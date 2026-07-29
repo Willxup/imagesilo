@@ -1,8 +1,8 @@
 import { expect, test } from '@playwright/test'
 
-import { login, readClipboard, uploadTinyImage } from './helpers'
+import { login, readClipboard, tinyWebP, uploadTinyImage } from './helpers'
 
-test('desktop administrator completes upload, management, alias, settings, theme, and language flows', async ({ page }) => {
+test('desktop administrator completes upload, management, alias, settings, theme, and language flows', async ({ page, request }) => {
   await login(page)
   await expect(page.getByText('最多同时处理 1 个文件；每批最多选择 20 个文件。')).toBeVisible()
 
@@ -35,6 +35,41 @@ test('desktop administrator completes upload, management, alias, settings, theme
   const aliasResponse = await page.request.get(aliasPath)
   expect(aliasResponse.status()).toBe(200)
   expect(aliasResponse.headers()['content-type']).toContain('image/webp')
+
+  await page.getByRole('link', { name: 'API Token' }).click()
+  await page.getByLabel('Token 名称').fill('desktop private upload')
+  await page.getByRole('checkbox', { name: /images:upload/ }).check()
+  await page.getByRole('checkbox', { name: /images:read_private/ }).check()
+  await page.getByRole('button', { name: '创建 Token' }).click()
+  const plaintextToken = (await page.getByRole('status').locator('code').textContent())?.trim()
+  expect(plaintextToken).toBeTruthy()
+
+  const tokenImageName = 'desktop-token-private.webp'
+  const tokenUpload = await request.post('/api/v1/images', {
+    headers: { Authorization: `Bearer ${plaintextToken}` },
+    multipart: {
+      file: { name: tokenImageName, mimeType: 'image/webp', buffer: tinyWebP },
+      visibility: 'private',
+    },
+  })
+  expect(tokenUpload.status()).toBe(201)
+  const tokenImage = await tokenUpload.json() as { standardUrl: string }
+  expect((await request.get(tokenImage.standardUrl)).status()).toBe(401)
+  expect((await request.get(tokenImage.standardUrl, { headers: { Authorization: `Bearer ${plaintextToken}` } })).status()).toBe(200)
+
+  await page.getByRole('link', { name: '图片' }).click()
+  await page.getByLabel('搜索').fill(tokenImageName)
+  await page.getByLabel('可见性').selectOption('private')
+  await page.getByLabel('上传来源').selectOption('api_token')
+  await page.getByRole('button', { name: '应用筛选' }).click()
+  await expect(page.getByRole('img', { name: tokenImageName })).toBeVisible()
+  await page.getByRole('link', { name: tokenImageName }).click()
+  await expect(page.getByRole('heading', { name: tokenImageName })).toBeVisible()
+  await expect(page.getByRole('heading', { name: '图片信息' }).locator('..').getByText('API Token', { exact: true })).toBeVisible()
+  page.once('dialog', (dialog) => dialog.accept())
+  await page.getByRole('button', { name: '永久删除' }).click()
+  await expect(page).toHaveURL(/\/admin\/images$/)
+  expect((await request.get(tokenImage.standardUrl, { headers: { Authorization: `Bearer ${plaintextToken}` } })).status()).toBe(404)
 
   await page.getByRole('link', { name: '设置' }).click()
   await expect(page.getByLabel('启用同格式压缩')).not.toBeChecked()

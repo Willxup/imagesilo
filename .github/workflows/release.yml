@@ -1,0 +1,143 @@
+name: Release image
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Immutable release tag, for example v1.0.0-rc.1
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+      - name: Run release quality gate
+        run: make check e2e
+
+  platform-image:
+    needs: quality
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            suffix: amd64
+            port: 18100
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+            port: 18101
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 35
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: true
+      - name: Resolve immutable image tag
+        id: image
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          release_tag="${REQUESTED_TAG:-${GITHUB_REF_NAME}}"
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release tag: $release_tag" >&2
+            exit 1
+          fi
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "target=ghcr.io/${owner}/imagesilo:${release_tag}" >> "$GITHUB_OUTPUT"
+          echo "platform_target=ghcr.io/${owner}/imagesilo:${release_tag}-${{ matrix.suffix }}" >> "$GITHUB_OUTPUT"
+      - name: Log in to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Refuse an existing immutable platform tag
+        run: |
+          if docker buildx imagetools inspect "${{ steps.image.outputs.platform_target }}" >/dev/null 2>&1; then
+            echo "Image tag already exists: ${{ steps.image.outputs.platform_target }}" >&2
+            exit 1
+          fi
+      - name: Build native image
+        run: docker build --platform "${{ matrix.platform }}" --file deploy/docker/Dockerfile --tag "${{ steps.image.outputs.platform_target }}" .
+      - name: Run native container smoke
+        env:
+          IMAGE: ${{ steps.image.outputs.platform_target }}
+          PLATFORM: ${{ matrix.platform }}
+          PORT: ${{ matrix.port }}
+          SMOKE_SUFFIX: release-${{ matrix.suffix }}
+        run: bash scripts/container-smoke.sh
+      - name: Push immutable platform image
+        run: docker push "${{ steps.image.outputs.platform_target }}"
+
+  manifest:
+    needs: platform-image
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Create and verify multi-platform manifest
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          release_tag="${REQUESTED_TAG:-${GITHUB_REF_NAME}}"
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          target="ghcr.io/${owner}/imagesilo:${release_tag}"
+          if docker buildx imagetools inspect "$target" >/dev/null 2>&1; then
+            echo "Image tag already exists: $target" >&2
+            exit 1
+          fi
+          docker buildx imagetools create \
+            --tag "$target" \
+            "${target}-amd64" \
+            "${target}-arm64"
+          raw="$(docker buildx imagetools inspect --raw "$target")"
+          jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"]' <<<"$raw"
+          docker buildx imagetools inspect "$target" | tee manifest-inspect.txt
+          {
+            echo "### Published ImageSilo image"
+            echo "\`$target\`"
+            echo '```text'
+            cat manifest-inspect.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

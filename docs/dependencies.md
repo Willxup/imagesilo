@@ -22,6 +22,7 @@
 | `github.com/mattn/go-sqlite3` | 1.14.49 | SQLite CGO 驱动 |
 | `github.com/google/uuid` | 1.6.0 | UUIDv7 生成与解析 |
 | `golang.org/x/crypto` | 0.54.0 | Argon2id 密码哈希 |
+| `golang.org/x/image` | 0.43.0 | 便携构建的 WebP 解码与缩略图缩放 |
 | `golang.org/x/term` | 0.45.0 | 管理员 CLI 无回显读取密码 |
 | `github.com/davidbyttow/govips/v2` | 2.18.0 | 阶段 3 的 libvips 边界 |
 
@@ -31,7 +32,7 @@
 
 TypeScript 的 `latest` 标签在解析日为 7.0.2，但 `openapi-typescript` 7.13.0 的 peer dependency 明确为 TypeScript 5.x，`typescript-eslint` 8.65.0 也尚未声明 TypeScript 7 支持。因此锁定可解析依赖树中的最新 TypeScript 5.x（5.9.3），不使用 `--force` 或 `--legacy-peer-deps` 隐藏不兼容。
 
-React Router 7.18.2 在解析日命中只影响 RSC Mode 的 `GHSA-qwww-vcr4-c8h2`。审计建议降级的 7.11.0 同时命中另一组 SSR/RSC 历史漏洞，目前没有落在全部公告区间之外的正式稳定版本。ImageSilo 锁定最新稳定 7.18.2，但只使用 Vite SPA 的 BrowserRouter，不启用 React Server Components、SSR、Server Action 或框架模式；阶段 7 发布审计前必须重新检查并优先升级到修复版。
+React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公告明确写明“仅使用 unstable RSC APIs 时受影响”，首个修复版本标为 8.3.0；但 npm 在 2026-07-29 尚未发布 8.3.0，最新正式版仍是 7.18.2。ImageSilo 只使用 Vite SPA 的 BrowserRouter，不启用 React Server Components、SSR、Server Action 或框架模式，因此没有该公告中的服务端 Action 执行面。每次发布仍重新检查，一旦官方发布兼容修复版立即升级。
 
 `openapi-typescript` 的构建期传递依赖通过 npm `overrides` 锁定到已修复的 `js-yaml` 4.3.0、`minimatch` 10.2.6 和 `brace-expansion` 5.0.8。它只解析仓库内受信任的 `api/openapi.yaml`，不处理用户输入。
 

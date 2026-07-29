@@ -7,6 +7,7 @@ port="${PORT:-18080}"
 suffix="${SMOKE_SUFFIX:-local}"
 container="imagesilo-smoke-${suffix}"
 restart_container="${container}-restart"
+permission_container="${container}-permission"
 volume="${container}-data"
 cookie_file="${TMPDIR:-/tmp}/${container}.cookies"
 upload_response="${TMPDIR:-/tmp}/${container}-upload.json"
@@ -22,17 +23,25 @@ import_token_response="${TMPDIR:-/tmp}/${container}-import-token.json"
 import_manifest="${TMPDIR:-/tmp}/${container}-import.tsv"
 import_result="${TMPDIR:-/tmp}/${container}-import-result.jsonl"
 overview_response="${TMPDIR:-/tmp}/${container}-overview.json"
+runtime_before_response="${TMPDIR:-/tmp}/${container}-runtime-before.json"
+runtime_after_response="${TMPDIR:-/tmp}/${container}-runtime-after.json"
 converted_webp="${TMPDIR:-/tmp}/${container}-converted.webp"
+delivery_headers="${TMPDIR:-/tmp}/${container}-delivery.headers"
+range_body="${TMPDIR:-/tmp}/${container}-range.bin"
+permission_log="${TMPDIR:-/tmp}/${container}-permission.log"
+permission_directory="${TMPDIR:-/tmp}/${container}-readonly-data"
 smoke_email="admin@example.com"
 smoke_password="ImageSilo-${suffix}-Smoke-Password!"
 
 cleanup() {
-  docker rm --force "$container" "$restart_container" >/dev/null 2>&1 || true
+  docker rm --force "$container" "$restart_container" "$permission_container" >/dev/null 2>&1 || true
   docker volume rm "$volume" >/dev/null 2>&1 || true
   rm -f "$cookie_file" "$upload_response" "$system_response" "$png_response" "$gif_response" \
-    "$conversion_response" "$webp_response" "$converted_webp"
+    "$conversion_response" "$webp_response" "$converted_webp" "$delivery_headers" "$range_body"
   rm -f "$import_response" "$import_conflict_response" "$import_source" "$import_token_response" \
-    "$import_manifest" "$import_result" "$overview_response"
+    "$import_manifest" "$import_result" "$overview_response" "$runtime_before_response" \
+    "$runtime_after_response" "$permission_log"
+  rm -rf "$permission_directory"
 }
 trap cleanup EXIT INT TERM
 
@@ -75,7 +84,7 @@ printf '%s\n' "$smoke_password" | docker run --rm --interactive \
   --volume "${volume}:/data" \
   "$image" admin create --email "$smoke_email" --password-stdin
 
-docker run --detach --rm \
+docker run --detach \
   --platform "$platform" \
   --name "$container" \
   --publish "127.0.0.1:${port}:8080" \
@@ -86,6 +95,34 @@ docker run --detach --rm \
 base_url="http://127.0.0.1:${port}"
 wait_ready "$base_url"
 wait_healthy "$container"
+
+test "$(docker inspect --format '{{.Config.User}}' "$container")" = "10001:10001"
+test "$(docker inspect --format '{{json .Config.Entrypoint}}' "$container")" = '["/usr/local/bin/imagesilo"]'
+test "$(docker inspect --format '{{json .Config.Healthcheck.Test}}' "$container")" = '["CMD","/usr/local/bin/imagesilo","healthcheck"]'
+docker exec "$container" sh -ec '
+  ! command -v node >/dev/null
+  ! command -v go >/dev/null
+  ! command -v cc >/dev/null
+  ! command -v gcc >/dev/null
+  test ! -e /src
+  test ! -e /opt/vips/bin
+  test ! -e /opt/vips/include
+  test ! -e /opt/vips/lib/pkgconfig
+  test ! -e /opt/vips/share
+  test -n "$(find /opt/vips/lib -type f -name "libvips.so.*" -print -quit)"
+'
+
+mkdir -p "$permission_directory"
+chmod 0555 "$permission_directory"
+if docker run --name "$permission_container" \
+  --platform "$platform" \
+  --volume "${permission_directory}:/data:ro" \
+  "$image" serve >"$permission_log" 2>&1; then
+  printf 'read-only /data unexpectedly allowed ImageSilo to start\n' >&2
+  exit 1
+fi
+grep -Eqi 'read-only file system|permission denied' "$permission_log"
+docker rm "$permission_container" >/dev/null
 
 curl --fail --silent --show-error \
   --cookie-jar "$cookie_file" \
@@ -103,6 +140,9 @@ test "$(jq --raw-output '.vipsVersion' "$system_response")" = "8.18.4"
 test "$(jq '.supportedFormats | length' "$system_response")" = "4"
 test "$(jq '.processingConcurrency' "$system_response")" = "1"
 test "$(jq '.maxTotalPixels' "$system_response")" = "16000000"
+curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$runtime_before_response"
+goroutines_before="$(jq '.goroutines' "$runtime_before_response")"
+fds_before="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdepth 1 | wc -l')"
 
 go run ./tests/performance/jpeg_stdout.go -width 3000 -height 2000 -quality 90 |
   curl --fail --silent --show-error \
@@ -118,6 +158,29 @@ test "$expected_hash" != "null"
 
 actual_hash="$(curl --fail --silent --show-error "${base_url}/image/${image_id}" | hash_stdin)"
 test "$actual_hash" = "$expected_hash"
+
+curl --fail --silent --show-error \
+  --dump-header "$delivery_headers" \
+  --output "$range_body" \
+  --header 'Range: bytes=0-3' \
+  "${base_url}/image/${image_id}"
+test "$(wc -c <"$range_body" | tr -d ' ')" = "4"
+grep -Eqi '^Content-Range: bytes 0-3/[0-9]+' "$delivery_headers"
+
+curl --fail --silent --show-error \
+  --dump-header "$delivery_headers" \
+  --output "$range_body" \
+  --header 'Range: bytes=-4' \
+  "${base_url}/image/${image_id}"
+test "$(wc -c <"$range_body" | tr -d ' ')" = "4"
+grep -Eqi '^Content-Range: bytes [0-9]+-[0-9]+/[0-9]+' "$delivery_headers"
+
+etag="$(curl --fail --silent --show-error --head "${base_url}/image/${image_id}" | awk 'tolower($1) == "etag:" { print $2 }' | tr -d '\r')"
+test -n "$etag"
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --header "If-None-Match: ${etag}" "${base_url}/image/${image_id}")" = "304"
+test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' --header 'Range: bytes=999999999-' "${base_url}/image/${image_id}")" = "416"
+curl --fail --silent --show-error --head "${base_url}/image/${image_id}" >"$delivery_headers"
+grep -Eqi "^Content-Length: $(jq '.storedSize' "$upload_response")" "$delivery_headers"
 
 go run ./tests/performance/image_stdout.go -format png -width 800 -height 600 |
   curl --fail --silent --show-error \
@@ -191,6 +254,10 @@ IMAGESILO_BASE_URL="$base_url" IMAGESILO_TOKEN="$import_token" \
 jq --raw-output '.response | fromjson' "$import_result" >"$import_response"
 import_id="$(jq --raw-output '.imageId' "$import_response")"
 test "$(jq --raw-output '.sha256' "$import_response")" = "$import_source_hash"
+alias_etag="$(curl --fail --silent --show-error --head "${base_url}/legacy/container-import.jpg" | awk 'tolower($1) == "etag:" { print $2 }' | tr -d '\r')"
+import_etag="$(curl --fail --silent --show-error --head "${base_url}/image/${import_id}" | awk 'tolower($1) == "etag:" { print $2 }' | tr -d '\r')"
+test -n "$alias_etag"
+test "$alias_etag" = "$import_etag"
 
 curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_response"
 images_before_conflict="$(jq '.imageCount' "$overview_response")"
@@ -210,14 +277,37 @@ test "$(jq '.imageCount' "$overview_response")" = "$images_before_conflict"
 curl --fail --silent --show-error \
   --cookie "$cookie_file" \
   "${base_url}$(jq --raw-output '.thumbnailUrl' "$webp_response")" >/dev/null
-test "$(docker inspect --format '{{.Config.User}}' "$container")" = "10001:10001"
 test "$(docker inspect --format '{{.State.Health.Status}}' "$container")" = "healthy"
 curl --fail --silent --show-error "${base_url}/admin/login" | grep -q '<div id="root"></div>'
+
+for _ in $(seq 1 4); do
+  curl --fail --silent --show-error "${base_url}/image/${image_id}" >/dev/null
+done
+curl --fail --silent --show-error \
+  --cookie "$cookie_file" \
+  --header "X-CSRF-Token: ${csrf_token}" \
+  --request POST \
+  "${base_url}/api/v1/maintenance/inspect" >/dev/null
+curl --fail --silent --show-error \
+  --cookie "$cookie_file" \
+  --header "X-CSRF-Token: ${csrf_token}" \
+  --request POST \
+  "${base_url}/api/v1/maintenance/rebuild" >/dev/null
+curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$runtime_after_response"
+goroutines_after="$(jq '.goroutines' "$runtime_after_response")"
+fds_after="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdepth 1 | wc -l')"
+temporary_after="$(docker exec "$container" sh -c 'find /data/tmp -type f | wc -l')"
+test "$goroutines_after" -le "$((goroutines_before + 4))"
+test "$fds_after" -le "$((fds_before + 8))"
+test "$temporary_after" = "0"
 
 docker exec "$container" rm "/data/images/${import_id}"
 
 docker stop --timeout 15 "$container" >/dev/null
-docker run --detach --rm \
+test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = "0"
+docker logs "$container" 2>&1 | grep -q 'shutdown requested'
+docker rm "$container" >/dev/null
+docker run --detach \
   --platform "$platform" \
   --name "$restart_container" \
   --publish "127.0.0.1:${port}:8080" \
@@ -234,5 +324,9 @@ curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/ov
 test "$(jq '.missingImageCount' "$overview_response")" = "1"
 test "$(jq --raw-output --arg id "$import_id" '.missingImageIds | index($id) != null' "$overview_response")" = "true"
 test "$(curl --silent --output /dev/null --write-out '%{http_code}' "${base_url}/legacy/container-import.jpg")" = "404"
+
+docker stop --timeout 15 "$container" >/dev/null
+test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = "0"
+docker logs "$container" 2>&1 | grep -q 'shutdown requested'
 
 printf 'ImageSilo container smoke passed: platform=%s image_id=%s sha256=%s\n' "$platform" "$image_id" "$expected_hash"

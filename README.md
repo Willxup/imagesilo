@@ -38,7 +38,7 @@ printf '%s\n' "$CI_SMOKE_PASSWORD" | IMAGESILO_DATA_DIR="$PWD/data" ./bin/images
 
 API Token 的 curl、PicGo 与 ShareX 配置见 [`docs/api-token-usage.md`](docs/api-token-usage.md)。HTTP 契约的唯一事实来源为 [`api/openapi.yaml`](api/openapi.yaml)。
 
-单张图片与旧 URL 的迁移见 [`docs/imports.md`](docs/imports.md)；每日巡检、孤儿文件安全清理和停止容器后备份整个 `/data` 的步骤见 [`docs/operations.md`](docs/operations.md)。
+单张图片与旧 URL 的迁移见 [`docs/imports.md`](docs/imports.md)；每日巡检和孤儿文件安全清理见 [`docs/operations.md`](docs/operations.md)；Docker 部署、升级、完整 `/data` 备份和回滚见 [`docs/deployment.md`](docs/deployment.md)；双架构发布候选与受限资源验收见 [`docs/release.md`](docs/release.md)；安全边界、依赖例外和精简镜像证据见 [`docs/security-audit.md`](docs/security-audit.md)。
 
 ## 部署边界
 

@@ -10,11 +10,11 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/mattn/go-sqlite3 v1.14.49
 	golang.org/x/crypto v0.54.0
+	golang.org/x/image v0.43.0
 	golang.org/x/term v0.45.0
 )
 
 require (
-	golang.org/x/image v0.38.0 // indirect
 	golang.org/x/net v0.56.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.40.0 // indirect

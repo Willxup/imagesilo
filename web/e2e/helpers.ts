@@ -1,7 +1,7 @@
 import { expect, type Page } from '@playwright/test'
 import { Buffer } from 'node:buffer'
 
-const tinyWebP = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64')
+export const tinyWebP = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA', 'base64')
 
 export async function login(page: Page) {
   await page.goto('/admin/login')

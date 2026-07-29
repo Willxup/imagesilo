@@ -60,6 +60,11 @@ COPY --from=web-build /src/web/dist ./internal/webui/dist
 RUN CGO_ENABLED=1 go test -tags vips ./internal/platform/processor ./internal/image ./internal/httpapi \
     && CGO_ENABLED=1 go build -tags vips -trimpath -ldflags='-s -w' -o /out/imagesilo ./cmd/imagesilo
 
+FROM vips-build AS vips-runtime
+RUN rm -rf /opt/vips/bin /opt/vips/include /opt/vips/lib/pkgconfig /opt/vips/share \
+    && find /opt/vips/lib -type f \( -name '*.a' -o -name '*.la' \) -delete \
+    && find /opt/vips/lib -type f -name '*.so.*' -exec strip --strip-unneeded {} +
+
 FROM ${RUNTIME_IMAGE} AS runtime
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
@@ -69,7 +74,7 @@ RUN apt-get update \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin imagesilo \
     && install -d -o 10001 -g 10001 -m 0750 /data/db /data/images /data/cache/thumbnails /data/tmp
 
-COPY --from=go-build /opt/vips /opt/vips
+COPY --from=vips-runtime /opt/vips/lib /opt/vips/lib
 COPY --from=go-build /out/imagesilo /usr/local/bin/imagesilo
 
 ENV LD_LIBRARY_PATH=/opt/vips/lib
