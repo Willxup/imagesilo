@@ -34,6 +34,10 @@
 - 永久删除严格按“SQLite 级联删除 → 图片及关联别名索引移除 → 正式文件和缩略图删除”执行；文件清理失败不恢复数据库，而是返回 `cleanupPending` 并写结构化告警日志。
 - React 已完成上传本地队列、进度/取消/重试、图片网格与列表、只读缩略图、详情和多格式链接复制、历史路径、系统状态、设置、深浅主题、中英文及响应式导航。
 - Playwright 使用单 worker 和临时数据目录，桌面与手机闭环各只上传一张 1 × 1 WebP；空库启动实测 Go heap alloc 324,624 B、RSS 14,352,384 B、4 个 goroutine，阶段 5 没有新增运行时依赖。
+- 阶段 6 已完成通用单张导入：原始字节流式写入并校验，图片与一个历史别名在同一个 SQLite 事务中提交，已存在别名会在解码前快速返回冲突且不留下图片记录、正式文件或缩略图。
+- 通用 TSV 清单脚本严格串行导入，每项成功后自动访问旧 URL 并核对 SHA-256；原生 amd64/arm64 容器 smoke 都实际完成了导入、重复路径对账和旧 URL 字节校验。
+- 日常维护复用现有单个维护 goroutine：启动仅清理超过 24 小时的临时文件，每日只删除超过安全时限且 SQLite 无记录的孤儿文件，删除失败保留到下次重试，数据库缺失文件只报告且不自动重建索引。
+- 单张正式文件缺失不会阻止启动或 readiness；该图片及其别名不进入交付索引，系统页明确显示缺失数量和最多 100 个 Image ID。阶段 6 空库启动实测 Go heap alloc 326,864 B、RSS 14,614,528 B、4 个 goroutine。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
@@ -45,6 +49,8 @@
 阶段 4 已完成。GitHub Actions [Verify run 30467177771](https://github.com/Willxup/imagesilo/actions/runs/30467177771) 在提交 `6d17dfb362a60c2be85cbad38ebbe26a099790f0` 上通过：`quality`、原生 amd64/arm64 10k/100k Delivery Index 基准、容器构建、完整 smoke 和默认并发 1 图片基准全部成功。
 
 阶段 5 已完成。GitHub Actions [Verify run 30471726635](https://github.com/Willxup/imagesilo/actions/runs/30471726635) 在提交 `4fdb303604c19ffc8889110e21c2189c3fca3130` 上通过：`quality`（含 Vitest 与单 worker 桌面/手机 Playwright）、原生 amd64/arm64 Delivery Index 基准、容器闭环和默认并发 1 的 16 请求图片基准全部成功。
+
+阶段 6 已完成。GitHub Actions [Verify run 30474967233](https://github.com/Willxup/imagesilo/actions/runs/30474967233) 在提交 `9c0238957241e1e4f540821323bd298b291ed46d` 上通过：`quality`、原生 amd64/arm64 清单导入与历史 URL 校验、重复别名零残留、缺失正式文件重启容错、容器闭环和默认并发 1 的 16 请求图片基准全部成功。
 
 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
