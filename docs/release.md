@@ -27,7 +27,7 @@ docker buildx imagetools inspect ghcr.io/willxup/imagesilo:v1.0.0-rc.1
 
 ## my-geelinx 受限验收
 
-远程验收严格使用 `/var/tmp` 独立目录，默认只占 `0.5` CPU、`256m` 内存、`128` PID，处理并发固定为 `1`。默认连续运行 10 分钟，所有请求串行：
+远程验收严格使用 `/var/tmp` 独立目录，默认只占 `0.5` CPU、`256m` 内存、`128` PID，处理并发固定为 `1`。脚本只要求 Docker、curl、Python 3、base64 和系统哈希工具，不要求安装 jq。默认连续运行 10 分钟，所有请求串行：
 
 ```bash
 ssh my-geelinx
@@ -39,3 +39,17 @@ bash scripts/remote-release-acceptance.sh
 ```
 
 脚本不会删除 `WORK_DIR`。结果、日志、测试图片、SQLite 和正式文件全部归拢在该目录；只会移除临时容器。验收记录包含 cgroup 当前/峰值内存、goroutine、文件描述符和实际串行轮次。
+
+### v0.1.0-rc.1 验收记录
+
+提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 已在 `my-geelinx` 原生 amd64 上完成：
+
+- 构建器限制为 CPU 0、1 CPU quota、1 GiB 内存；镜像内 vips 测试通过后删除 builder。
+- 候选镜像大小 `94,845,421` 字节，固定 `10001:10001`、exec-form ENTRYPOINT 和内置健康检查。
+- 运行限制为 0.5 CPU、256 MiB、128 PID、处理并发 1，连续 600 秒完成 118 轮串行校验。
+- cgroup 当前内存 `14,135,296` 字节、峰值 `35,938,304` 字节；goroutine `10 → 8`、FD `10 → 10`。
+- 启动 RSS `20,402,176` 字节；上传后概览 RSS `43,679,744` 字节，结束 RSS `26,570,752` 字节。
+- SIGTERM 正常退出，测试容器、builder 和临时候选镜像已删除。
+- 源代码、构建元数据、失败前置检查和最终验收结果保留在 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`，总计约 2.0 MiB。
+
+Git 标签 `v0.1.0-rc.1` 当前仅存在于本地；GHCR 外部包发布必须在得到明确授权后执行，不得用其他分发方式绕过。

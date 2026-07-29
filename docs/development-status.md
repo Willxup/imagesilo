@@ -1,6 +1,6 @@
 # 开发状态与准备度
 
-更新日期：2026-07-29
+更新日期：2026-07-30
 
 ## 结论
 
@@ -38,6 +38,12 @@
 - 通用 TSV 清单脚本严格串行导入，每项成功后自动访问旧 URL 并核对 SHA-256；原生 amd64/arm64 容器 smoke 都实际完成了导入、重复路径对账和旧 URL 字节校验。
 - 日常维护复用现有单个维护 goroutine：启动仅清理超过 24 小时的临时文件，每日只删除超过安全时限且 SQLite 无记录的孤儿文件，删除失败保留到下次重试，数据库缺失文件只报告且不自动重建索引。
 - 单张正式文件缺失不会阻止启动或 readiness；该图片及其别名不进入交付索引，系统页明确显示缺失数量和最多 100 个 Image ID。阶段 6 空库启动实测 Go heap alloc 326,864 B、RSS 14,614,528 B、4 个 goroutine。
+- 阶段 7 已补齐公开交付的 Range/416/条件请求/HEAD、微型重叠读、重复生命周期临时文件检查，以及桌面 E2E 的 API Token 私密上传、Token 读取、搜索筛选、详情和永久删除。
+- 容器 smoke 已验证固定 UID/GID、exec-form ENTRYPOINT、健康检查、只读 `/data` 权限错误、运行镜像精简内容、goroutine/FD/临时文件边界和两次 SIGTERM 优雅停止；最终镜像不含 Node、Go、编译器、源码、测试素材或 libvips 开发文件。
+- `govulncheck` 实际调用链为 0；`golang.org/x/image` 已从存在 WebP 解码漏洞的 0.38.0 升级至 0.43.0。React Router 公告仅影响未启用的 unstable RSC API，作为可达性例外记录并在每次发布前复查。
+- [Verify run 30479364047](https://github.com/Willxup/imagesilo/actions/runs/30479364047) 在提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 上通过 quality、原生 amd64/arm64 增强容器 smoke 和每架构并发 1、16 请求 benchmark。结束匿名内存为 amd64 86,945,792 B、arm64 101,023,744 B；约 91.4 MB 文件页缓存与 16 个输出总量吻合。
+- `my-geelinx` 已在 1 CPU/1 GiB 的专用 builder 中完成原生 amd64 构建，并在 0.5 CPU/256 MiB、并发 1 下连续运行 600 秒、完成 118 轮串行校验：cgroup 峰值 35,938,304 B，goroutine 10→8，FD 10→10，优雅停止通过；所有证据位于 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`。
+- 阶段 7 当前只剩外部 GHCR 多架构 OCI manifest 发布与 `imagetools inspect`。本地预发布标签 `v0.1.0-rc.1` 尚未推送；得到明确外部发布授权前不关闭阶段门，也不开始阶段 8。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。

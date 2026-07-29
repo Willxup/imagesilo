@@ -44,6 +44,12 @@ hash_stdin() {
   fi
 }
 
+json_field() {
+  local file="$1"
+  local key="$2"
+  python3 -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))[sys.argv[2]])' "$file" "$key"
+}
+
 wait_ready() {
   local base_url="$1"
   for _ in $(seq 1 120); do
@@ -106,8 +112,8 @@ curl --fail --silent --show-error \
   --form "file=@${fixture_file};filename=acceptance.webp;type=image/webp" \
   --form 'visibility=public' \
   "${base_url}/api/v1/images" >"$upload_response"
-image_id="$(jq --raw-output '.id' "$upload_response")"
-expected_hash="$(jq --raw-output '.storedSha256' "$upload_response")"
+image_id="$(json_field "$upload_response" id)"
+expected_hash="$(json_field "$upload_response" storedSha256)"
 test -n "$image_id"
 test "$expected_hash" = "$(curl --fail --silent --show-error "${base_url}/image/${image_id}" | hash_stdin)"
 
@@ -119,7 +125,7 @@ curl --fail --silent --show-error \
   "${base_url}/api/v1/aliases" >/dev/null
 
 curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_before"
-goroutines_before="$(jq '.goroutines' "$overview_before")"
+goroutines_before="$(json_field "$overview_before" goroutines)"
 fds_before="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdepth 1 | wc -l')"
 started_at="$(date +%s)"
 iterations=0
@@ -133,7 +139,7 @@ while test "$(( $(date +%s) - started_at ))" -lt "$duration_seconds"; do
 done
 
 curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_after"
-goroutines_after="$(jq '.goroutines' "$overview_after")"
+goroutines_after="$(json_field "$overview_after" goroutines)"
 fds_after="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdepth 1 | wc -l')"
 temporary_files="$(docker exec "$container" sh -c 'find /data/tmp -type f | wc -l')"
 memory_current="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.current')"
@@ -149,22 +155,36 @@ test "$(docker inspect --format '{{.State.ExitCode}}' "$container")" = "0"
 docker logs "$container" >"$container_log" 2>&1
 grep -q 'shutdown requested' "$container_log"
 
-jq --null-input \
-  --arg image "$image" \
-  --arg workDir "$work_dir" \
-  --argjson durationSeconds "$duration_seconds" \
-  --argjson iterations "$iterations" \
-  --argjson cpuLimit "$cpu_limit" \
-  --arg memoryLimit "$memory_limit" \
-  --argjson goroutinesBefore "$goroutines_before" \
-  --argjson goroutinesAfter "$goroutines_after" \
-  --argjson fileDescriptorsBefore "$fds_before" \
-  --argjson fileDescriptorsAfter "$fds_after" \
-  --argjson memoryCurrentBytes "$memory_current" \
-  --argjson memoryPeakBytes "$memory_peak" \
-  --argjson memoryAnonBytes "$memory_anon" \
-  --argjson memoryFileBytes "$memory_file" \
-  '{image:$image,workDir:$workDir,durationSeconds:$durationSeconds,iterations:$iterations,cpuLimit:$cpuLimit,memoryLimit:$memoryLimit,goroutinesBefore:$goroutinesBefore,goroutinesAfter:$goroutinesAfter,fileDescriptorsBefore:$fileDescriptorsBefore,fileDescriptorsAfter:$fileDescriptorsAfter,memoryCurrentBytes:$memoryCurrentBytes,memoryPeakBytes:$memoryPeakBytes,memoryAnonBytes:$memoryAnonBytes,memoryFileBytes:$memoryFileBytes}' \
-  >"$result_file"
+python3 - \
+  "$result_file" "$image" "$work_dir" "$duration_seconds" "$iterations" "$cpu_limit" "$memory_limit" \
+  "$goroutines_before" "$goroutines_after" "$fds_before" "$fds_after" \
+  "$memory_current" "$memory_peak" "$memory_anon" "$memory_file" <<'PY'
+import json
+import sys
+
+(
+    result_file, image, work_dir, duration_seconds, iterations, cpu_limit, memory_limit,
+    goroutines_before, goroutines_after, fds_before, fds_after,
+    memory_current, memory_peak, memory_anon, memory_file,
+) = sys.argv[1:]
+with open(result_file, "w", encoding="utf-8") as output:
+    json.dump({
+        "image": image,
+        "workDir": work_dir,
+        "durationSeconds": int(duration_seconds),
+        "iterations": int(iterations),
+        "cpuLimit": float(cpu_limit),
+        "memoryLimit": memory_limit,
+        "goroutinesBefore": int(goroutines_before),
+        "goroutinesAfter": int(goroutines_after),
+        "fileDescriptorsBefore": int(fds_before),
+        "fileDescriptorsAfter": int(fds_after),
+        "memoryCurrentBytes": int(memory_current),
+        "memoryPeakBytes": int(memory_peak),
+        "memoryAnonBytes": int(memory_anon),
+        "memoryFileBytes": int(memory_file),
+    }, output, ensure_ascii=False, indent=2)
+    output.write("\n")
+PY
 
 printf 'ImageSilo limited remote acceptance passed: result=%s data=%s\n' "$result_file" "$data_dir"
