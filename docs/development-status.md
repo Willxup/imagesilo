@@ -30,6 +30,10 @@
 - 阶段 4 已完成严格别名路径规范化、保留路由保护、映射创建/列表/解析/删除 API、直接字节交付、409 冲突语义、启动重建和别名热路径零 SQL。
 - 图片、别名、Session 与 API Token 使用同一个索引变更屏障：普通写操作共享进入，完整重建独占进入，直链读取不经过屏障；并发测试证明重建不会恢复已退出 Session、已吊销 Token、旧可见性或旧别名状态。
 - 10,000/100,000 路径原生 amd64/arm64 基准均通过；100,000 路径完整 SQLite Loader 低于 160 ms，Go heap 增量约 14.16 MiB，不引入 Redis、LRU 或 TTL。
+- 阶段 5 已完成图片 keyset 分页、搜索、完整筛选、详情、单张/批量永久删除、批量可见性、明确逐项结果、系统概览、手动只读巡检和手动完整索引重建。
+- 永久删除严格按“SQLite 级联删除 → 图片及关联别名索引移除 → 正式文件和缩略图删除”执行；文件清理失败不恢复数据库，而是返回 `cleanupPending` 并写结构化告警日志。
+- React 已完成上传本地队列、进度/取消/重试、图片网格与列表、只读缩略图、详情和多格式链接复制、历史路径、系统状态、设置、深浅主题、中英文及响应式导航。
+- Playwright 使用单 worker 和临时数据目录，桌面与手机闭环各只上传一张 1 × 1 WebP；空库启动实测 Go heap alloc 324,624 B、RSS 14,352,384 B、4 个 goroutine，阶段 5 没有新增运行时依赖。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
@@ -39,6 +43,8 @@
 阶段 3 已完成。GitHub Actions [Verify run 30463581291](https://github.com/Willxup/imagesilo/actions/runs/30463581291) 在提交 `09734182ec09486fd947a9f6e6727017ad734863` 上通过：`quality`、原生 amd64/arm64 镜像、四格式 smoke、WebP 转换和处理安全门全部成功。后续 [Verify run 30464513095](https://github.com/Willxup/imagesilo/actions/runs/30464513095) 在提交 `e6d059a755a748646ebd329de31e90635023a603` 上再次通过，并确认两个原生架构只运行默认并发 1 的持续基准。
 
 阶段 4 已完成。GitHub Actions [Verify run 30467177771](https://github.com/Willxup/imagesilo/actions/runs/30467177771) 在提交 `6d17dfb362a60c2be85cbad38ebbe26a099790f0` 上通过：`quality`、原生 amd64/arm64 10k/100k Delivery Index 基准、容器构建、完整 smoke 和默认并发 1 图片基准全部成功。
+
+阶段 5 已完成。GitHub Actions [Verify run 30471726635](https://github.com/Willxup/imagesilo/actions/runs/30471726635) 在提交 `4fdb303604c19ffc8889110e21c2189c3fca3130` 上通过：`quality`（含 Vitest 与单 worker 桌面/手机 Playwright）、原生 amd64/arm64 Delivery Index 基准、容器闭环和默认并发 1 的 16 请求图片基准全部成功。
 
 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
