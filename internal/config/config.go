@@ -12,7 +12,7 @@ import (
 const (
 	defaultListenAddress     = ":8080"
 	defaultDataDirectory     = "/data"
-	defaultProcessingWorkers = 2
+	defaultProcessingWorkers = 1
 	defaultShutdownTimeout   = 10 * time.Second
 	minimumProcessingWorkers = 1
 	maximumProcessingWorkers = 64
