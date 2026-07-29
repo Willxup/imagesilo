@@ -23,10 +23,12 @@
 - 阶段 2 本机闭环：Session 轮换、退出、改密、过期清理、CSRF、双维度登录限速、安全响应头、四种 API Token Scope、只显示一次与哈希存储、吊销/过期内存失效、默认/单次/现有图片可见性、公开/私密缓存策略，以及 Session/Bearer 私密读取全部完成。
 - 阶段 2 的私密读取集成测试会先关闭 SQLite，再分别使用管理员 Session 和 `images:read_private` Token 读取图片，直接证明热路径没有 SQL 回源。
 - 阶段 2 的 React 管理界面已加入上传可见性、图片可见性切换、API Token 创建/一次性复制/吊销、默认可见性和修改密码；OpenAPI 生成类型、curl、PicGo 与 ShareX 示例已同步。
-- Phase 2 arm64 与 amd64 本地容器均通过管理员初始化、CSRF 上传、字节哈希、非 root、健康检查、持久卷重启恢复。GitHub 原生双架构阶段门将在本次提交推送后确认。
+- Phase 2 arm64 与 amd64 本地容器均通过管理员初始化、CSRF 上传、字节哈希、非 root、健康检查、持久卷重启恢复。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
+
+阶段 2 已完成。GitHub Actions [Verify run 30450944427](https://github.com/Willxup/imagesilo/actions/runs/30450944427) 在提交 `7367185118583a10e89e078a12fb583c768733bc` 上通过：`quality`、原生 amd64 与原生 arm64 容器闭环全部成功。
 
 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
