@@ -67,17 +67,18 @@ jobs:
           PORT: ${{ matrix.port }}
           SMOKE_SUFFIX: ${{ matrix.suffix }}
         run: bash scripts/container-smoke.sh
-      - name: Benchmark native processing concurrency
+      - name: Benchmark native processing at concurrency 1
         env:
           IMAGE: imagesilo:smoke-${{ matrix.suffix }}
           PLATFORM: ${{ matrix.platform }}
           PORT: ${{ matrix.benchmark_port }}
           BENCH_SUFFIX: ${{ matrix.suffix }}
+          CONCURRENCIES: "1"
         run: |
           output="processing-benchmark-${{ matrix.suffix }}.jsonl"
           bash scripts/processing-benchmark.sh | tee "$output"
           {
-            echo "### Native ${{ matrix.suffix }} processing benchmark"
+            echo "### Native ${{ matrix.suffix }} processing benchmark (concurrency 1)"
             echo '```json'
             cat "$output"
             echo '```'
