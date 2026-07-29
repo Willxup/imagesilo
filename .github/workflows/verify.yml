@@ -42,10 +42,12 @@ jobs:
             platform: linux/amd64
             suffix: amd64
             port: 18080
+            benchmark_port: 18090
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
             suffix: arm64
             port: 18081
+            benchmark_port: 18091
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     steps:
@@ -65,3 +67,18 @@ jobs:
           PORT: ${{ matrix.port }}
           SMOKE_SUFFIX: ${{ matrix.suffix }}
         run: bash scripts/container-smoke.sh
+      - name: Benchmark native processing concurrency
+        env:
+          IMAGE: imagesilo:smoke-${{ matrix.suffix }}
+          PLATFORM: ${{ matrix.platform }}
+          PORT: ${{ matrix.benchmark_port }}
+          BENCH_SUFFIX: ${{ matrix.suffix }}
+        run: |
+          output="processing-benchmark-${{ matrix.suffix }}.jsonl"
+          bash scripts/processing-benchmark.sh | tee "$output"
+          {
+            echo "### Native ${{ matrix.suffix }} processing benchmark"
+            echo '```json'
+            cat "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

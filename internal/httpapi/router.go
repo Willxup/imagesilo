@@ -21,16 +21,17 @@ type healthResponse struct {
 }
 
 type Dependencies struct {
-	DB            *sql.DB
-	Logger        *slog.Logger
-	Auth          *auth.Service
-	APITokens     *apitoken.Service
-	Images        *images.Service
-	Settings      *settings.Service
-	DeliveryIndex *delivery.Index
-	Storage       *storage.Filesystem
-	CookieSecure  bool
-	UI            *webui.UI
+	DB                    *sql.DB
+	Logger                *slog.Logger
+	Auth                  *auth.Service
+	APITokens             *apitoken.Service
+	Images                *images.Service
+	Settings              *settings.Service
+	DeliveryIndex         *delivery.Index
+	Storage               *storage.Filesystem
+	CookieSecure          bool
+	ProcessingConcurrency int
+	UI                    *webui.UI
 }
 
 func NewRouter(dependencies Dependencies) http.Handler {
@@ -65,16 +66,20 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Post("/api/v1/api-tokens", tokenHandler.create)
 		router.Delete("/api/v1/api-tokens/{tokenID}", tokenHandler.revoke)
 	}
-	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil {
-		imageHandler := newImageHandler(dependencies.Images, dependencies.Settings, authenticator, dependencies.Logger)
+	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil && dependencies.Storage != nil {
+		imageHandler := newImageHandler(dependencies.Images, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger)
 		router.Get("/api/v1/images", imageHandler.list)
 		router.Post("/api/v1/images", imageHandler.upload)
+		router.Get("/api/v1/images/{imageID}/thumbnail", imageHandler.thumbnail)
 		router.Patch("/api/v1/images/{imageID}/visibility", imageHandler.changeVisibility)
 	}
 	if dependencies.Settings != nil && dependencies.Auth != nil {
 		settingsHandler := newSettingsHandler(dependencies.Settings, authenticator)
 		router.Get("/api/v1/settings", settingsHandler.get)
 		router.Patch("/api/v1/settings/default-visibility", settingsHandler.updateDefaultVisibility)
+		router.Patch("/api/v1/settings/processing", settingsHandler.updateProcessing)
+		systemHandler := newSystemHandler(dependencies.Settings, authenticator, dependencies.ProcessingConcurrency)
+		router.Get("/api/v1/system", systemHandler.get)
 	}
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {
 		deliveryHandler := newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator)

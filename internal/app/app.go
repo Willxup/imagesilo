@@ -14,6 +14,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/delivery"
 	"github.com/Willxup/imagesilo/internal/httpapi"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
 	"github.com/Willxup/imagesilo/internal/webui"
@@ -61,7 +62,10 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	}
 
 	imageRepository := images.NewRepository(db)
-	imageService := images.NewService(imageRepository, filesystem, deliveryIndex)
+	imageService := images.NewServiceWithProcessor(
+		imageRepository, filesystem, deliveryIndex,
+		processor.NewEngine(), processor.NewGate(cfg.ProcessingConcurrency),
+	)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	ui, err := webui.New()
 	if err != nil {
@@ -71,16 +75,17 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 
 	application := &Application{cancel: cancel}
 	application.Handler = httpapi.NewRouter(httpapi.Dependencies{
-		DB:            db,
-		Logger:        logger,
-		Auth:          authService,
-		APITokens:     tokenService,
-		Images:        imageService,
-		Settings:      settingsService,
-		DeliveryIndex: deliveryIndex,
-		Storage:       filesystem,
-		CookieSecure:  cfg.CookieSecure,
-		UI:            ui,
+		DB:                    db,
+		Logger:                logger,
+		Auth:                  authService,
+		APITokens:             tokenService,
+		Images:                imageService,
+		Settings:              settingsService,
+		DeliveryIndex:         deliveryIndex,
+		Storage:               filesystem,
+		CookieSecure:          cfg.CookieSecure,
+		ProcessingConcurrency: cfg.ProcessingConcurrency,
+		UI:                    ui,
 	})
 	go runExpirationCleanup(applicationContext, logger, authService, tokenService)
 	return application, nil

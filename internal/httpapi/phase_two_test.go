@@ -24,6 +24,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/platform/database"
+	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
 )
@@ -197,6 +198,10 @@ func TestPhaseTwoTokenVisibilityAndPrivateDeliveryUseMemoryIndexes(t *testing.T)
 }
 
 func newPhaseTwoFixture(t *testing.T) *phaseTwoFixture {
+	return newHTTPFixture(t, processor.NewEngine(), processor.NewGate(1), 1)
+}
+
+func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate, processingConcurrency int) *phaseTwoFixture {
 	t.Helper()
 	dataDirectory := t.TempDir()
 	for _, path := range []string{"db", "images", filepath.Join("cache", "thumbnails"), "tmp"} {
@@ -230,13 +235,13 @@ func newPhaseTwoFixture(t *testing.T) *phaseTwoFixture {
 	tokenService := apitoken.NewService(apitoken.NewRepository(db), apitoken.NewIndex())
 	filesystem := storage.NewFilesystem(dataDirectory)
 	deliveryIndex := delivery.NewIndex()
-	imageService := images.NewService(images.NewRepository(db), filesystem, deliveryIndex)
+	imageService := images.NewServiceWithProcessor(images.NewRepository(db), filesystem, deliveryIndex, engine, gate)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	var logs bytes.Buffer
 	router := NewRouter(Dependencies{
 		DB: db, Logger: slog.New(slog.NewJSONHandler(&logs, nil)), Auth: authService, APITokens: tokenService,
 		Images: imageService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
-		CookieSecure: false,
+		CookieSecure: false, ProcessingConcurrency: processingConcurrency,
 	})
 	return &phaseTwoFixture{
 		t: t, db: db, router: router, authService: authService, tokenService: tokenService, dataDirectory: dataDirectory, logs: &logs,
@@ -283,13 +288,18 @@ func (f *phaseTwoFixture) createToken(cookies []*http.Cookie, csrfToken, name st
 
 func (f *phaseTwoFixture) upload(cookies []*http.Cookie, csrfToken, visibility, bearer string) imageResponse {
 	f.t.Helper()
+	return f.uploadBytes(cookies, csrfToken, visibility, bearer, "phase-two.jpg", phaseTwoJPEG(f.t))
+}
+
+func (f *phaseTwoFixture) uploadBytes(cookies []*http.Cookie, csrfToken, visibility, bearer, filename string, data []byte) imageResponse {
+	f.t.Helper()
 	var body bytes.Buffer
 	writer := multipart.NewWriter(&body)
-	part, err := writer.CreateFormFile("file", "phase-two.jpg")
+	part, err := writer.CreateFormFile("file", filename)
 	if err != nil {
 		f.t.Fatalf("CreateFormFile() error = %v", err)
 	}
-	if _, err := part.Write(phaseTwoJPEG(f.t)); err != nil {
+	if _, err := part.Write(data); err != nil {
 		f.t.Fatalf("write JPEG: %v", err)
 	}
 	if visibility != "" {

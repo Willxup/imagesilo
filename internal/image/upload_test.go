@@ -18,7 +18,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 )
 
-func TestUploadJPEGPreservesBytesAndUpdatesIndex(t *testing.T) {
+func TestUploadPreservesBytesAndUpdatesIndex(t *testing.T) {
 	dataDirectory := prepareUploadTestData(t)
 	db, err := database.Open(filepath.Join(dataDirectory, "db", "imagesilo.db"))
 	if err != nil {
@@ -33,16 +33,16 @@ func TestUploadJPEGPreservesBytesAndUpdatesIndex(t *testing.T) {
 	index := delivery.NewIndex()
 	filesystem := storage.NewFilesystem(dataDirectory)
 	service := NewService(NewRepository(db), filesystem, index)
-	value, err := service.UploadJPEG(context.Background(), bytes.NewReader(jpegBytes), "sample.jpg", UploadOptions{
+	value, err := service.Upload(context.Background(), bytes.NewReader(jpegBytes), "sample.jpg", UploadOptions{
 		Visibility:  VisibilityPublic,
 		UploadedVia: "admin",
 	}, time.Now())
 	if err != nil {
-		t.Fatalf("UploadJPEG() error = %v", err)
+		t.Fatalf("Upload() error = %v", err)
 	}
 	wantHash := sha256.Sum256(jpegBytes)
 	if value.SourceSHA256 != wantHash || value.StoredSHA256 != wantHash {
-		t.Fatal("UploadJPEG() changed the default-upload bytes")
+		t.Fatal("Upload() changed the default-upload bytes")
 	}
 	stored, err := os.ReadFile(filepath.Join(dataDirectory, "images", value.StorageKey))
 	if err != nil {

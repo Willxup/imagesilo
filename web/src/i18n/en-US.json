@@ -19,13 +19,22 @@
   },
   "upload": {
     "title": "Upload image",
-    "description": "Upload a JPEG and choose whether its stable link is public or private.",
-    "chooseFile": "Choose a JPEG file",
+    "description": "Upload JPEG, PNG, WebP, or animated GIF files and choose whether their stable links are public or private.",
+    "chooseFiles": "Choose image files",
+    "runtime": "Up to {{concurrency}} files are processed at once; each batch can contain {{count}} files.",
+    "tooMany": "Choose no more than {{count}} files in one batch.",
     "visibility": "Visibility",
     "visibilityDefault": "Use system default",
-    "upload": "Upload JPEG",
+    "uploadCount": "Upload {{count}} files",
     "success": "Upload complete",
-    "failed": "Upload failed. Check the file type and size, then try again."
+    "failed": "Upload failed. Check the file type and size, then try again.",
+    "result": "{{format}} · {{before}} → {{after}} · saved {{percent}}%",
+    "status": {
+      "queued": "Queued in this browser",
+      "uploading": "Uploading and processing",
+      "complete": "Complete",
+      "failed": "Failed"
+    }
   },
   "images": {
     "title": "Recent images",
@@ -81,6 +90,17 @@
     "newPassword": "New password (at least 12 characters)",
     "savePassword": "Change password",
     "passwordChanged": "Password changed. Other administrator sessions were revoked.",
-    "passwordFailed": "Unable to change the password. Check the current password and requirements."
+    "passwordFailed": "Unable to change the password. Check the current password and requirements.",
+    "processing": "Image processing",
+    "processingHelp": "Compression and WebP conversion are independent. Both remain off by default so uploaded bytes are preserved.",
+    "compressionEnabled": "Enable same-format compression",
+    "jpegQuality": "JPEG quality",
+    "webpQuality": "WebP quality",
+    "pngCompression": "PNG compression level",
+    "conversionEnabled": "Convert JPEG and PNG to WebP",
+    "conversionWebpQuality": "Converted WebP quality",
+    "conversionWebpLossless": "Lossless WebP conversion",
+    "saveProcessing": "Save processing settings",
+    "processingFailed": "Unable to update image processing settings."
   }
 }

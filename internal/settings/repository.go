@@ -62,3 +62,29 @@ func (r *Repository) UpdateDefaultVisibility(ctx context.Context, visibility ima
 	}
 	return nil
 }
+
+func (r *Repository) UpdateProcessing(ctx context.Context, value Settings, now time.Time) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE app_settings SET
+			compression_enabled = ?, jpeg_quality = ?, webp_quality = ?, png_compression_level = ?,
+			conversion_enabled = ?, conversion_webp_quality = ?, conversion_webp_lossless = ?, updated_at = ?
+		WHERE singleton = 1`,
+		boolInt(value.CompressionEnabled), value.JPEGQuality, value.WebPQuality, value.PNGCompressionLevel,
+		boolInt(value.ConversionEnabled), value.ConversionWebPQuality, boolInt(value.ConversionWebPLossless), now.Unix(),
+	)
+	if err != nil {
+		return fmt.Errorf("update image processing settings: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil || updated != 1 {
+		return fmt.Errorf("image processing settings update affected %d rows", updated)
+	}
+	return nil
+}
+
+func boolInt(value bool) int {
+	if value {
+		return 1
+	}
+	return 0
+}

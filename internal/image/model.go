@@ -1,6 +1,10 @@
 package image
 
-import "time"
+import (
+	"time"
+
+	"github.com/Willxup/imagesilo/internal/platform/processor"
+)
 
 type Visibility string
 
@@ -32,4 +36,6 @@ type UploadOptions struct {
 	Visibility           Visibility
 	UploadedVia          string
 	UploadedByAPITokenID *string
+	Limits               processor.Limits
+	Processing           processor.Options
 }

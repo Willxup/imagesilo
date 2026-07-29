@@ -15,6 +15,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/config"
 	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/database"
+	"github.com/Willxup/imagesilo/internal/platform/processor"
 )
 
 func serve() error {
@@ -35,6 +36,10 @@ func serve() error {
 	if err := migrations.Apply(context.Background(), db); err != nil {
 		return err
 	}
+	if err := processor.Startup(); err != nil {
+		return err
+	}
+	defer processor.Shutdown()
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 	application, err := app.Build(context.Background(), cfg, db, logger)

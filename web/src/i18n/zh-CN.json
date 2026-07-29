@@ -19,13 +19,22 @@
   },
   "upload": {
     "title": "上传图片",
-    "description": "上传 JPEG，并选择稳定直链是公开还是私密。",
-    "chooseFile": "选择 JPEG 文件",
+    "description": "上传 JPEG、PNG、WebP 或动态 GIF，并选择稳定直链是公开还是私密。",
+    "chooseFiles": "选择图片文件",
+    "runtime": "最多同时处理 {{concurrency}} 个文件；每批最多选择 {{count}} 个文件。",
+    "tooMany": "每批最多选择 {{count}} 个文件。",
     "visibility": "可见性",
     "visibilityDefault": "使用系统默认值",
-    "upload": "上传 JPEG",
+    "uploadCount": "上传 {{count}} 个文件",
     "success": "上传成功",
-    "failed": "上传失败，请检查文件格式和大小后重试。"
+    "failed": "上传失败，请检查文件格式和大小后重试。",
+    "result": "{{format}} · {{before}} → {{after}} · 节省 {{percent}}%",
+    "status": {
+      "queued": "在浏览器中排队",
+      "uploading": "上传并处理中",
+      "complete": "已完成",
+      "failed": "失败"
+    }
   },
   "images": {
     "title": "最近图片",
@@ -81,6 +90,17 @@
     "newPassword": "新密码（至少 12 个字符）",
     "savePassword": "修改密码",
     "passwordChanged": "密码已修改，其他管理员 Session 已撤销。",
-    "passwordFailed": "密码修改失败，请检查当前密码和新密码要求。"
+    "passwordFailed": "密码修改失败，请检查当前密码和新密码要求。",
+    "processing": "图片处理",
+    "processingHelp": "压缩与 WebP 转换相互独立，默认都关闭，因此上传字节会原样保存。",
+    "compressionEnabled": "启用同格式压缩",
+    "jpegQuality": "JPEG 质量",
+    "webpQuality": "WebP 质量",
+    "pngCompression": "PNG 压缩等级",
+    "conversionEnabled": "将 JPEG 和 PNG 转为 WebP",
+    "conversionWebpQuality": "转换后 WebP 质量",
+    "conversionWebpLossless": "WebP 无损转换",
+    "saveProcessing": "保存处理设置",
+    "processingFailed": "图片处理设置更新失败。"
   }
 }

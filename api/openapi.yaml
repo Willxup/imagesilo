@@ -176,6 +176,23 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/images/{imageId}/thumbnail:
+    get:
+      operationId: getImageThumbnail
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+      responses:
+        '200':
+          description: 可重建的后台 JPEG 预览缩略图
+          content:
+            image/jpeg:
+              schema: { type: string, format: binary }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /image/{imageId}:
     get:
       operationId: deliverImage
@@ -304,6 +321,46 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/settings/processing:
+    patch:
+      operationId: updateProcessingSettings
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateProcessingSettingsRequest'
+      responses:
+        '200':
+          description: 图片压缩与 WebP 转换设置已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/system:
+    get:
+      operationId: getSystemInfo
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 只读处理并发与上传安全边界
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SystemInfo'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
   /api/v1/imports:
     post:
       operationId: importImage
@@ -427,19 +484,22 @@ components:
         newPassword: { type: string, minLength: 12, maxLength: 1024 }
     Image:
       type: object
-      required: [id, originalName, mimeType, width, height, sourceSize, storedSize, sourceSha256, storedSha256, visibility, standardUrl, createdAt]
+      required: [id, originalName, mimeType, extension, width, height, sourceSize, storedSize, sourceSha256, storedSha256, processingSummary, visibility, standardUrl, thumbnailUrl, createdAt]
       properties:
         id: { type: string, format: uuid }
         originalName: { type: string }
         mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
+        extension: { type: string, enum: [.jpg, .png, .webp, .gif] }
         width: { type: integer, minimum: 1 }
         height: { type: integer, minimum: 1 }
         sourceSize: { type: integer, format: int64, minimum: 1 }
         storedSize: { type: integer, format: int64, minimum: 1 }
         sourceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         storedSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        processingSummary: { $ref: '#/components/schemas/ProcessingSummary' }
         visibility: { $ref: '#/components/schemas/Visibility' }
         standardUrl: { type: string }
+        thumbnailUrl: { type: string }
         createdAt: { type: string, format: date-time }
     ImageList:
       type: object
@@ -502,15 +562,57 @@ components:
           items: { $ref: '#/components/schemas/ApiToken' }
     AppSettings:
       type: object
-      required: [defaultVisibility]
+      required: [defaultVisibility, compressionEnabled, jpegQuality, webpQuality, pngCompressionLevel, conversionEnabled, conversionWebpQuality, conversionWebpLossless]
       properties:
         defaultVisibility: { $ref: '#/components/schemas/Visibility' }
+        compressionEnabled: { type: boolean }
+        jpegQuality: { type: integer, minimum: 1, maximum: 100 }
+        webpQuality: { type: integer, minimum: 1, maximum: 100 }
+        pngCompressionLevel: { type: integer, minimum: 0, maximum: 9 }
+        conversionEnabled: { type: boolean }
+        conversionWebpQuality: { type: integer, minimum: 1, maximum: 100 }
+        conversionWebpLossless: { type: boolean }
     UpdateDefaultVisibilityRequest:
       type: object
       additionalProperties: false
       required: [defaultVisibility]
       properties:
         defaultVisibility: { $ref: '#/components/schemas/Visibility' }
+    UpdateProcessingSettingsRequest:
+      type: object
+      additionalProperties: false
+      required: [compressionEnabled, jpegQuality, webpQuality, pngCompressionLevel, conversionEnabled, conversionWebpQuality, conversionWebpLossless]
+      properties:
+        compressionEnabled: { type: boolean }
+        jpegQuality: { type: integer, minimum: 1, maximum: 100 }
+        webpQuality: { type: integer, minimum: 1, maximum: 100 }
+        pngCompressionLevel: { type: integer, minimum: 0, maximum: 9 }
+        conversionEnabled: { type: boolean }
+        conversionWebpQuality: { type: integer, minimum: 1, maximum: 100 }
+        conversionWebpLossless: { type: boolean }
+    ProcessingSummary:
+      type: object
+      required: [action, sourceFormat, storedFormat, preserved, compressionEnabled, conversionEnabled]
+      properties:
+        action: { type: string, enum: [preserve, compress, convert] }
+        sourceFormat: { type: string, enum: [jpeg, png, webp, gif] }
+        storedFormat: { type: string, enum: [jpeg, png, webp, gif] }
+        preserved: { type: boolean }
+        compressionEnabled: { type: boolean }
+        conversionEnabled: { type: boolean }
+        compressionRejected: { type: boolean }
+    SystemInfo:
+      type: object
+      required: [processingConcurrency, maxBatchCount, maxUploadBytes, maxTotalPixels, supportedFormats, vipsVersion]
+      properties:
+        processingConcurrency: { type: integer, minimum: 1 }
+        maxBatchCount: { type: integer, minimum: 1 }
+        maxUploadBytes: { type: integer, format: int64, minimum: 1 }
+        maxTotalPixels: { type: integer, format: int64, minimum: 1 }
+        supportedFormats:
+          type: array
+          items: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
+        vipsVersion: { type: string }
     CreateAliasRequest:
       type: object
       additionalProperties: false

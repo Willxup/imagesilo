@@ -9,15 +9,28 @@ import (
 )
 
 type Filesystem struct {
-	imagesDirectory    string
-	temporaryDirectory string
+	imagesDirectory     string
+	thumbnailsDirectory string
+	temporaryDirectory  string
 }
 
 func NewFilesystem(dataDirectory string) *Filesystem {
 	return &Filesystem{
-		imagesDirectory:    filepath.Join(dataDirectory, "images"),
-		temporaryDirectory: filepath.Join(dataDirectory, "tmp"),
+		imagesDirectory:     filepath.Join(dataDirectory, "images"),
+		thumbnailsDirectory: filepath.Join(dataDirectory, "cache", "thumbnails"),
+		temporaryDirectory:  filepath.Join(dataDirectory, "tmp"),
 	}
+}
+
+func (f *Filesystem) CommitThumbnailTemporary(temporaryPath, imageID string) error {
+	finalPath, err := f.resolveThumbnailKey(imageID)
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(temporaryPath, finalPath); err != nil {
+		return fmt.Errorf("atomically commit thumbnail: %w", err)
+	}
+	return nil
 }
 
 func (f *Filesystem) CreateTemporary() (*os.File, error) {
@@ -61,6 +74,18 @@ func (f *Filesystem) Open(storageKey string) (*os.File, error) {
 	return file, nil
 }
 
+func (f *Filesystem) OpenThumbnail(imageID string) (*os.File, error) {
+	path, err := f.resolveThumbnailKey(imageID)
+	if err != nil {
+		return nil, err
+	}
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, fmt.Errorf("open thumbnail: %w", err)
+	}
+	return file, nil
+}
+
 func (f *Filesystem) Exists(storageKey string) (bool, error) {
 	path, err := f.resolveStorageKey(storageKey)
 	if err != nil {
@@ -87,6 +112,17 @@ func (f *Filesystem) Remove(storageKey string) error {
 	return nil
 }
 
+func (f *Filesystem) RemoveThumbnail(imageID string) error {
+	path, err := f.resolveThumbnailKey(imageID)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove thumbnail: %w", err)
+	}
+	return nil
+}
+
 func (f *Filesystem) RemoveTemporary(path string) error {
 	clean := filepath.Clean(path)
 	relative, err := filepath.Rel(f.temporaryDirectory, clean)
@@ -108,4 +144,11 @@ func (f *Filesystem) resolveStorageKey(storageKey string) (string, error) {
 		return "", fmt.Errorf("invalid storage key")
 	}
 	return path, nil
+}
+
+func (f *Filesystem) resolveThumbnailKey(imageID string) (string, error) {
+	if imageID == "" || imageID != filepath.Base(imageID) || strings.ContainsAny(imageID, "/\\\x00") || !fs.ValidPath(imageID) {
+		return "", fmt.Errorf("invalid thumbnail key")
+	}
+	return filepath.Join(f.thumbnailsDirectory, imageID), nil
 }

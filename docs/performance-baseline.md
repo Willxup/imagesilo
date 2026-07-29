@@ -28,4 +28,4 @@
 - 证据为 GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938)，对应提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268`。
 - `scripts/container-smoke.sh` 在本机和 GitHub 均确认没有遗留容器或 volume。
 
-当前阶段不根据这些数字设置 Docker CPU/内存配额，也不调用强制 GC。图片解码并发值仍保持保守默认 1，等待阶段 3 在 amd64/arm64 真机上完成 1、2、4、8 并发 benchmark。
+当前阶段不根据这些数字设置 Docker CPU/内存配额，也不调用强制 GC。阶段 3 的 libvips 处理并发基线与默认值选择见 `processing-benchmark.md`。

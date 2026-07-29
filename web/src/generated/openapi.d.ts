@@ -132,6 +132,22 @@ export interface paths {
         patch: operations["updateImageVisibility"];
         trace?: never;
     };
+    "/api/v1/images/{imageId}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageThumbnail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/image/{imageId}": {
         parameters: {
             query?: never;
@@ -212,6 +228,38 @@ export interface paths {
         patch: operations["updateDefaultVisibility"];
         trace?: never;
     };
+    "/api/v1/settings/processing": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateProcessingSettings"];
+        trace?: never;
+    };
+    "/api/v1/system": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSystemInfo"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports": {
         parameters: {
             query?: never;
@@ -279,6 +327,8 @@ export interface components {
             originalName: string;
             /** @enum {string} */
             mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+            /** @enum {string} */
+            extension: ".jpg" | ".png" | ".webp" | ".gif";
             width: number;
             height: number;
             /** Format: int64 */
@@ -287,8 +337,10 @@ export interface components {
             storedSize: number;
             sourceSha256: string;
             storedSha256: string;
+            processingSummary: components["schemas"]["ProcessingSummary"];
             visibility: components["schemas"]["Visibility"];
             standardUrl: string;
+            thumbnailUrl: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -336,9 +388,47 @@ export interface components {
         };
         AppSettings: {
             defaultVisibility: components["schemas"]["Visibility"];
+            compressionEnabled: boolean;
+            jpegQuality: number;
+            webpQuality: number;
+            pngCompressionLevel: number;
+            conversionEnabled: boolean;
+            conversionWebpQuality: number;
+            conversionWebpLossless: boolean;
         };
         UpdateDefaultVisibilityRequest: {
             defaultVisibility: components["schemas"]["Visibility"];
+        };
+        UpdateProcessingSettingsRequest: {
+            compressionEnabled: boolean;
+            jpegQuality: number;
+            webpQuality: number;
+            pngCompressionLevel: number;
+            conversionEnabled: boolean;
+            conversionWebpQuality: number;
+            conversionWebpLossless: boolean;
+        };
+        ProcessingSummary: {
+            /** @enum {string} */
+            action: "preserve" | "compress" | "convert";
+            /** @enum {string} */
+            sourceFormat: "jpeg" | "png" | "webp" | "gif";
+            /** @enum {string} */
+            storedFormat: "jpeg" | "png" | "webp" | "gif";
+            preserved: boolean;
+            compressionEnabled: boolean;
+            conversionEnabled: boolean;
+            compressionRejected?: boolean;
+        };
+        SystemInfo: {
+            processingConcurrency: number;
+            maxBatchCount: number;
+            /** Format: int64 */
+            maxUploadBytes: number;
+            /** Format: int64 */
+            maxTotalPixels: number;
+            supportedFormats: ("image/jpeg" | "image/png" | "image/webp" | "image/gif")[];
+            vipsVersion: string;
         };
         CreateAliasRequest: {
             path: string;
@@ -681,6 +771,30 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
+    getImageThumbnail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 可重建的后台 JPEG 预览缩略图 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/jpeg": string;
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
     deliverImage: {
         parameters: {
             query?: never;
@@ -845,6 +959,57 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updateProcessingSettings: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProcessingSettingsRequest"];
+            };
+        };
+        responses: {
+            /** @description 图片压缩与 WebP 转换设置已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getSystemInfo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 只读处理并发与上传安全边界 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemInfo"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
         };
     };
     importImage: {

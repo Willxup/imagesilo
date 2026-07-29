@@ -34,11 +34,11 @@ export function ImageListPage() {
         {query.data?.items.map((image) => (
           <article className="overflow-hidden rounded-2xl border border-line bg-panel" key={image.id}>
             <a href={image.standardUrl} target="_blank" rel="noreferrer">
-              <img className="aspect-video w-full bg-canvas object-contain" src={image.standardUrl} alt={image.originalName} loading="lazy" />
+              <img className="aspect-video w-full bg-canvas object-contain" src={image.thumbnailUrl} alt={image.originalName} loading="lazy" />
             </a>
             <div className="p-4">
               <p className="truncate font-medium" title={image.originalName}>{image.originalName}</p>
-              <p className="mt-1 text-sm text-muted">{image.width} × {image.height} · {formatBytes(image.storedSize)}</p>
+              <p className="mt-1 text-sm text-muted">{image.width} × {image.height} · {image.extension} · {formatBytes(image.storedSize)}</p>
               <div className="mt-4 flex items-center justify-between gap-3">
                 <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
                   {t(`visibility.${image.visibility}`)}
