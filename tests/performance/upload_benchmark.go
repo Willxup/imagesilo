@@ -35,6 +35,8 @@ type result struct {
 	SourceHeight      int     `json:"sourceHeight"`
 	SourcePixels      int     `json:"sourcePixels"`
 	SourceFixtureSize int     `json:"sourceFixtureBytes"`
+	StoredBytesTotal  int64   `json:"storedBytesTotal"`
+	StoredBytesMean   float64 `json:"storedBytesMean"`
 }
 
 func main() {
@@ -65,6 +67,7 @@ func main() {
 	jobs := make(chan struct{})
 	durations := make(chan time.Duration, *requests)
 	statuses := make(chan int, *requests)
+	storedSizes := make(chan int64, *requests)
 	var workers sync.WaitGroup
 	for worker := 0; worker < *concurrency; worker++ {
 		workers.Add(1)
@@ -82,10 +85,24 @@ func main() {
 				if err != nil {
 					fatal(err.Error())
 				}
-				_, _ = io.Copy(io.Discard, response.Body)
+				responseBody, err := io.ReadAll(response.Body)
 				response.Body.Close()
+				if err != nil {
+					fatal(err.Error())
+				}
+				storedSize := int64(0)
+				if response.StatusCode == http.StatusCreated {
+					var uploaded struct {
+						StoredSize int64 `json:"storedSize"`
+					}
+					if err := json.Unmarshal(responseBody, &uploaded); err != nil || uploaded.StoredSize <= 0 {
+						fatal("upload response did not include storedSize")
+					}
+					storedSize = uploaded.StoredSize
+				}
 				durations <- time.Since(started)
 				statuses <- response.StatusCode
+				storedSizes <- storedSize
 			}
 		}()
 	}
@@ -97,6 +114,7 @@ func main() {
 	workers.Wait()
 	close(durations)
 	close(statuses)
+	close(storedSizes)
 	elapsed := time.Since(started)
 
 	values := make([]time.Duration, 0, *requests)
@@ -116,6 +134,10 @@ func main() {
 			fatal(fmt.Sprintf("unexpected upload status %d", status))
 		}
 	}
+	storedBytesTotal := int64(0)
+	for storedSize := range storedSizes {
+		storedBytesTotal += storedSize
+	}
 	p95Index := int(float64(len(values)-1) * 0.95)
 	output := result{
 		Concurrency: *concurrency, Requests: *requests, Successes: successes, BusyResponses: busy,
@@ -123,6 +145,10 @@ func main() {
 		ThroughputPerSec: float64(successes) / elapsed.Seconds(),
 		SourceFormat:     "png", SourceWidth: *width, SourceHeight: *height,
 		SourcePixels: *width * *height, SourceFixtureSize: len(pngBytes),
+		StoredBytesTotal: storedBytesTotal,
+	}
+	if successes > 0 {
+		output.StoredBytesMean = float64(storedBytesTotal) / float64(successes)
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
 		fatal(err.Error())

@@ -138,6 +138,8 @@ fds_after="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdep
 temporary_files="$(docker exec "$container" sh -c 'find /data/tmp -type f | wc -l')"
 memory_current="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.current')"
 memory_peak="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.peak')"
+memory_anon="$(docker exec "$container" sh -c "awk '\$1 == \"anon\" { print \$2 }' /sys/fs/cgroup/memory.stat")"
+memory_file="$(docker exec "$container" sh -c "awk '\$1 == \"file\" { print \$2 }' /sys/fs/cgroup/memory.stat")"
 test "$goroutines_after" -le "$((goroutines_before + 4))"
 test "$fds_after" -le "$((fds_before + 8))"
 test "$temporary_files" = "0"
@@ -160,7 +162,9 @@ jq --null-input \
   --argjson fileDescriptorsAfter "$fds_after" \
   --argjson memoryCurrentBytes "$memory_current" \
   --argjson memoryPeakBytes "$memory_peak" \
-  '{image:$image,workDir:$workDir,durationSeconds:$durationSeconds,iterations:$iterations,cpuLimit:$cpuLimit,memoryLimit:$memoryLimit,goroutinesBefore:$goroutinesBefore,goroutinesAfter:$goroutinesAfter,fileDescriptorsBefore:$fileDescriptorsBefore,fileDescriptorsAfter:$fileDescriptorsAfter,memoryCurrentBytes:$memoryCurrentBytes,memoryPeakBytes:$memoryPeakBytes}' \
+  --argjson memoryAnonBytes "$memory_anon" \
+  --argjson memoryFileBytes "$memory_file" \
+  '{image:$image,workDir:$workDir,durationSeconds:$durationSeconds,iterations:$iterations,cpuLimit:$cpuLimit,memoryLimit:$memoryLimit,goroutinesBefore:$goroutinesBefore,goroutinesAfter:$goroutinesAfter,fileDescriptorsBefore:$fileDescriptorsBefore,fileDescriptorsAfter:$fileDescriptorsAfter,memoryCurrentBytes:$memoryCurrentBytes,memoryPeakBytes:$memoryPeakBytes,memoryAnonBytes:$memoryAnonBytes,memoryFileBytes:$memoryFileBytes}' \
   >"$result_file"
 
 printf 'ImageSilo limited remote acceptance passed: result=%s data=%s\n' "$result_file" "$data_dir"

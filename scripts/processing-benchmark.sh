@@ -56,8 +56,10 @@ for concurrency in $concurrencies; do
     -width "$fixture_width" -height "$fixture_height" -conversion-enabled="$conversion_enabled"
   memory_current="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.current')"
   memory_peak="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.peak')"
-  printf '{"concurrency":%s,"memoryCurrentBytes":%s,"memoryPeakBytes":%s}\n' \
-    "$concurrency" "$memory_current" "$memory_peak"
+  memory_anon="$(docker exec "$container" sh -c "awk '\$1 == \"anon\" { print \$2 }' /sys/fs/cgroup/memory.stat")"
+  memory_file="$(docker exec "$container" sh -c "awk '\$1 == \"file\" { print \$2 }' /sys/fs/cgroup/memory.stat")"
+  printf '{"concurrency":%s,"memoryCurrentBytes":%s,"memoryPeakBytes":%s,"memoryAnonBytes":%s,"memoryFileBytes":%s}\n' \
+    "$concurrency" "$memory_current" "$memory_peak" "$memory_anon" "$memory_file"
   if test "$diagnostics" = "true"; then
     docker logs "$container" 2>&1 | grep 'image upload completed' | tail -n 1 >&2 || true
     docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.stat' >&2

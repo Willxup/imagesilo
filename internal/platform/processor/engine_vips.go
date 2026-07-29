@@ -41,10 +41,13 @@ static int imagesilo_transform(
 			NULL);
 		break;
 	case IMAGESILO_SAVE_WEBP:
+		// Effort 1 cuts the 16 MP single-request encoder peak and CPU time
+		// materially while keeping quality unchanged; effort 4 only saved
+		// about 7% more bytes on the fixed worst-case fixture.
 		result = vips_webpsave(image, output,
 			"Q", quality,
 			"lossless", lossless,
-			"effort", 4,
+			"effort", 1,
 			NULL);
 		break;
 	}
