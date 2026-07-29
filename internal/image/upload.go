@@ -34,7 +34,13 @@ func NewService(repository *Repository, filesystem *storage.Filesystem, index *d
 	return &Service{repository: repository, storage: filesystem, index: index}
 }
 
-func (s *Service) UploadJPEG(ctx context.Context, reader io.Reader, originalName string, now time.Time) (Image, error) {
+func (s *Service) UploadJPEG(ctx context.Context, reader io.Reader, originalName string, options UploadOptions, now time.Time) (Image, error) {
+	if options.Visibility != VisibilityPublic && options.Visibility != VisibilityPrivate {
+		return Image{}, fmt.Errorf("invalid image visibility")
+	}
+	if options.UploadedVia != "admin" && options.UploadedVia != "api_token" && options.UploadedVia != "import" {
+		return Image{}, fmt.Errorf("invalid upload source")
+	}
 	temporary, err := s.storage.CreateTemporary()
 	if err != nil {
 		return Image{}, err
@@ -86,21 +92,22 @@ func (s *Service) UploadJPEG(ctx context.Context, reader io.Reader, originalName
 	var digest [32]byte
 	copy(digest[:], hasher.Sum(nil))
 	value := Image{
-		ID:                id.String(),
-		OriginalName:      sanitizeOriginalName(originalName),
-		StorageKey:        storageKey,
-		Extension:         ".jpg",
-		MIMEType:          "image/jpeg",
-		Width:             width,
-		Height:            height,
-		SourceSize:        written,
-		StoredSize:        written,
-		SourceSHA256:      digest,
-		StoredSHA256:      digest,
-		ProcessingSummary: `{"preserved":true}`,
-		Visibility:        VisibilityPublic,
-		UploadedVia:       "admin",
-		CreatedAt:         now.UTC(),
+		ID:                   id.String(),
+		OriginalName:         sanitizeOriginalName(originalName),
+		StorageKey:           storageKey,
+		Extension:            ".jpg",
+		MIMEType:             "image/jpeg",
+		Width:                width,
+		Height:               height,
+		SourceSize:           written,
+		StoredSize:           written,
+		SourceSHA256:         digest,
+		StoredSHA256:         digest,
+		ProcessingSummary:    `{"preserved":true}`,
+		Visibility:           options.Visibility,
+		UploadedVia:          options.UploadedVia,
+		UploadedByAPITokenID: options.UploadedByAPITokenID,
+		CreatedAt:            now.UTC(),
 	}
 	if err := s.repository.Create(ctx, value); err != nil {
 		committed = false
@@ -123,6 +130,18 @@ func (s *Service) List(ctx context.Context, limit int) ([]Image, error) {
 		limit = 50
 	}
 	return s.repository.List(ctx, limit)
+}
+
+func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Visibility) (bool, error) {
+	if visibility != VisibilityPublic && visibility != VisibilityPrivate {
+		return false, fmt.Errorf("invalid image visibility")
+	}
+	updated, err := s.repository.UpdateVisibility(ctx, id, visibility)
+	if err != nil || !updated {
+		return updated, err
+	}
+	s.index.UpdateVisibility(id, string(visibility))
+	return true, nil
 }
 
 func inspectJPEG(path string) (int, int, error) {

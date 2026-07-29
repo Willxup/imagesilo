@@ -1,14 +1,26 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { apiRequest } from '../../lib/api-client'
-import type { ImageList } from '../../lib/api-types'
+import type { ImageList, Visibility } from '../../lib/api-types'
 
 export function ImageListPage() {
   const { t } = useTranslation()
+  const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: ['images'],
     queryFn: () => apiRequest<ImageList>('/api/v1/images?limit=50'),
+  })
+  const visibilityMutation = useMutation({
+    mutationFn: ({ id, visibility }: { id: string; visibility: Visibility }) => apiRequest<void>(
+      `/api/v1/images/${id}/visibility`,
+      {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ visibility }),
+      },
+    ),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['images'] }),
   })
 
   return (
@@ -27,10 +39,27 @@ export function ImageListPage() {
             <div className="p-4">
               <p className="truncate font-medium" title={image.originalName}>{image.originalName}</p>
               <p className="mt-1 text-sm text-muted">{image.width} × {image.height} · {formatBytes(image.storedSize)}</p>
+              <div className="mt-4 flex items-center justify-between gap-3">
+                <span className="rounded-full bg-accent-soft px-3 py-1 text-xs font-medium text-accent">
+                  {t(`visibility.${image.visibility}`)}
+                </span>
+                <button
+                  className="button-secondary"
+                  type="button"
+                  disabled={visibilityMutation.isPending}
+                  onClick={() => visibilityMutation.mutate({
+                    id: image.id,
+                    visibility: image.visibility === 'public' ? 'private' : 'public',
+                  })}
+                >
+                  {image.visibility === 'public' ? t('images.makePrivate') : t('images.makePublic')}
+                </button>
+              </div>
             </div>
           </article>
         ))}
       </div>
+      {visibilityMutation.isError ? <p className="mt-5 text-danger">{t('images.visibilityFailed')}</p> : null}
     </section>
   )
 }

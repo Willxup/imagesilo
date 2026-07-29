@@ -84,6 +84,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -98,6 +114,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/{imageId}/visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateImageVisibility"];
         trace?: never;
     };
     "/image/{imageId}": {
@@ -123,13 +155,61 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listApiTokens"];
         put?: never;
         post: operations["createApiToken"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/api-tokens/{tokenId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["revokeApiToken"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSettings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/settings/default-visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateDefaultVisibility"];
         trace?: never;
     };
     "/api/v1/imports": {
@@ -185,8 +265,13 @@ export interface components {
             adminId: string;
             /** Format: email */
             email: string;
+            csrfToken: string;
             /** Format: date-time */
             expiresAt: string;
+        };
+        ChangePasswordRequest: {
+            currentPassword: string;
+            newPassword: string;
         };
         Image: {
             /** Format: uuid */
@@ -210,6 +295,9 @@ export interface components {
         ImageList: {
             items: components["schemas"]["Image"][];
         };
+        UpdateImageVisibilityRequest: {
+            visibility: components["schemas"]["Visibility"];
+        };
         CreateApiTokenRequest: {
             name: string;
             scopes: components["schemas"]["ApiTokenScope"][];
@@ -224,7 +312,33 @@ export interface components {
             tokenPrefix: string;
             scopes: components["schemas"]["ApiTokenScope"][];
             /** Format: date-time */
+            expiresAt: string | null;
+            /** @enum {string} */
+            status: "active";
+            /** Format: date-time */
             createdAt: string;
+        };
+        ApiToken: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            tokenPrefix: string;
+            scopes: components["schemas"]["ApiTokenScope"][];
+            /** Format: date-time */
+            expiresAt: string | null;
+            /** @enum {string} */
+            status: "active" | "expired" | "revoked";
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ApiTokenList: {
+            items: components["schemas"]["ApiToken"][];
+        };
+        AppSettings: {
+            defaultVisibility: components["schemas"]["Visibility"];
+        };
+        UpdateDefaultVisibilityRequest: {
+            defaultVisibility: components["schemas"]["Visibility"];
         };
         CreateAliasRequest: {
             path: string;
@@ -327,6 +441,11 @@ export interface components {
     };
     parameters: {
         ImageId: string;
+        TokenId: string;
+        /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+        CSRFToken: string;
+        /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+        CSRFTokenForSession: string;
     };
     requestBodies: never;
     headers: never;
@@ -425,7 +544,10 @@ export interface operations {
     logout: {
         parameters: {
             query?: never;
-            header?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -438,6 +560,36 @@ export interface operations {
                 };
                 content?: never;
             };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    changePassword: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordRequest"];
+            };
+        };
+        responses: {
+            /** @description 密码已更新，当前 Session 保留，其他 Session 已撤销 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     listImages: {
@@ -466,7 +618,10 @@ export interface operations {
     uploadImage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -493,6 +648,37 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    updateImageVisibility: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateImageVisibilityRequest"];
+            };
+        };
+        responses: {
+            /** @description 可见性已提交到 SQLite 并同步更新交付索引 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     deliverImage: {
@@ -533,10 +719,34 @@ export interface operations {
             404: components["responses"]["NotFound"];
         };
     };
-    createApiToken: {
+    listApiTokens: {
         parameters: {
             query?: never;
             header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description API Token 元数据列表，永不返回 Token 明文 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiTokenList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    createApiToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -557,6 +767,84 @@ export interface operations {
             };
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    revokeApiToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                tokenId: components["parameters"]["TokenId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token 已吊销并立即从活跃内存索引移除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    getSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 当前可由阶段 2 管理的系统设置 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSettings"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    updateDefaultVisibility: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDefaultVisibilityRequest"];
+            };
+        };
+        responses: {
+            /** @description 默认可见性已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppSettings"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     importImage: {

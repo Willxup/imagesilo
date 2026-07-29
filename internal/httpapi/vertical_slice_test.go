@@ -22,6 +22,7 @@ import (
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/platform/database"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
+	"github.com/Willxup/imagesilo/internal/settings"
 )
 
 func TestPhaseOneVerticalSlice(t *testing.T) {
@@ -59,6 +60,7 @@ func TestPhaseOneVerticalSlice(t *testing.T) {
 	imageService := images.NewService(images.NewRepository(db), filesystem, index)
 	router := NewRouter(Dependencies{
 		DB: db, Logger: slog.New(slog.DiscardHandler), Auth: authService, Images: imageService,
+		Settings:      settings.NewService(settings.NewRepository(db)),
 		DeliveryIndex: index, Storage: filesystem, CookieSecure: false,
 	})
 
@@ -71,8 +73,20 @@ func TestPhaseOneVerticalSlice(t *testing.T) {
 		t.Fatalf("login status = %d, body = %s", loginResponse.Code, loginResponse.Body.String())
 	}
 	cookies := loginResponse.Result().Cookies()
-	if len(cookies) != 1 || cookies[0].Name != sessionCookieName {
-		t.Fatalf("login cookies = %+v, want one session cookie", cookies)
+	if len(cookies) != 2 {
+		t.Fatalf("login cookies = %+v, want session and CSRF cookies", cookies)
+	}
+	var sessionCookie, csrfCookie *http.Cookie
+	for _, cookie := range cookies {
+		switch cookie.Name {
+		case sessionCookieName:
+			sessionCookie = cookie
+		case csrfCookieName:
+			csrfCookie = cookie
+		}
+	}
+	if sessionCookie == nil || csrfCookie == nil {
+		t.Fatalf("login cookies = %+v, want session and CSRF cookies", cookies)
 	}
 
 	jpegBytes := verticalSliceJPEG(t)
@@ -90,7 +104,9 @@ func TestPhaseOneVerticalSlice(t *testing.T) {
 	}
 	uploadRequest := httptest.NewRequest(http.MethodPost, "/api/v1/images", &uploadBody)
 	uploadRequest.Header.Set("Content-Type", writer.FormDataContentType())
-	uploadRequest.AddCookie(cookies[0])
+	uploadRequest.AddCookie(sessionCookie)
+	uploadRequest.AddCookie(csrfCookie)
+	uploadRequest.Header.Set("X-CSRF-Token", csrfCookie.Value)
 	uploadResponse := httptest.NewRecorder()
 	router.ServeHTTP(uploadResponse, uploadRequest)
 	if uploadResponse.Code != http.StatusCreated {
@@ -102,7 +118,7 @@ func TestPhaseOneVerticalSlice(t *testing.T) {
 	}
 
 	listRequest := httptest.NewRequest(http.MethodGet, "/api/v1/images", nil)
-	listRequest.AddCookie(cookies[0])
+	listRequest.AddCookie(sessionCookie)
 	listResponse := httptest.NewRecorder()
 	router.ServeHTTP(listResponse, listRequest)
 	if listResponse.Code != http.StatusOK {

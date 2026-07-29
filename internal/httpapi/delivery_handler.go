@@ -11,15 +11,22 @@ import (
 )
 
 type deliveryHandler struct {
-	index   *delivery.Index
-	storage *storage.Filesystem
+	index         *delivery.Index
+	storage       *storage.Filesystem
+	authenticator *authenticator
 }
 
-func newDeliveryHandler(index *delivery.Index, filesystem *storage.Filesystem) *deliveryHandler {
-	return &deliveryHandler{index: index, storage: filesystem}
+func newDeliveryHandler(index *delivery.Index, filesystem *storage.Filesystem, authenticator *authenticator) *deliveryHandler {
+	return &deliveryHandler{index: index, storage: filesystem, authenticator: authenticator}
 }
 
 func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
+	for _, name := range []string{"token", "key", "api_key", "access_token"} {
+		if _, present := r.URL.Query()[name]; present {
+			writeError(w, r, http.StatusBadRequest, "url_token_forbidden", "Authentication tokens are not accepted in image URLs.")
+			return
+		}
+	}
 	rawID := chi.URLParam(r, "imageID")
 	id, err := uuid.Parse(rawID)
 	if err != nil || id.String() != rawID {
@@ -27,9 +34,23 @@ func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target, ok := h.index.Get(rawID)
-	if !ok || target.Visibility != "public" {
+	if !ok {
 		http.NotFound(w, r)
 		return
+	}
+	if target.Visibility == "private" {
+		w.Header().Set("Cache-Control", "private, no-store")
+		w.Header().Set("Vary", "Authorization, Cookie")
+		allowed, insufficientScope := h.authenticator.privateImageAccess(r)
+		if !allowed {
+			w.Header().Set("WWW-Authenticate", `Bearer realm="imagesilo"`)
+			if insufficientScope {
+				writeError(w, r, http.StatusForbidden, "insufficient_scope", "Bearer token does not have images:read_private scope.")
+			} else {
+				writeError(w, r, http.StatusUnauthorized, "authentication_required", "Private image authentication is required.")
+			}
+			return
+		}
 	}
 	file, err := h.storage.Open(target.StorageKey)
 	if err != nil {
@@ -40,7 +61,9 @@ func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", target.MIMEType)
 	w.Header().Set("ETag", target.ETag)
-	w.Header().Set("Cache-Control", "public, no-cache")
+	if target.Visibility != "private" {
+		w.Header().Set("Cache-Control", "public, no-cache")
+	}
 	if disposition := mime.FormatMediaType("inline", map[string]string{"filename": target.OriginalName}); disposition != "" {
 		w.Header().Set("Content-Disposition", disposition)
 	}

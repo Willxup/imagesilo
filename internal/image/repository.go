@@ -70,6 +70,18 @@ func (r *Repository) List(ctx context.Context, limit int) ([]Image, error) {
 	return images, nil
 }
 
+func (r *Repository) UpdateVisibility(ctx context.Context, id string, visibility Visibility) (bool, error) {
+	result, err := r.db.ExecContext(ctx, "UPDATE images SET visibility = ? WHERE id = ?", visibility, id)
+	if err != nil {
+		return false, fmt.Errorf("update image visibility: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("count image visibility update: %w", err)
+	}
+	return updated == 1, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }

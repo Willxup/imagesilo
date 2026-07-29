@@ -24,6 +24,8 @@ export function AdminLayout() {
           <nav className="flex items-center gap-2" aria-label={t('nav.primary')}>
             <NavLink className="nav-link" to="/admin/upload">{t('nav.upload')}</NavLink>
             <NavLink className="nav-link" to="/admin/images">{t('nav.images')}</NavLink>
+            <NavLink className="nav-link" to="/admin/api-tokens">{t('nav.apiTokens')}</NavLink>
+            <NavLink className="nav-link" to="/admin/settings">{t('nav.settings')}</NavLink>
             <button className="button-secondary" type="button" onClick={() => void signOut()}>{t('auth.signOut')}</button>
           </nav>
         </div>

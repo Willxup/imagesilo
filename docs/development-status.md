@@ -11,7 +11,7 @@
 ## 当前环境证据
 
 - 本机为 macOS arm64，Go、Node、Clang 和 Docker buildx CLI 可用。
-- 本机 Docker daemon 尚未启动，因此双架构容器构建与运行 smoke test 必须在 daemon 可用后执行。
+- 本机 OrbStack Docker daemon 可用，arm64 原生镜像与 amd64 模拟镜像均可构建和运行。
 - 本机未安装 libvips；阶段 3 的处理器以 Docker 中锁定的 libvips 8.18.4 为可复现构建边界，不把开发机全局库当作事实来源。
 - arm64 本机原生运行和 amd64 OrbStack 模拟用于开发反馈；GitHub 官方原生 amd64/arm64 runner 用于阶段门证据。
 
@@ -20,6 +20,10 @@
 - 阶段 0：依赖、工具链和 Docker 基础镜像 digest 已锁定；Go、React、OpenAPI、SQLite 迁移、Makefile 和 Compose 基础工程通过完整检查。
 - 阶段 1 的代码与本机闭环：无回显管理员创建、Argon2id、Session 哈希内存索引、流式 JPEG 上传、原子落盘、失败补偿、图片列表、内存交付索引、Range/ETag、React 登录/上传/列表、重启恢复全部完成。
 - arm64 原生容器闭环通过；amd64 OrbStack 模拟容器闭环通过。
+- 阶段 2 本机闭环：Session 轮换、退出、改密、过期清理、CSRF、双维度登录限速、安全响应头、四种 API Token Scope、只显示一次与哈希存储、吊销/过期内存失效、默认/单次/现有图片可见性、公开/私密缓存策略，以及 Session/Bearer 私密读取全部完成。
+- 阶段 2 的私密读取集成测试会先关闭 SQLite，再分别使用管理员 Session 和 `images:read_private` Token 读取图片，直接证明热路径没有 SQL 回源。
+- 阶段 2 的 React 管理界面已加入上传可见性、图片可见性切换、API Token 创建/一次性复制/吊销、默认可见性和修改密码；OpenAPI 生成类型、curl、PicGo 与 ShareX 示例已同步。
+- Phase 2 arm64 与 amd64 本地容器均通过管理员初始化、CSRF 上传、字节哈希、非 root、健康检查、持久卷重启恢复。GitHub 原生双架构阶段门将在本次提交推送后确认。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。

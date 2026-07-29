@@ -41,6 +41,7 @@ func serve() error {
 	if err != nil {
 		return err
 	}
+	defer application.Close()
 	snapshot := maintenance.CaptureRuntime()
 	logger.Info("runtime startup baseline",
 		"go_heap_alloc_bytes", snapshot.HeapAllocBytes,

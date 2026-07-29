@@ -32,6 +32,36 @@ func (i *SessionIndex) Remove(hash [32]byte) {
 	i.mu.Unlock()
 }
 
+func (i *SessionIndex) RemoveAllExcept(keep [32]byte) {
+	i.mu.Lock()
+	identity, ok := i.sessions[keep]
+	i.sessions = make(map[[32]byte]SessionIdentity)
+	if ok {
+		i.sessions[keep] = identity
+	}
+	i.mu.Unlock()
+}
+
+func (i *SessionIndex) PurgeExpired(now time.Time) int {
+	i.mu.Lock()
+	removed := 0
+	for hash, identity := range i.sessions {
+		if !identity.ExpiresAt.After(now) {
+			delete(i.sessions, hash)
+			removed++
+		}
+	}
+	i.mu.Unlock()
+	return removed
+}
+
+func (i *SessionIndex) Len() int {
+	i.mu.RLock()
+	length := len(i.sessions)
+	i.mu.RUnlock()
+	return length
+}
+
 func (i *SessionIndex) Get(hash [32]byte, now time.Time) (SessionIdentity, bool) {
 	i.mu.RLock()
 	identity, ok := i.sessions[hash]

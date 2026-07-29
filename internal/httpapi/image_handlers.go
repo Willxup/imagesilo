@@ -3,23 +3,27 @@ package httpapi
 import (
 	"encoding/hex"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
-	"github.com/Willxup/imagesilo/internal/auth"
+	"github.com/Willxup/imagesilo/internal/apitoken"
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/maintenance"
+	"github.com/Willxup/imagesilo/internal/settings"
+	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 )
 
-const maxMultipartRequestBytes = 22 << 20
+const multipartOverheadBytes = 2 << 20
 
 type imageHandler struct {
-	service *images.Service
-	auth    *authHandler
-	logger  *slog.Logger
+	service       *images.Service
+	settings      *settings.Service
+	authenticator *authenticator
+	logger        *slog.Logger
 }
 
 type imageResponse struct {
@@ -41,50 +45,68 @@ type imageListResponse struct {
 	Items []imageResponse `json:"items"`
 }
 
-func newImageHandler(service *images.Service, authService *auth.Service, logger *slog.Logger) *imageHandler {
-	return &imageHandler{service: service, auth: newAuthHandler(authService, true), logger: logger}
+type visibilityRequest struct {
+	Visibility images.Visibility `json:"visibility"`
+}
+
+func newImageHandler(
+	service *images.Service,
+	settingsService *settings.Service,
+	authenticator *authenticator,
+	logger *slog.Logger,
+) *imageHandler {
+	return &imageHandler{service: service, settings: settingsService, authenticator: authenticator, logger: logger}
 }
 
 func (h *imageHandler) upload(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.auth.authenticateRequest(r); !ok {
-		writeError(w, r, http.StatusUnauthorized, "authentication_required", "Administrator session is required.")
+	principal, ok := h.authenticator.requireScope(w, r, apitoken.ScopeImagesUpload)
+	if !ok {
 		return
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, maxMultipartRequestBytes)
-	reader, err := r.MultipartReader()
+	currentSettings, err := h.settings.Get(r.Context())
 	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to read upload settings.")
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, currentSettings.MaxUploadBytes+multipartOverheadBytes)
+	if err := r.ParseMultipartForm(256 << 10); err != nil {
+		var maxBytesError *http.MaxBytesError
+		if errors.As(err, &maxBytesError) {
+			writeError(w, r, http.StatusRequestEntityTooLarge, "file_too_large", "Image exceeds the maximum upload size.")
+			return
+		}
 		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "A multipart image upload is required.")
 		return
 	}
-
-	var uploaded *images.Image
-	for {
-		part, err := reader.NextPart()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			if uploaded == nil {
-				writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to read the multipart upload.")
-				return
-			}
-			break
-		}
-		if part.FormName() != "file" {
-			part.Close()
-			continue
-		}
-		value, uploadErr := h.service.UploadJPEG(r.Context(), part, part.FileName(), time.Now())
-		part.Close()
-		if uploadErr != nil {
-			h.writeUploadError(w, r, uploadErr)
+	defer r.MultipartForm.RemoveAll()
+	files := r.MultipartForm.File["file"]
+	if len(files) != 1 {
+		writeError(w, r, http.StatusBadRequest, "single_file_required", "Exactly one image file is required.")
+		return
+	}
+	visibility := currentSettings.DefaultVisibility
+	if rawVisibility := strings.TrimSpace(r.FormValue("visibility")); rawVisibility != "" {
+		visibility = images.Visibility(rawVisibility)
+		if visibility != images.VisibilityPublic && visibility != images.VisibilityPrivate {
+			writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
 			return
 		}
-		uploaded = &value
-		break
 	}
-	if uploaded == nil {
-		writeError(w, r, http.StatusBadRequest, "file_required", "The file field is required.")
+	file, err := files[0].Open()
+	if err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to open uploaded image.")
+		return
+	}
+	defer file.Close()
+	options := images.UploadOptions{Visibility: visibility, UploadedVia: "admin"}
+	if principal.APIToken != nil {
+		tokenID := principal.APIToken.TokenID
+		options.UploadedVia = "api_token"
+		options.UploadedByAPITokenID = &tokenID
+	}
+	uploaded, err := h.service.UploadJPEG(r.Context(), file, files[0].Filename, options, time.Now())
+	if err != nil {
+		h.writeUploadError(w, r, err)
 		return
 	}
 	snapshot := maintenance.CaptureRuntime()
@@ -92,16 +114,17 @@ func (h *imageHandler) upload(w http.ResponseWriter, r *http.Request) {
 		"image_id", uploaded.ID,
 		"source_bytes", uploaded.SourceSize,
 		"stored_bytes", uploaded.StoredSize,
+		"visibility", uploaded.Visibility,
+		"uploaded_via", uploaded.UploadedVia,
 		"go_heap_alloc_bytes", snapshot.HeapAllocBytes,
 		"go_heap_sys_bytes", snapshot.HeapSysBytes,
 		"goroutines", snapshot.Goroutines,
 	)
-	writeJSON(w, http.StatusCreated, toImageResponse(*uploaded))
+	writeJSON(w, http.StatusCreated, toImageResponse(uploaded))
 }
 
 func (h *imageHandler) list(w http.ResponseWriter, r *http.Request) {
-	if _, ok := h.auth.authenticateRequest(r); !ok {
-		writeError(w, r, http.StatusUnauthorized, "authentication_required", "Administrator session is required.")
+	if _, ok := h.authenticator.requireSession(w, r, false); !ok {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
@@ -115,6 +138,33 @@ func (h *imageHandler) list(w http.ResponseWriter, r *http.Request) {
 		response.Items = append(response.Items, toImageResponse(value))
 	}
 	writeJSON(w, http.StatusOK, response)
+}
+
+func (h *imageHandler) changeVisibility(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticator.requireSession(w, r, true); !ok {
+		return
+	}
+	rawID := chi.URLParam(r, "imageID")
+	id, err := uuid.Parse(rawID)
+	if err != nil || id.String() != rawID {
+		writeError(w, r, http.StatusNotFound, "image_not_found", "Image was not found.")
+		return
+	}
+	var request visibilityRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid visibility request.")
+		return
+	}
+	updated, err := h.service.ChangeVisibility(r.Context(), rawID, request.Visibility)
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to update image visibility.")
+		return
+	}
+	if !updated {
+		writeError(w, r, http.StatusNotFound, "image_not_found", "Image was not found.")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (h *imageHandler) writeUploadError(w http.ResponseWriter, r *http.Request, err error) {

@@ -27,6 +27,9 @@ var defaultPasswordParameters = PasswordParameters{
 }
 
 func HashPassword(password string) (string, error) {
+	if len(password) < 12 {
+		return "", ErrPasswordTooShort
+	}
 	return hashPassword(password, defaultPasswordParameters)
 }
 

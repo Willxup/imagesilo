@@ -27,3 +27,9 @@ type Image struct {
 	UploadedByAPITokenID *string
 	CreatedAt            time.Time
 }
+
+type UploadOptions struct {
+	Visibility           Visibility
+	UploadedVia          string
+	UploadedByAPITokenID *string
+}

@@ -34,6 +34,10 @@ CI 只能显式使用 `--password-stdin`，密码不会出现在进程参数中�
 printf '%s\n' "$CI_SMOKE_PASSWORD" | IMAGESILO_DATA_DIR="$PWD/data" ./bin/imagesilo admin create --email admin@example.com --password-stdin
 ```
 
+管理后台入口为 `/admin/login`。登录后可以上传公开/私密图片、修改现有图片的可见性、设置默认可见性、修改管理员密码，以及创建和吊销具名 API Token。
+
+API Token 的 curl、PicGo 与 ShareX 配置见 [`docs/api-token-usage.md`](docs/api-token-usage.md)。HTTP 契约的唯一事实来源为 [`api/openapi.yaml`](api/openapi.yaml)。
+
 ## 部署边界
 
 V1 唯一支持的生产部署方式是 Docker Engine + Docker Compose。`/data` 必须使用 Docker 本地 named volume 或宿主机本地文件系统 bind mount；不支持 NFS 或 SMB。

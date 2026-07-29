@@ -77,9 +77,13 @@ curl --fail --silent --show-error \
   --data "{\"email\":\"${smoke_email}\",\"password\":\"${smoke_password}\"}" \
   "${base_url}/api/v1/auth/login" >/dev/null
 
+csrf_token="$(awk '$6 == "imagesilo_csrf" { print $7 }' "$cookie_file" | tail -n 1)"
+test -n "$csrf_token"
+
 go run ./tests/performance/jpeg_stdout.go -width 3000 -height 2000 -quality 90 |
   curl --fail --silent --show-error \
     --cookie "$cookie_file" \
+    --header "X-CSRF-Token: ${csrf_token}" \
     --form 'file=@-;filename=container-smoke.jpg;type=image/jpeg' \
     "${base_url}/api/v1/images" >"$upload_response"
 

@@ -11,13 +11,16 @@ export class ApiError extends Error {
 }
 
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers)
+  headers.set('Accept', 'application/json')
+  if (!isSafeMethod(init?.method) && !headers.has('X-CSRF-Token')) {
+    const csrfToken = readCookie('imagesilo_csrf')
+    if (csrfToken) headers.set('X-CSRF-Token', csrfToken)
+  }
   const response = await fetch(path, {
     ...init,
     credentials: 'include',
-    headers: {
-      Accept: 'application/json',
-      ...init?.headers,
-    },
+    headers,
   })
   if (response.status === 204) {
     return undefined as T
@@ -31,4 +34,18 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     throw new ApiError(response.status, message, code)
   }
   return body as T
+}
+
+function isSafeMethod(method?: string) {
+  const normalized = (method ?? 'GET').toUpperCase()
+  return normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS'
+}
+
+function readCookie(name: string) {
+  const prefix = `${encodeURIComponent(name)}=`
+  for (const item of document.cookie.split(';')) {
+    const cookie = item.trim()
+    if (cookie.startsWith(prefix)) return decodeURIComponent(cookie.slice(prefix.length))
+  }
+  return ''
 }

@@ -67,9 +67,37 @@ paths:
       operationId: logout
       security:
         - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
       responses:
         '204':
           description: Session 已撤销
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/auth/password:
+    post:
+      operationId: changePassword
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChangePasswordRequest'
+      responses:
+        '204':
+          description: 密码已更新，当前 Session 保留，其他 Session 已撤销
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/images:
     get:
       operationId: listImages
@@ -93,6 +121,8 @@ paths:
       security:
         - sessionCookie: []
         - bearerToken: [images:upload]
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
         required: true
         content:
@@ -121,9 +151,38 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/images/{imageId}/visibility:
+    patch:
+      operationId: updateImageVisibility
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateImageVisibilityRequest'
+      responses:
+        '204':
+          description: 可见性已提交到 SQLite 并同步更新交付索引
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /image/{imageId}:
     get:
       operationId: deliverImage
+      security:
+        - {}
+        - sessionCookie: []
+        - bearerToken: [images:read_private]
       parameters:
         - $ref: '#/components/parameters/ImageId'
       responses:
@@ -150,10 +209,25 @@ paths:
         '404':
           $ref: '#/components/responses/NotFound'
   /api/v1/api-tokens:
+    get:
+      operationId: listApiTokens
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: API Token 元数据列表，永不返回 Token 明文
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiTokenList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
     post:
       operationId: createApiToken
       security:
         - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
       requestBody:
         required: true
         content:
@@ -171,6 +245,65 @@ paths:
           $ref: '#/components/responses/BadRequest'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/api-tokens/{tokenId}:
+    delete:
+      operationId: revokeApiToken
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/TokenId'
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: Token 已吊销并立即从活跃内存索引移除
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/settings:
+    get:
+      operationId: getSettings
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 当前可由阶段 2 管理的系统设置
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/settings/default-visibility:
+    patch:
+      operationId: updateDefaultVisibility
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateDefaultVisibilityRequest'
+      responses:
+        '200':
+          description: 默认可见性已更新
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppSettings'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/imports:
     post:
       operationId: importImage
@@ -235,6 +368,29 @@ components:
       schema:
         type: string
         format: uuid
+    TokenId:
+      name: tokenId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    CSRFToken:
+      name: X-CSRF-Token
+      in: header
+      required: true
+      description: 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。
+      schema:
+        type: string
+        pattern: '^isc_[A-Za-z0-9_-]{43}$'
+    CSRFTokenForSession:
+      name: X-CSRF-Token
+      in: header
+      required: false
+      description: 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。
+      schema:
+        type: string
+        pattern: '^isc_[A-Za-z0-9_-]{43}$'
   schemas:
     Visibility:
       type: string
@@ -256,11 +412,19 @@ components:
         password: { type: string, minLength: 1, maxLength: 1024 }
     AdminSession:
       type: object
-      required: [adminId, email, expiresAt]
+      required: [adminId, email, csrfToken, expiresAt]
       properties:
         adminId: { type: string, format: uuid }
         email: { type: string, format: email }
+        csrfToken: { type: string, pattern: '^isc_[A-Za-z0-9_-]{43}$' }
         expiresAt: { type: string, format: date-time }
+    ChangePasswordRequest:
+      type: object
+      additionalProperties: false
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword: { type: string, minLength: 1, maxLength: 1024 }
+        newPassword: { type: string, minLength: 12, maxLength: 1024 }
     Image:
       type: object
       required: [id, originalName, mimeType, width, height, sourceSize, storedSize, sourceSha256, storedSha256, visibility, standardUrl, createdAt]
@@ -284,6 +448,12 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/Image' }
+    UpdateImageVisibilityRequest:
+      type: object
+      additionalProperties: false
+      required: [visibility]
+      properties:
+        visibility: { $ref: '#/components/schemas/Visibility' }
     CreateApiTokenRequest:
       type: object
       additionalProperties: false
@@ -298,16 +468,49 @@ components:
         expiresAt: { type: [string, 'null'], format: date-time }
     CreatedApiToken:
       type: object
-      required: [id, name, token, tokenPrefix, scopes, createdAt]
+      required: [id, name, token, tokenPrefix, scopes, expiresAt, status, createdAt]
       properties:
         id: { type: string, format: uuid }
         name: { type: string }
-        token: { type: string, writeOnly: true }
+        token: { type: string, writeOnly: true, pattern: '^ist_[A-Za-z0-9_-]{43}$' }
         tokenPrefix: { type: string }
         scopes:
           type: array
           items: { $ref: '#/components/schemas/ApiTokenScope' }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [active] }
         createdAt: { type: string, format: date-time }
+    ApiToken:
+      type: object
+      required: [id, name, tokenPrefix, scopes, expiresAt, status, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        tokenPrefix: { type: string }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/ApiTokenScope' }
+        expiresAt: { type: [string, 'null'], format: date-time }
+        status: { type: string, enum: [active, expired, revoked] }
+        createdAt: { type: string, format: date-time }
+    ApiTokenList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ApiToken' }
+    AppSettings:
+      type: object
+      required: [defaultVisibility]
+      properties:
+        defaultVisibility: { $ref: '#/components/schemas/Visibility' }
+    UpdateDefaultVisibilityRequest:
+      type: object
+      additionalProperties: false
+      required: [defaultVisibility]
+      properties:
+        defaultVisibility: { $ref: '#/components/schemas/Visibility' }
     CreateAliasRequest:
       type: object
       additionalProperties: false

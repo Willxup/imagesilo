@@ -4,6 +4,8 @@ import { AuthGuard } from '../features/auth/auth-guard'
 import { LoginPage } from '../features/auth/login-page'
 import { ImageListPage } from '../features/images/image-list-page'
 import { UploadPage } from '../features/upload/upload-page'
+import { ApiTokenPage } from '../features/api-tokens/api-token-page'
+import { SettingsPage } from '../features/settings/settings-page'
 import { AdminLayout } from '../components/layout/admin-layout'
 
 export const router = createBrowserRouter(
@@ -23,6 +25,8 @@ export const router = createBrowserRouter(
         { index: true, element: <Navigate to="upload" replace /> },
         { path: 'upload', element: <UploadPage /> },
         { path: 'images', element: <ImageListPage /> },
+        { path: 'api-tokens', element: <ApiTokenPage /> },
+        { path: 'settings', element: <SettingsPage /> },
       ],
     },
   ],

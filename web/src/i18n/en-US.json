@@ -13,12 +13,16 @@
   "nav": {
     "primary": "Primary navigation",
     "upload": "Upload",
-    "images": "Images"
+    "images": "Images",
+    "apiTokens": "API tokens",
+    "settings": "Settings"
   },
   "upload": {
     "title": "Upload image",
-    "phaseOneHelp": "Phase one validates a single JPEG streaming upload, reliable storage, and a stable URL.",
+    "description": "Upload a JPEG and choose whether its stable link is public or private.",
     "chooseFile": "Choose a JPEG file",
+    "visibility": "Visibility",
+    "visibilityDefault": "Use system default",
     "upload": "Upload JPEG",
     "success": "Upload complete",
     "failed": "Upload failed. Check the file type and size, then try again."
@@ -27,6 +31,56 @@
     "title": "Recent images",
     "description": "Image links are delivered from the in-memory index and local filesystem.",
     "empty": "No images yet.",
-    "failed": "Unable to load images."
+    "failed": "Unable to load images.",
+    "makePrivate": "Make private",
+    "makePublic": "Make public",
+    "visibilityFailed": "Unable to change image visibility."
+  },
+  "visibility": {
+    "public": "Public",
+    "private": "Private"
+  },
+  "apiTokens": {
+    "title": "API tokens",
+    "description": "Create scoped Bearer tokens. Plaintext is shown once and never stored by ImageSilo.",
+    "name": "Token name",
+    "scopes": "Scopes",
+    "expiresAt": "Expiration (optional)",
+    "create": "Create token",
+    "createFailed": "Unable to create the API token.",
+    "copyNow": "Copy this token now. It will not be shown again.",
+    "copy": "Copy token",
+    "existing": "Existing tokens",
+    "listFailed": "Unable to load API tokens.",
+    "empty": "No API tokens yet.",
+    "expires": "Expires {{value}}",
+    "neverExpires": "Never expires",
+    "revoke": "Revoke",
+    "confirmRevoke": "Revoke API token “{{name}}”? This takes effect immediately.",
+    "scopeHelp": {
+      "images:upload": "Upload images through the API.",
+      "images:read_private": "Read private image bytes.",
+      "images:delete": "Delete images when management endpoints are enabled.",
+      "aliases:write": "Create or import historical URL aliases."
+    },
+    "status": {
+      "active": "Active",
+      "expired": "Expired",
+      "revoked": "Revoked"
+    }
+  },
+  "settings": {
+    "title": "Settings",
+    "description": "Manage Phase 2 security and visibility defaults.",
+    "defaultVisibility": "Default upload visibility",
+    "defaultVisibilityHelp": "Uploads without an explicit value use this visibility.",
+    "loadFailed": "Unable to load settings.",
+    "updateFailed": "Unable to update the default visibility.",
+    "changePassword": "Change administrator password",
+    "currentPassword": "Current password",
+    "newPassword": "New password (at least 12 characters)",
+    "savePassword": "Change password",
+    "passwordChanged": "Password changed. Other administrator sessions were revoked.",
+    "passwordFailed": "Unable to change the password. Check the current password and requirements."
   }
 }

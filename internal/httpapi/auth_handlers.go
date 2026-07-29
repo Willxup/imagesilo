@@ -4,17 +4,26 @@ import (
 	"encoding/json"
 	"errors"
 	"io"
+	"net"
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Willxup/imagesilo/internal/auth"
 )
 
-const sessionCookieName = "imagesilo_session"
+const (
+	sessionCookieName = "imagesilo_session"
+	csrfCookieName    = "imagesilo_csrf"
+)
 
 type authHandler struct {
-	service      *auth.Service
-	cookieSecure bool
+	service        *auth.Service
+	authenticator  *authenticator
+	cookieSecure   bool
+	accountLimiter *loginLimiter
+	addressLimiter *loginLimiter
 }
 
 type loginRequest struct {
@@ -25,11 +34,21 @@ type loginRequest struct {
 type sessionResponse struct {
 	AdminID   string    `json:"adminId"`
 	Email     string    `json:"email"`
+	CSRFToken string    `json:"csrfToken"`
 	ExpiresAt time.Time `json:"expiresAt"`
 }
 
-func newAuthHandler(service *auth.Service, cookieSecure bool) *authHandler {
-	return &authHandler{service: service, cookieSecure: cookieSecure}
+type changePasswordRequest struct {
+	CurrentPassword string `json:"currentPassword"`
+	NewPassword     string `json:"newPassword"`
+}
+
+func newAuthHandler(service *auth.Service, authenticator *authenticator, cookieSecure bool) *authHandler {
+	return &authHandler{
+		service: service, authenticator: authenticator, cookieSecure: cookieSecure,
+		accountLimiter: newLoginLimiter(5, 5*time.Minute),
+		addressLimiter: newLoginLimiter(20, 5*time.Minute),
+	}
 }
 
 func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
@@ -38,7 +57,23 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid login request.")
 		return
 	}
-	identity, token, err := h.service.Login(r.Context(), request.Email, request.Password, time.Now())
+	request.Email = strings.TrimSpace(request.Email)
+	if request.Email == "" || len(request.Email) > 254 || request.Password == "" || len(request.Password) > 1024 {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Email or password has an invalid length.")
+		return
+	}
+	now := time.Now()
+	accountKey := "account:" + strings.ToLower(strings.TrimSpace(request.Email))
+	addressKey := "address:" + remoteAddress(r)
+	if allowed, retry := h.addressLimiter.Allow(addressKey, now); !allowed {
+		writeRateLimited(w, r, retry)
+		return
+	}
+	if allowed, retry := h.accountLimiter.Allow(accountKey, now); !allowed {
+		writeRateLimited(w, r, retry)
+		return
+	}
+	identity, token, csrfToken, err := h.service.Login(r.Context(), request.Email, request.Password, now)
 	if err != nil {
 		if errors.Is(err, auth.ErrInvalidCredentials) {
 			writeError(w, r, http.StatusUnauthorized, "invalid_credentials", "Email or password is incorrect.")
@@ -47,68 +82,135 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to complete login.")
 		return
 	}
-	h.setSessionCookie(w, token, identity.ExpiresAt)
-	writeJSON(w, http.StatusOK, toSessionResponse(identity))
-}
-
-func (h *authHandler) current(w http.ResponseWriter, r *http.Request) {
-	identity, ok := h.authenticateRequest(r)
-	if !ok {
-		writeError(w, r, http.StatusUnauthorized, "authentication_required", "Administrator session is required.")
-		return
-	}
-	writeJSON(w, http.StatusOK, toSessionResponse(identity))
-}
-
-func (h *authHandler) logout(w http.ResponseWriter, r *http.Request) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err == nil {
-		if err := h.service.Logout(r.Context(), cookie.Value); err != nil {
-			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to complete logout.")
+	if oldCookie, cookieErr := r.Cookie(sessionCookieName); cookieErr == nil && oldCookie.Value != token {
+		if logoutErr := h.service.Logout(r.Context(), oldCookie.Value); logoutErr != nil {
+			_ = h.service.Logout(r.Context(), token)
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to rotate administrator session.")
 			return
 		}
 	}
-	h.clearSessionCookie(w)
+	h.accountLimiter.Reset(accountKey)
+	h.addressLimiter.Reset(addressKey)
+	h.setSessionCookies(w, token, csrfToken, identity.ExpiresAt)
+	writeJSON(w, http.StatusOK, toSessionResponse(identity, csrfToken))
+}
+
+func (h *authHandler) current(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.requireSession(w, r, false)
+	if !ok {
+		return
+	}
+	csrfCookie, err := r.Cookie(csrfCookieName)
+	if err != nil || h.service.ValidateCSRF(*principal.Session, csrfCookie.Value) != nil {
+		writeError(w, r, http.StatusUnauthorized, "invalid_session", "Administrator session is missing its CSRF token.")
+		return
+	}
+	writeJSON(w, http.StatusOK, toSessionResponse(*principal.Session, csrfCookie.Value))
+}
+
+func (h *authHandler) logout(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.requireSession(w, r, true)
+	if !ok {
+		return
+	}
+	if err := h.service.Logout(r.Context(), principal.RawSessionToken); err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to complete logout.")
+		return
+	}
+	h.clearSessionCookies(w)
 	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *authHandler) authenticateRequest(r *http.Request) (auth.SessionIdentity, bool) {
-	cookie, err := r.Cookie(sessionCookieName)
-	if err != nil {
-		return auth.SessionIdentity{}, false
+func (h *authHandler) changePassword(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.requireSession(w, r, true)
+	if !ok {
+		return
 	}
-	identity, err := h.service.Authenticate(cookie.Value, time.Now())
-	return identity, err == nil
+	var request changePasswordRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid password change request.")
+		return
+	}
+	if len(request.CurrentPassword) > 1024 || len(request.NewPassword) > 1024 {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Password has an invalid length.")
+		return
+	}
+	err := h.service.ChangePassword(
+		r.Context(), *principal.Session, principal.RawSessionToken,
+		request.CurrentPassword, request.NewPassword, time.Now(),
+	)
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrInvalidCredentials):
+			writeError(w, r, http.StatusUnauthorized, "invalid_credentials", "Current password is incorrect.")
+		case errors.Is(err, auth.ErrPasswordTooShort):
+			writeError(w, r, http.StatusBadRequest, "password_too_short", err.Error())
+		default:
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to change password.")
+		}
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
-func (h *authHandler) setSessionCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
+func (h *authHandler) setSessionCookies(w http.ResponseWriter, token, csrfToken string, expiresAt time.Time) {
+	maxAge := int(expiresAt.Sub(time.Now()).Seconds())
 	http.SetCookie(w, &http.Cookie{
 		Name:     sessionCookieName,
 		Value:    token,
 		Path:     "/",
 		Expires:  expiresAt,
-		MaxAge:   int(time.Until(expiresAt).Seconds()),
+		MaxAge:   maxAge,
 		HttpOnly: true,
 		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
-}
-
-func (h *authHandler) clearSessionCookie(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     sessionCookieName,
-		Value:    "",
+		Name:     csrfCookieName,
+		Value:    csrfToken,
 		Path:     "/",
-		MaxAge:   -1,
-		Expires:  time.Unix(1, 0),
-		HttpOnly: true,
+		Expires:  expiresAt,
+		MaxAge:   maxAge,
+		HttpOnly: false,
 		Secure:   h.cookieSecure,
 		SameSite: http.SameSiteLaxMode,
 	})
 }
 
-func toSessionResponse(identity auth.SessionIdentity) sessionResponse {
-	return sessionResponse{AdminID: identity.AdminID, Email: identity.Email, ExpiresAt: identity.ExpiresAt}
+func (h *authHandler) clearSessionCookies(w http.ResponseWriter) {
+	for _, cookie := range []http.Cookie{
+		{Name: sessionCookieName, HttpOnly: true},
+		{Name: csrfCookieName, HttpOnly: false},
+	} {
+		cookie.Value = ""
+		cookie.Path = "/"
+		cookie.MaxAge = -1
+		cookie.Expires = time.Unix(1, 0)
+		cookie.Secure = h.cookieSecure
+		cookie.SameSite = http.SameSiteLaxMode
+		http.SetCookie(w, &cookie)
+	}
+}
+
+func toSessionResponse(identity auth.SessionIdentity, csrfToken string) sessionResponse {
+	return sessionResponse{AdminID: identity.AdminID, Email: identity.Email, CSRFToken: csrfToken, ExpiresAt: identity.ExpiresAt}
+}
+
+func remoteAddress(r *http.Request) string {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err == nil {
+		return host
+	}
+	return r.RemoteAddr
+}
+
+func writeRateLimited(w http.ResponseWriter, r *http.Request, retry time.Duration) {
+	seconds := int(retry.Round(time.Second).Seconds())
+	if seconds < 1 {
+		seconds = 1
+	}
+	w.Header().Set("Retry-After", strconv.Itoa(seconds))
+	writeError(w, r, http.StatusTooManyRequests, "login_rate_limited", "Too many login attempts. Try again later.")
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, destination any) error {

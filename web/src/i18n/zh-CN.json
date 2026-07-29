@@ -13,12 +13,16 @@
   "nav": {
     "primary": "主要导航",
     "upload": "上传",
-    "images": "图片"
+    "images": "图片",
+    "apiTokens": "API Token",
+    "settings": "设置"
   },
   "upload": {
     "title": "上传图片",
-    "phaseOneHelp": "第一阶段先验证单张 JPEG 的流式上传、可靠落盘和稳定直链。",
+    "description": "上传 JPEG，并选择稳定直链是公开还是私密。",
     "chooseFile": "选择 JPEG 文件",
+    "visibility": "可见性",
+    "visibilityDefault": "使用系统默认值",
     "upload": "上传 JPEG",
     "success": "上传成功",
     "failed": "上传失败，请检查文件格式和大小后重试。"
@@ -27,6 +31,56 @@
     "title": "最近图片",
     "description": "图片直链从内存索引和本地文件系统交付。",
     "empty": "还没有图片。",
-    "failed": "图片列表加载失败。"
+    "failed": "图片列表加载失败。",
+    "makePrivate": "改为私密",
+    "makePublic": "改为公开",
+    "visibilityFailed": "图片可见性修改失败。"
+  },
+  "visibility": {
+    "public": "公开",
+    "private": "私密"
+  },
+  "apiTokens": {
+    "title": "API Token",
+    "description": "创建带 Scope 的 Bearer Token。明文只显示一次，ImageSilo 不会保存。",
+    "name": "Token 名称",
+    "scopes": "权限范围",
+    "expiresAt": "过期时间（可选）",
+    "create": "创建 Token",
+    "createFailed": "API Token 创建失败。",
+    "copyNow": "请立即复制此 Token，关闭后不会再次显示。",
+    "copy": "复制 Token",
+    "existing": "现有 Token",
+    "listFailed": "API Token 列表加载失败。",
+    "empty": "还没有 API Token。",
+    "expires": "过期时间：{{value}}",
+    "neverExpires": "永不过期",
+    "revoke": "吊销",
+    "confirmRevoke": "确定吊销 API Token“{{name}}”吗？操作会立即生效。",
+    "scopeHelp": {
+      "images:upload": "通过 API 上传图片。",
+      "images:read_private": "读取私密图片字节。",
+      "images:delete": "图片管理接口启用后可删除图片。",
+      "aliases:write": "创建或导入历史 URL 映射。"
+    },
+    "status": {
+      "active": "有效",
+      "expired": "已过期",
+      "revoked": "已吊销"
+    }
+  },
+  "settings": {
+    "title": "设置",
+    "description": "管理第二阶段的安全项和默认可见性。",
+    "defaultVisibility": "上传默认可见性",
+    "defaultVisibilityHelp": "未显式选择可见性的上传使用此值。",
+    "loadFailed": "设置加载失败。",
+    "updateFailed": "默认可见性更新失败。",
+    "changePassword": "修改管理员密码",
+    "currentPassword": "当前密码",
+    "newPassword": "新密码（至少 12 个字符）",
+    "savePassword": "修改密码",
+    "passwordChanged": "密码已修改，其他管理员 Session 已撤销。",
+    "passwordFailed": "密码修改失败，请检查当前密码和新密码要求。"
   }
 }

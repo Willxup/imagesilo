@@ -14,6 +14,7 @@ type Session struct {
 	ID        string
 	AdminID   string
 	TokenHash [32]byte
+	CSRFHash  [32]byte
 	ExpiresAt time.Time
 	CreatedAt time.Time
 }
@@ -22,5 +23,6 @@ type SessionIdentity struct {
 	SessionID string
 	AdminID   string
 	Email     string
+	CSRFHash  [32]byte
 	ExpiresAt time.Time
 }

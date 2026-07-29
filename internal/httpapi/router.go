@@ -5,10 +5,12 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/Willxup/imagesilo/internal/apitoken"
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
+	"github.com/Willxup/imagesilo/internal/settings"
 	"github.com/Willxup/imagesilo/internal/webui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -22,7 +24,9 @@ type Dependencies struct {
 	DB            *sql.DB
 	Logger        *slog.Logger
 	Auth          *auth.Service
+	APITokens     *apitoken.Service
 	Images        *images.Service
+	Settings      *settings.Service
 	DeliveryIndex *delivery.Index
 	Storage       *storage.Filesystem
 	CookieSecure  bool
@@ -32,9 +36,9 @@ type Dependencies struct {
 func NewRouter(dependencies Dependencies) http.Handler {
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
-	router.Use(middleware.RealIP)
 	router.Use(middleware.Recoverer)
 	router.Use(securityHeaders)
+	authenticator := newAuthenticator(dependencies.Auth, dependencies.APITokens)
 
 	router.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSON(w, http.StatusOK, healthResponse{Status: "ok"})
@@ -49,18 +53,31 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	})
 
 	if dependencies.Auth != nil {
-		authHandler := newAuthHandler(dependencies.Auth, dependencies.CookieSecure)
+		authHandler := newAuthHandler(dependencies.Auth, authenticator, dependencies.CookieSecure)
 		router.Post("/api/v1/auth/login", authHandler.login)
 		router.Get("/api/v1/auth/session", authHandler.current)
 		router.Post("/api/v1/auth/logout", authHandler.logout)
+		router.Post("/api/v1/auth/password", authHandler.changePassword)
 	}
-	if dependencies.Images != nil && dependencies.Auth != nil {
-		imageHandler := newImageHandler(dependencies.Images, dependencies.Auth, dependencies.Logger)
+	if dependencies.APITokens != nil && dependencies.Auth != nil {
+		tokenHandler := newAPITokenHandler(dependencies.APITokens, authenticator)
+		router.Get("/api/v1/api-tokens", tokenHandler.list)
+		router.Post("/api/v1/api-tokens", tokenHandler.create)
+		router.Delete("/api/v1/api-tokens/{tokenID}", tokenHandler.revoke)
+	}
+	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil {
+		imageHandler := newImageHandler(dependencies.Images, dependencies.Settings, authenticator, dependencies.Logger)
 		router.Get("/api/v1/images", imageHandler.list)
 		router.Post("/api/v1/images", imageHandler.upload)
+		router.Patch("/api/v1/images/{imageID}/visibility", imageHandler.changeVisibility)
+	}
+	if dependencies.Settings != nil && dependencies.Auth != nil {
+		settingsHandler := newSettingsHandler(dependencies.Settings, authenticator)
+		router.Get("/api/v1/settings", settingsHandler.get)
+		router.Patch("/api/v1/settings/default-visibility", settingsHandler.updateDefaultVisibility)
 	}
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {
-		deliveryHandler := newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage)
+		deliveryHandler := newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator)
 		router.Get("/image/{imageID}", deliveryHandler.serve)
 	}
 	if dependencies.UI != nil {
@@ -76,6 +93,8 @@ func securityHeaders(next http.Handler) http.Handler {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("Referrer-Policy", "same-origin")
 		w.Header().Set("X-Frame-Options", "DENY")
+		w.Header().Set("Content-Security-Policy", "default-src 'self'; img-src 'self' data: blob:; style-src 'self'; script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'")
+		w.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
 		next.ServeHTTP(w, r)
 	})
 }

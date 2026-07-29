@@ -23,6 +23,17 @@ func (i *Index) Add(id string, target Target) {
 	i.mu.Unlock()
 }
 
+func (i *Index) UpdateVisibility(id, visibility string) bool {
+	i.mu.Lock()
+	target, ok := i.byID[id]
+	if ok {
+		target.Visibility = visibility
+		i.byID[id] = target
+	}
+	i.mu.Unlock()
+	return ok
+}
+
 func (i *Index) Get(id string) (Target, bool) {
 	i.mu.RLock()
 	target, ok := i.byID[id]

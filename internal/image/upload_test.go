@@ -33,7 +33,10 @@ func TestUploadJPEGPreservesBytesAndUpdatesIndex(t *testing.T) {
 	index := delivery.NewIndex()
 	filesystem := storage.NewFilesystem(dataDirectory)
 	service := NewService(NewRepository(db), filesystem, index)
-	value, err := service.UploadJPEG(context.Background(), bytes.NewReader(jpegBytes), "sample.jpg", time.Now())
+	value, err := service.UploadJPEG(context.Background(), bytes.NewReader(jpegBytes), "sample.jpg", UploadOptions{
+		Visibility:  VisibilityPublic,
+		UploadedVia: "admin",
+	}, time.Now())
 	if err != nil {
 		t.Fatalf("UploadJPEG() error = %v", err)
 	}
