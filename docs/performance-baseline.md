@@ -23,8 +23,9 @@
 ## 容器验证
 
 - `linux/arm64`：原生构建和运行；管理员登录、SQLite 写入、6 MP JPEG 上传、公开直链、SHA-256、停止与 named volume 重启恢复均通过。
-- `linux/amd64`：OrbStack 模拟构建和运行；相同闭环通过，容器用户为 `10001:10001` 且健康检查为 `healthy`。
-- amd64 结果只是 QEMU/OrbStack 最低验证，不能替代发布门要求的 amd64 真机 smoke test。
-- `scripts/container-smoke.sh` 已在 arm64 原生与 amd64 OrbStack 模拟环境分别通过，并确认没有遗留容器或 volume；GitHub Actions 将在对应原生 runner 上执行同一脚本。
+- `linux/amd64`：本机 OrbStack 模拟闭环通过；GitHub 官方原生 `ubuntu-24.04` runner 的构建、登录、上传、直链、非 root、健康检查和重启恢复也已通过。
+- `linux/arm64`：本机原生闭环通过；GitHub 官方原生 `ubuntu-24.04-arm` runner 的同一闭环也已通过。
+- 证据为 GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938)，对应提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268`。
+- `scripts/container-smoke.sh` 在本机和 GitHub 均确认没有遗留容器或 volume。
 
 当前阶段不根据这些数字设置 Docker CPU/内存配额，也不调用强制 GC。图片解码并发值仍保持保守默认 1，等待阶段 3 在 amd64/arm64 真机上完成 1、2、4、8 并发 benchmark。

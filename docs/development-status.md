@@ -13,7 +13,7 @@
 - 本机为 macOS arm64，Go、Node、Clang 和 Docker buildx CLI 可用。
 - 本机 Docker daemon 尚未启动，因此双架构容器构建与运行 smoke test 必须在 daemon 可用后执行。
 - 本机未安装 libvips；阶段 3 的处理器以 Docker 中锁定的 libvips 8.18.4 为可复现构建边界，不把开发机全局库当作事实来源。
-- arm64 本机只能证明 arm64 原生运行；amd64 可以先做 QEMU 最低验证，发布门仍要求 amd64 真机 smoke test。
+- arm64 本机原生运行和 amd64 OrbStack 模拟用于开发反馈；GitHub 官方原生 amd64/arm64 runner 用于阶段门证据。
 
 ## 已完成
 
@@ -22,11 +22,9 @@
 - arm64 原生容器闭环通过；amd64 OrbStack 模拟容器闭环通过。
 - 资源基线见 `performance-baseline.md`。
 
-阶段 1 仍缺发布基线要求的 amd64 真机容器 smoke test。没有可用的原生 amd64 Docker context 或 runner 时，不把模拟结果伪装成真机结果，也不越过阶段门进入阶段 2。
+阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
 
-仓库已准备 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh`：一旦代码进入 GitHub，官方 `ubuntu-24.04` 与 `ubuntu-24.04-arm` runner 会执行同一套原生双架构闭环。当前 GitHub 仓库为公开空仓库，但本机 `gh` 令牌无效；未获得用户授权前不创建提交或推送。
-
-该脚本已在本机 arm64 原生和 amd64 OrbStack 模拟环境分别通过，并验证失败/成功路径结束后均不遗留临时容器或 named volume。剩余差异只有执行节点是否为原生 amd64。
+`.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
 ## 阶段门
 

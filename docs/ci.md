@@ -26,4 +26,4 @@ SMOKE_SUFFIX=local-arm64 \
 bash scripts/container-smoke.sh
 ```
 
-GitHub 仓库目前为空且本机 `gh` 登录令牌无效，因此工作流只能在用户授权创建提交并恢复 GitHub 认证后真正运行。未经授权不提交或推送。
+首次原生双架构运行证据为 [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938)：质量门、amd64 容器闭环和 arm64 容器闭环全部成功。Git 推送通过仓库 SSH 远程完成；后续正常开发提交按相同工作流持续验证。
