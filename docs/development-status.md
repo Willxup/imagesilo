@@ -27,6 +27,9 @@
 - 阶段 3 已完成 JPEG、PNG、WebP、GIF 严格检测与真实解码、默认字节保持、独立压缩与 WebP 转换、动态 GIF 保持、缩略图缓存、源/目标 SHA-256、16 MP 像素边界和无队列处理安全门。
 - 阶段 3 的默认 `processingConcurrency` 为 1；浏览器多文件上传继续使用本地队列。GitHub Actions 只持续复测并发 1，不再重复执行阶段选型时的一次性 2/4/8 benchmark。
 - libvips 固定为 8.18.4，运行镜像仅包含 V1 所需 JPEG、PNG、WebP 与内建 GIF 能力，不包含 Pango、SVG/PDF、ImageMagick、TIFF 或 HEIF。
+- 阶段 4 已完成严格别名路径规范化、保留路由保护、映射创建/列表/解析/删除 API、直接字节交付、409 冲突语义、启动重建和别名热路径零 SQL。
+- 图片、别名、Session 与 API Token 使用同一个索引变更屏障：普通写操作共享进入，完整重建独占进入，直链读取不经过屏障；并发测试证明重建不会恢复已退出 Session、已吊销 Token、旧可见性或旧别名状态。
+- 10,000/100,000 路径原生 amd64/arm64 基准均通过；100,000 路径完整 SQLite Loader 低于 160 ms，Go heap 增量约 14.16 MiB，不引入 Redis、LRU 或 TTL。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
@@ -34,6 +37,8 @@
 阶段 2 已完成。GitHub Actions [Verify run 30450944427](https://github.com/Willxup/imagesilo/actions/runs/30450944427) 在提交 `7367185118583a10e89e078a12fb583c768733bc` 上通过：`quality`、原生 amd64 与原生 arm64 容器闭环全部成功。
 
 阶段 3 已完成。GitHub Actions [Verify run 30463581291](https://github.com/Willxup/imagesilo/actions/runs/30463581291) 在提交 `09734182ec09486fd947a9f6e6727017ad734863` 上通过：`quality`、原生 amd64/arm64 镜像、四格式 smoke、WebP 转换和处理安全门全部成功。后续 [Verify run 30464513095](https://github.com/Willxup/imagesilo/actions/runs/30464513095) 在提交 `e6d059a755a748646ebd329de31e90635023a603` 上再次通过，并确认两个原生架构只运行默认并发 1 的持续基准。
+
+阶段 4 已完成。GitHub Actions [Verify run 30467177771](https://github.com/Willxup/imagesilo/actions/runs/30467177771) 在提交 `6d17dfb362a60c2be85cbad38ebbe26a099790f0` 上通过：`quality`、原生 amd64/arm64 10k/100k Delivery Index 基准、容器构建、完整 smoke 和默认并发 1 图片基准全部成功。
 
 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
