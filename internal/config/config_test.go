@@ -15,8 +15,8 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load() error = %v", err)
 	}
-	if cfg.ProcessingConcurrency != 4 {
-		t.Fatalf("ProcessingConcurrency = %d, want benchmark-selected default 4", cfg.ProcessingConcurrency)
+	if cfg.ProcessingConcurrency != 2 {
+		t.Fatalf("ProcessingConcurrency = %d, want cross-architecture benchmark default 2", cfg.ProcessingConcurrency)
 	}
 }
 
