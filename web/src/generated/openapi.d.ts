@@ -116,6 +116,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/images/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["batchDeleteImages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/images/batch-visibility": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["batchUpdateImageVisibility"];
+        trace?: never;
+    };
+    "/api/v1/images/{imageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getImageDetail"];
+        put?: never;
+        post?: never;
+        delete: operations["deleteImage"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images/{imageId}/visibility": {
         parameters: {
             query?: never;
@@ -260,6 +308,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSystemOverview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance/rebuild": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["rebuildIndexes"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/maintenance/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["inspectConsistency"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/imports": {
         parameters: {
             query?: never;
@@ -371,6 +467,8 @@ export interface components {
             storedSha256: string;
             processingSummary: components["schemas"]["ProcessingSummary"];
             visibility: components["schemas"]["Visibility"];
+            /** @enum {string} */
+            uploadedVia: "admin" | "api_token" | "import";
             standardUrl: string;
             thumbnailUrl: string;
             /** Format: date-time */
@@ -378,6 +476,34 @@ export interface components {
         };
         ImageList: {
             items: components["schemas"]["Image"][];
+            nextCursor?: string;
+        };
+        ImageDetail: components["schemas"]["Image"] & {
+            aliases: components["schemas"]["ImageAlias"][];
+        };
+        DeleteImageResult: {
+            /** Format: uuid */
+            imageId: string;
+            imageFileDeleted: boolean;
+            thumbnailDeleted: boolean;
+            cleanupPending: boolean;
+        };
+        BatchImageRequest: {
+            imageIds: string[];
+        };
+        BatchVisibilityRequest: components["schemas"]["BatchImageRequest"] & {
+            visibility: components["schemas"]["Visibility"];
+        };
+        BatchOperationItem: {
+            /** Format: uuid */
+            imageId: string;
+            /** @enum {string} */
+            status: "deleted" | "cleanup_pending" | "updated" | "not_found" | "error";
+            cleanupPending?: boolean;
+            errorCode?: string;
+        };
+        BatchOperationResult: {
+            items: components["schemas"]["BatchOperationItem"][];
         };
         UpdateImageVisibilityRequest: {
             visibility: components["schemas"]["Visibility"];
@@ -461,6 +587,53 @@ export interface components {
             maxTotalPixels: number;
             supportedFormats: ("image/jpeg" | "image/png" | "image/webp" | "image/gif")[];
             vipsVersion: string;
+        };
+        IndexStats: {
+            images: number;
+            aliases: number;
+            sessions: number;
+            tokens: number;
+        };
+        InspectionResult: {
+            /** Format: date-time */
+            checkedAt: string;
+            databaseImages: number;
+            imageFiles: number;
+            thumbnailFiles: number;
+            temporaryFiles: number;
+            missingImageCount: number;
+            missingImageIds: string[];
+            orphanImageCount: number;
+            orphanThumbnailCount: number;
+        };
+        RebuildResult: {
+            /** Format: date-time */
+            completedAt: string;
+            images: number;
+            aliases: number;
+            sessions: number;
+            tokens: number;
+            missingImageCount: number;
+            missingImageIds: string[];
+        };
+        SystemOverview: {
+            /** Format: int64 */
+            imageCount: number;
+            /** Format: int64 */
+            storedBytes: number;
+            /** Format: int64 */
+            aliasCount: number;
+            /** Format: int64 */
+            heapAllocBytes: number;
+            /** Format: int64 */
+            heapSysBytes: number;
+            /** Format: int64 */
+            rssBytes: number;
+            goroutines: number;
+            indexes: components["schemas"]["IndexStats"];
+            indexConsistent: boolean;
+            lastInspection: components["schemas"]["InspectionResult"] | null;
+            lastRebuild: components["schemas"]["RebuildResult"] | null;
         };
         CreateAliasRequest: {
             path: string;
@@ -722,6 +895,20 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                cursor?: string;
+                /** @description 按原始文件名、标准路径 UUID、历史路径或 SHA-256 搜索 */
+                q?: string;
+                visibility?: components["schemas"]["Visibility"];
+                format?: "jpeg" | "png" | "webp" | "gif";
+                uploadedVia?: "admin" | "api_token" | "import";
+                createdFrom?: string;
+                createdTo?: string;
+                minBytes?: number;
+                maxBytes?: number;
+                minWidth?: number;
+                maxWidth?: number;
+                minHeight?: number;
+                maxHeight?: number;
             };
             header?: never;
             path?: never;
@@ -729,7 +916,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 第一阶段的最近图片列表 */
+            /** @description 使用稳定 keyset cursor 的分页图片列表 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -738,6 +925,7 @@ export interface operations {
                     "application/json": components["schemas"]["ImageList"];
                 };
             };
+            400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
         };
     };
@@ -774,6 +962,118 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             503: components["responses"]["ServiceUnavailable"];
+        };
+    };
+    batchDeleteImages: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchImageRequest"];
+            };
+        };
+        responses: {
+            /** @description 每张图片的永久删除结果；文件清理失败会明确标记 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOperationResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    batchUpdateImageVisibility: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchVisibilityRequest"];
+            };
+        };
+        responses: {
+            /** @description 每张图片的可见性修改结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchOperationResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    getImageDetail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 图片完整管理详情及历史别名 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageDetail"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteImage: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
+            path: {
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 数据库和索引已永久删除；响应说明文件清理是否待巡检 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DeleteImageResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
     updateImageVisibility: {
@@ -1046,6 +1346,77 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthorized"];
+        };
+    };
+    getSystemOverview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 图片、存储、运行内存、索引和最近维护结果的最小概览 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SystemOverview"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    rebuildIndexes: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 全部内存索引已在独占变更屏障中整体重建 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RebuildResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    inspectConsistency: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 只读一致性巡检结果；本阶段不自动删除文件 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InspectionResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
         };
     };
     importImage: {

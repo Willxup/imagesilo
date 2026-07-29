@@ -17,6 +17,7 @@ import (
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
+	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
@@ -67,6 +68,9 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		barrier,
 	)
 	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
+	maintenanceService := maintenance.NewService(
+		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger,
+	)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	ui, err := webui.New()
 	if err != nil {
@@ -83,6 +87,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		Aliases:               aliasService,
 		Images:                imageService,
 		Settings:              settingsService,
+		Maintenance:           maintenanceService,
 		DeliveryIndex:         deliveryIndex,
 		Storage:               filesystem,
 		CookieSecure:          cfg.CookieSecure,

@@ -51,6 +51,7 @@ func serve() error {
 	logger.Info("runtime startup baseline",
 		"go_heap_alloc_bytes", snapshot.HeapAllocBytes,
 		"go_heap_sys_bytes", snapshot.HeapSysBytes,
+		"rss_bytes", snapshot.RSSBytes,
 		"goroutines", snapshot.Goroutines,
 	)
 	server := &http.Server{

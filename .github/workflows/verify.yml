@@ -30,7 +30,7 @@ jobs:
       - name: Install frontend dependencies
         run: npm --prefix web ci
       - name: Run quality gate
-        run: make check
+        run: make check e2e
 
   container-smoke:
     needs: quality

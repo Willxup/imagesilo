@@ -5,6 +5,7 @@ import "runtime"
 type RuntimeSnapshot struct {
 	HeapAllocBytes uint64
 	HeapSysBytes   uint64
+	RSSBytes       uint64
 	Goroutines     int
 }
 
@@ -14,6 +15,7 @@ func CaptureRuntime() RuntimeSnapshot {
 	return RuntimeSnapshot{
 		HeapAllocBytes: stats.HeapAlloc,
 		HeapSysBytes:   stats.HeapSys,
+		RSSBytes:       currentRSSBytes(),
 		Goroutines:     runtime.NumGoroutine(),
 	}
 }

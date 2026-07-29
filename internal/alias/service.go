@@ -56,6 +56,14 @@ func (s *Service) List(ctx context.Context, limit int) ([]Alias, error) {
 	return s.repository.List(ctx, limit)
 }
 
+func (s *Service) ListByImage(ctx context.Context, imageID string) ([]Alias, error) {
+	parsedImageID, err := uuid.Parse(imageID)
+	if err != nil || parsedImageID.String() != imageID {
+		return nil, ErrInvalidImage
+	}
+	return s.repository.ListByImage(ctx, imageID)
+}
+
 func (s *Service) Resolve(ctx context.Context, path string) (Alias, error) {
 	normalizedPath, err := delivery.NormalizeAliasPath(path)
 	if err != nil {

@@ -107,15 +107,57 @@ paths:
         - name: limit
           in: query
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          description: 按原始文件名、标准路径 UUID、历史路径或 SHA-256 搜索
+          schema: { type: string, maxLength: 200 }
+        - name: visibility
+          in: query
+          schema: { $ref: '#/components/schemas/Visibility' }
+        - name: format
+          in: query
+          schema: { type: string, enum: [jpeg, png, webp, gif] }
+        - name: uploadedVia
+          in: query
+          schema: { type: string, enum: [admin, api_token, import] }
+        - name: createdFrom
+          in: query
+          schema: { type: string, format: date-time }
+        - name: createdTo
+          in: query
+          schema: { type: string, format: date-time }
+        - name: minBytes
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: maxBytes
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: minWidth
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: maxWidth
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: minHeight
+          in: query
+          schema: { type: integer, minimum: 0 }
+        - name: maxHeight
+          in: query
+          schema: { type: integer, minimum: 0 }
       responses:
         '200':
-          description: 第一阶段的最近图片列表
+          description: 使用稳定 keyset cursor 的分页图片列表
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImageList'
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '400':
+          $ref: '#/components/responses/BadRequest'
     post:
       operationId: uploadImage
       security:
@@ -151,6 +193,92 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/images/batch-delete:
+    post:
+      operationId: batchDeleteImages
+      security:
+        - sessionCookie: []
+        - bearerToken: [images:delete]
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenForSession'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchImageRequest' }
+      responses:
+        '200':
+          description: 每张图片的永久删除结果；文件清理失败会明确标记
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchOperationResult' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/images/batch-visibility:
+    patch:
+      operationId: batchUpdateImageVisibility
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchVisibilityRequest' }
+      responses:
+        '200':
+          description: 每张图片的可见性修改结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/BatchOperationResult' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/images/{imageId}:
+    get:
+      operationId: getImageDetail
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+      responses:
+        '200':
+          description: 图片完整管理详情及历史别名
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImageDetail' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      operationId: deleteImage
+      security:
+        - sessionCookie: []
+        - bearerToken: [images:delete]
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+        - $ref: '#/components/parameters/CSRFTokenForSession'
+      responses:
+        '200':
+          description: 数据库和索引已永久删除；响应说明文件清理是否待巡检
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/DeleteImageResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
   /api/v1/images/{imageId}/visibility:
     patch:
       operationId: updateImageVisibility
@@ -361,6 +489,53 @@ paths:
                 $ref: '#/components/schemas/SystemInfo'
         '401':
           $ref: '#/components/responses/Unauthorized'
+  /api/v1/overview:
+    get:
+      operationId: getSystemOverview
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 图片、存储、运行内存、索引和最近维护结果的最小概览
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SystemOverview' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/maintenance/rebuild:
+    post:
+      operationId: rebuildIndexes
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: 全部内存索引已在独占变更屏障中整体重建
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RebuildResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/maintenance/inspect:
+    post:
+      operationId: inspectConsistency
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: 只读一致性巡检结果；本阶段不自动删除文件
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/InspectionResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
   /api/v1/imports:
     post:
       operationId: importImage
@@ -566,7 +741,7 @@ components:
         newPassword: { type: string, minLength: 12, maxLength: 1024 }
     Image:
       type: object
-      required: [id, originalName, mimeType, extension, width, height, sourceSize, storedSize, sourceSha256, storedSha256, processingSummary, visibility, standardUrl, thumbnailUrl, createdAt]
+      required: [id, originalName, mimeType, extension, width, height, sourceSize, storedSize, sourceSha256, storedSha256, processingSummary, visibility, uploadedVia, standardUrl, thumbnailUrl, createdAt]
       properties:
         id: { type: string, format: uuid }
         originalName: { type: string }
@@ -580,6 +755,7 @@ components:
         storedSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
         processingSummary: { $ref: '#/components/schemas/ProcessingSummary' }
         visibility: { $ref: '#/components/schemas/Visibility' }
+        uploadedVia: { type: string, enum: [admin, api_token, import] }
         standardUrl: { type: string }
         thumbnailUrl: { type: string }
         createdAt: { type: string, format: date-time }
@@ -590,6 +766,57 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/Image' }
+        nextCursor: { type: string }
+    ImageDetail:
+      allOf:
+        - $ref: '#/components/schemas/Image'
+        - type: object
+          required: [aliases]
+          properties:
+            aliases:
+              type: array
+              items: { $ref: '#/components/schemas/ImageAlias' }
+    DeleteImageResult:
+      type: object
+      required: [imageId, imageFileDeleted, thumbnailDeleted, cleanupPending]
+      properties:
+        imageId: { type: string, format: uuid }
+        imageFileDeleted: { type: boolean }
+        thumbnailDeleted: { type: boolean }
+        cleanupPending: { type: boolean }
+    BatchImageRequest:
+      type: object
+      additionalProperties: false
+      required: [imageIds]
+      properties:
+        imageIds:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, format: uuid }
+    BatchVisibilityRequest:
+      allOf:
+        - $ref: '#/components/schemas/BatchImageRequest'
+        - type: object
+          required: [visibility]
+          properties:
+            visibility: { $ref: '#/components/schemas/Visibility' }
+    BatchOperationItem:
+      type: object
+      required: [imageId, status]
+      properties:
+        imageId: { type: string, format: uuid }
+        status: { type: string, enum: [deleted, cleanup_pending, updated, not_found, error] }
+        cleanupPending: { type: boolean }
+        errorCode: { type: string }
+    BatchOperationResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/BatchOperationItem' }
     UpdateImageVisibilityRequest:
       type: object
       additionalProperties: false
@@ -695,6 +922,65 @@ components:
           type: array
           items: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
         vipsVersion: { type: string }
+    IndexStats:
+      type: object
+      required: [images, aliases, sessions, tokens]
+      properties:
+        images: { type: integer, minimum: 0 }
+        aliases: { type: integer, minimum: 0 }
+        sessions: { type: integer, minimum: 0 }
+        tokens: { type: integer, minimum: 0 }
+    InspectionResult:
+      type: object
+      required: [checkedAt, databaseImages, imageFiles, thumbnailFiles, temporaryFiles, missingImageCount, missingImageIds, orphanImageCount, orphanThumbnailCount]
+      properties:
+        checkedAt: { type: string, format: date-time }
+        databaseImages: { type: integer, minimum: 0 }
+        imageFiles: { type: integer, minimum: 0 }
+        thumbnailFiles: { type: integer, minimum: 0 }
+        temporaryFiles: { type: integer, minimum: 0 }
+        missingImageCount: { type: integer, minimum: 0 }
+        missingImageIds:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid }
+        orphanImageCount: { type: integer, minimum: 0 }
+        orphanThumbnailCount: { type: integer, minimum: 0 }
+    RebuildResult:
+      type: object
+      required: [completedAt, images, aliases, sessions, tokens, missingImageCount, missingImageIds]
+      properties:
+        completedAt: { type: string, format: date-time }
+        images: { type: integer, minimum: 0 }
+        aliases: { type: integer, minimum: 0 }
+        sessions: { type: integer, minimum: 0 }
+        tokens: { type: integer, minimum: 0 }
+        missingImageCount: { type: integer, minimum: 0 }
+        missingImageIds:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid }
+    SystemOverview:
+      type: object
+      required: [imageCount, storedBytes, aliasCount, heapAllocBytes, heapSysBytes, rssBytes, goroutines, indexes, indexConsistent, lastInspection, lastRebuild]
+      properties:
+        imageCount: { type: integer, format: int64, minimum: 0 }
+        storedBytes: { type: integer, format: int64, minimum: 0 }
+        aliasCount: { type: integer, format: int64, minimum: 0 }
+        heapAllocBytes: { type: integer, format: int64, minimum: 0 }
+        heapSysBytes: { type: integer, format: int64, minimum: 0 }
+        rssBytes: { type: integer, format: int64, minimum: 0 }
+        goroutines: { type: integer, minimum: 0 }
+        indexes: { $ref: '#/components/schemas/IndexStats' }
+        indexConsistent: { type: boolean }
+        lastInspection:
+          oneOf:
+            - $ref: '#/components/schemas/InspectionResult'
+            - type: 'null'
+        lastRebuild:
+          oneOf:
+            - $ref: '#/components/schemas/RebuildResult'
+            - type: 'null'
     CreateAliasRequest:
       type: object
       additionalProperties: false

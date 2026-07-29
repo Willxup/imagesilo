@@ -9,7 +9,7 @@ void i18n.use(initReactI18next).init({
     'zh-CN': { translation: zhCN },
     'en-US': { translation: enUS },
   },
-  lng: 'zh-CN',
+  lng: localStorage.getItem('imagesilo_language') === 'en-US' ? 'en-US' : 'zh-CN',
   fallbackLng: 'en-US',
   interpolation: { escapeValue: false },
 })

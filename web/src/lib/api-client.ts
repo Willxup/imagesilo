@@ -36,6 +36,59 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   return body as T
 }
 
+export function uploadForm<T>(
+  path: string,
+  body: FormData,
+  onProgress: (percent: number) => void,
+  signal: AbortSignal,
+): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest()
+    const abort = () => request.abort()
+    signal.addEventListener('abort', abort, { once: true })
+    request.open('POST', path)
+    request.withCredentials = true
+    request.setRequestHeader('Accept', 'application/json')
+    const csrfToken = readCookie('imagesilo_csrf')
+    if (csrfToken) request.setRequestHeader('X-CSRF-Token', csrfToken)
+    request.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable) onProgress(Math.min(100, Math.round((event.loaded / event.total) * 100)))
+    })
+    request.addEventListener('load', () => {
+      signal.removeEventListener('abort', abort)
+      const contentType = request.getResponseHeader('content-type') ?? ''
+      let value: unknown
+      if (contentType.includes('application/json') && request.responseText) {
+        try {
+          value = JSON.parse(request.responseText)
+        } catch {
+          value = undefined
+        }
+      }
+      if (request.status >= 200 && request.status < 300) {
+        onProgress(100)
+        resolve(value as T)
+        return
+      }
+      const error = value as { message?: unknown; code?: unknown } | undefined
+      reject(new ApiError(
+        request.status,
+        typeof error?.message === 'string' ? error.message : `Request failed with status ${request.status}`,
+        typeof error?.code === 'string' ? error.code : undefined,
+      ))
+    })
+    request.addEventListener('error', () => {
+      signal.removeEventListener('abort', abort)
+      reject(new ApiError(0, 'Network request failed'))
+    })
+    request.addEventListener('abort', () => {
+      signal.removeEventListener('abort', abort)
+      reject(new DOMException('Upload canceled', 'AbortError'))
+    })
+    request.send(body)
+  })
+}
+
 function isSafeMethod(method?: string) {
   const normalized = (method ?? 'GET').toUpperCase()
   return normalized === 'GET' || normalized === 'HEAD' || normalized === 'OPTIONS'

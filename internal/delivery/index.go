@@ -42,13 +42,26 @@ func (i *Index) UpdateVisibility(id, visibility string) bool {
 
 func (i *Index) AddAlias(path, imageID string) {
 	i.mu.Lock()
-	i.aliases[path] = imageID
+	if _, exists := i.byID[imageID]; exists {
+		i.aliases[path] = imageID
+	}
 	i.mu.Unlock()
 }
 
 func (i *Index) RemoveAlias(path string) {
 	i.mu.Lock()
 	delete(i.aliases, path)
+	i.mu.Unlock()
+}
+
+func (i *Index) RemoveImage(id string) {
+	i.mu.Lock()
+	delete(i.byID, id)
+	for path, imageID := range i.aliases {
+		if imageID == id {
+			delete(i.aliases, path)
+		}
+	}
 	i.mu.Unlock()
 }
 

@@ -62,6 +62,28 @@ func (r *Repository) List(ctx context.Context, limit int) ([]Alias, error) {
 	return result, nil
 }
 
+func (r *Repository) ListByImage(ctx context.Context, imageID string) ([]Alias, error) {
+	rows, err := r.db.QueryContext(ctx, `
+		SELECT id, alias_path, image_id, source, created_at
+		FROM image_aliases WHERE image_id = ? ORDER BY created_at ASC, id ASC`, imageID)
+	if err != nil {
+		return nil, fmt.Errorf("list image aliases by target: %w", err)
+	}
+	defer rows.Close()
+	result := make([]Alias, 0)
+	for rows.Next() {
+		value, err := scanAlias(rows)
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, value)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate image aliases by target: %w", err)
+	}
+	return result, nil
+}
+
 func (r *Repository) GetByPath(ctx context.Context, path string) (Alias, error) {
 	value, err := scanAlias(r.db.QueryRowContext(ctx, `
 		SELECT id, alias_path, image_id, source, created_at

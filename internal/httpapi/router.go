@@ -10,6 +10,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
 	"github.com/Willxup/imagesilo/internal/webui"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	Aliases               *imagealias.Service
 	Images                *images.Service
 	Settings              *settings.Service
+	Maintenance           *maintenance.Service
 	DeliveryIndex         *delivery.Index
 	Storage               *storage.Filesystem
 	CookieSecure          bool
@@ -76,9 +78,13 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Delete("/api/v1/aliases/{aliasID}", aliasHandler.delete)
 	}
 	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil && dependencies.Storage != nil {
-		imageHandler := newImageHandler(dependencies.Images, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger)
+		imageHandler := newImageHandler(dependencies.Images, dependencies.Aliases, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger)
 		router.Get("/api/v1/images", imageHandler.list)
 		router.Post("/api/v1/images", imageHandler.upload)
+		router.Post("/api/v1/images/batch-delete", imageHandler.batchDelete)
+		router.Patch("/api/v1/images/batch-visibility", imageHandler.batchVisibility)
+		router.Get("/api/v1/images/{imageID}", imageHandler.detail)
+		router.Delete("/api/v1/images/{imageID}", imageHandler.delete)
 		router.Get("/api/v1/images/{imageID}/thumbnail", imageHandler.thumbnail)
 		router.Patch("/api/v1/images/{imageID}/visibility", imageHandler.changeVisibility)
 	}
@@ -89,6 +95,12 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Patch("/api/v1/settings/processing", settingsHandler.updateProcessing)
 		systemHandler := newSystemHandler(dependencies.Settings, authenticator, dependencies.ProcessingConcurrency)
 		router.Get("/api/v1/system", systemHandler.get)
+	}
+	if dependencies.Maintenance != nil && dependencies.Auth != nil {
+		maintenanceHandler := newMaintenanceHandler(dependencies.Maintenance, authenticator)
+		router.Get("/api/v1/overview", maintenanceHandler.overview)
+		router.Post("/api/v1/maintenance/rebuild", maintenanceHandler.rebuild)
+		router.Post("/api/v1/maintenance/inspect", maintenanceHandler.inspect)
 	}
 	var imageDelivery *deliveryHandler
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {

@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
+    "e2e": "playwright test",
     "typecheck": "tsc -b --pretty false",
     "generate:api": "openapi-typescript ../api/openapi.yaml -o src/generated/openapi.d.ts"
   },

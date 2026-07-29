@@ -6,11 +6,15 @@ func TestIndexReplaceAndRead(t *testing.T) {
 	index := NewIndex()
 	index.Add("first", Target{StorageKey: "first"})
 	index.AddAlias("/legacy/first.jpg", "first")
+	index.AddAlias("/legacy/missing.jpg", "missing")
 	if _, ok := index.Get("first"); !ok {
 		t.Fatal("Get(first) missed an inserted target")
 	}
 	if target, ok := index.GetAlias("/legacy/first.jpg"); !ok || target.StorageKey != "first" {
 		t.Fatal("GetAlias() did not resolve through the target map")
+	}
+	if _, ok := index.ResolveAlias("/legacy/missing.jpg"); ok {
+		t.Fatal("AddAlias() retained an alias for a missing target")
 	}
 	index.ReplaceAll(
 		map[string]Target{"second": {StorageKey: "second"}},

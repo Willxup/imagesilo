@@ -1,7 +1,18 @@
 {
   "common": {
     "loading": "Loading…",
-    "working": "Working…"
+    "working": "Working…",
+    "all": "All",
+    "clear": "Clear",
+    "copied": "Copied",
+    "cancel": "Cancel",
+    "retry": "Retry",
+    "copy": "Copy",
+    "delete": "Delete"
+  },
+  "preferences": {
+    "dark": "Dark",
+    "light": "Light"
   },
   "auth": {
     "email": "Administrator email",
@@ -14,40 +25,122 @@
     "primary": "Primary navigation",
     "upload": "Upload",
     "images": "Images",
+    "aliases": "Aliases",
     "apiTokens": "API tokens",
-    "settings": "Settings"
+    "settings": "Settings",
+    "system": "System"
   },
   "upload": {
-    "title": "Upload image",
-    "description": "Upload JPEG, PNG, WebP, or animated GIF files and choose whether their stable links are public or private.",
+    "title": "Upload images",
+    "description": "Drop, choose, or paste JPEG, PNG, WebP, and animated GIF files. The queue stays in this browser.",
     "chooseFiles": "Choose image files",
+    "dropOrPaste": "Drop images here or paste an image from the clipboard",
+    "dropHelp": "You can also use the file picker below. Unsupported formats are not added.",
     "runtime": "Up to {{concurrency}} files are processed at once; each batch can contain {{count}} files.",
     "tooMany": "Choose no more than {{count}} files in one batch.",
+    "unsupported": "Some files were not supported JPEG, PNG, WebP, or GIF images and were ignored.",
     "visibility": "Visibility",
     "visibilityDefault": "Use system default",
     "uploadCount": "Upload {{count}} files",
-    "success": "Upload complete",
-    "failed": "Upload failed. Check the file type and size, then try again.",
+    "empty": "No files are queued.",
+    "progress": "Upload progress {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · saved {{percent}}%",
     "status": {
       "queued": "Queued in this browser",
       "uploading": "Uploading and processing",
       "complete": "Complete",
-      "failed": "Failed"
+      "failed": "Failed",
+      "canceled": "Canceled"
     }
   },
   "images": {
-    "title": "Recent images",
-    "description": "Image links are delivered from the in-memory index and local filesystem.",
-    "empty": "No images yet.",
+    "title": "Image management",
+    "description": "Search, filter, and manage paginated images. Lists always load thumbnails only.",
+    "empty": "No images match the current filters.",
     "failed": "Unable to load images.",
+    "viewMode": "View mode",
+    "grid": "Grid",
+    "list": "List",
+    "search": "Search",
+    "searchPlaceholder": "Filename, path, UUID, or SHA-256",
+    "visibility": "Visibility",
+    "format": "Format",
+    "uploadedVia": "Upload source",
+    "source": {
+      "admin": "Admin UI",
+      "api_token": "API token",
+      "import": "Import"
+    },
+    "createdFrom": "Start date",
+    "createdTo": "End date",
+    "minSize": "Minimum size (MiB)",
+    "maxSize": "Maximum size (MiB)",
+    "minWidth": "Minimum width",
+    "maxWidth": "Maximum width",
+    "minHeight": "Minimum height",
+    "maxHeight": "Maximum height",
+    "applyFilters": "Apply filters",
+    "resetFilters": "Reset",
+    "selected": "{{count}} selected",
+    "selectImage": "Select image {{name}}",
     "makePrivate": "Make private",
     "makePublic": "Make public",
-    "visibilityFailed": "Unable to change image visibility."
+    "deletePermanently": "Delete permanently",
+    "confirmBatchDelete": "Permanently delete the selected {{count}} images? This cannot be undone.",
+    "confirmDelete": "Permanently delete “{{name}}”? This cannot be undone.",
+    "copyDirect": "Copy direct link",
+    "details": "Details",
+    "loadMore": "Load more",
+    "operationFailed": "The operation failed. Try again.",
+    "batchCompleted": "Processed {{count}} items",
+    "batchSuccess": "All operations succeeded.",
+    "batchStatus": {
+      "cleanup_pending": "Database and index deleted; files await inspection cleanup",
+      "not_found": "Image not found",
+      "error": "Operation failed",
+      "deleted": "Deleted",
+      "updated": "Updated"
+    },
+    "detailFailed": "Unable to load image details.",
+    "back": "Back to images",
+    "openImage": "Open image",
+    "copyLinks": "Copy link formats",
+    "linkFormat": {
+      "direct": "Copy direct link",
+      "markdown": "Copy Markdown",
+      "html": "Copy HTML",
+      "bbcode": "Copy BBCode"
+    },
+    "metadata": "Image information",
+    "sourceSize": "Source size",
+    "storedSize": "Stored size",
+    "sha256": "Stored SHA-256",
+    "uploadedAt": "Uploaded at",
+    "processing": "Processing summary",
+    "aliases": "Historical paths",
+    "noAliases": "This image has no historical path aliases."
   },
   "visibility": {
     "public": "Public",
     "private": "Private"
+  },
+  "aliases": {
+    "title": "Historical path aliases",
+    "description": "Create, resolve, and delete one old URL at a time. Old paths return image bytes directly without redirects.",
+    "create": "Create alias",
+    "resolve": "Resolve path",
+    "path": "Historical path",
+    "imageId": "Target image UUID",
+    "source": "Source label",
+    "created": "Created {{path}}",
+    "createFailed": "Unable to create the alias. Check the path, image UUID, or conflict.",
+    "target": "Target image: {{id}}",
+    "notFound": "No alias was found for this path.",
+    "existing": "Existing aliases",
+    "listFailed": "Unable to load aliases.",
+    "empty": "No historical path aliases yet.",
+    "confirmDelete": "Delete alias “{{path}}”?",
+    "deleteFailed": "Unable to delete the alias."
   },
   "apiTokens": {
     "title": "API tokens",
@@ -69,7 +162,7 @@
     "scopeHelp": {
       "images:upload": "Upload images through the API.",
       "images:read_private": "Read private image bytes.",
-      "images:delete": "Delete images when management endpoints are enabled.",
+      "images:delete": "Permanently delete single or batched images.",
       "aliases:write": "Create or import historical URL aliases."
     },
     "status": {
@@ -80,7 +173,28 @@
   },
   "settings": {
     "title": "Settings",
-    "description": "Manage Phase 2 security and visibility defaults.",
+    "description": "Manage processing, visibility defaults, system state, and the administrator password.",
+    "overview": "System overview",
+    "overviewHelp": "Shows current image, storage, memory, index, and maintenance state without collecting traffic trends.",
+    "overviewFailed": "Unable to load the system overview.",
+    "inspectNow": "Inspect now",
+    "rebuildIndexes": "Rebuild indexes",
+    "confirmRebuild": "Direct links keep reading the old index while writes wait briefly. Continue?",
+    "maintenanceFailed": "The maintenance operation failed.",
+    "imageCount": "Images",
+    "storageUsed": "Storage used",
+    "aliasCount": "Historical paths",
+    "rss": "Process RSS",
+    "heap": "Go heap",
+    "goroutines": "Goroutines",
+    "indexConsistent": "Database and image/alias index counts agree.",
+    "indexDifferent": "Database and in-memory index counts differ. Check missing files or rebuild.",
+    "indexCounts": "Indexes: {{images}} images, {{aliases}} aliases, {{sessions}} sessions, {{tokens}} tokens",
+    "lastInspection": "Last inspection",
+    "lastRebuild": "Last rebuild",
+    "notRun": "Not run since this process started.",
+    "inspectionSummary": "{{missingImageCount}} missing images, {{orphanImageCount}} orphan images, {{orphanThumbnailCount}} orphan thumbnails, {{temporaryFiles}} temporary files.",
+    "rebuildSummary": "Loaded {{images}} images, {{aliases}} aliases, {{sessions}} sessions, and {{tokens}} tokens; {{missingImageCount}} images missing.",
     "defaultVisibility": "Default upload visibility",
     "defaultVisibilityHelp": "Uploads without an explicit value use this visibility.",
     "loadFailed": "Unable to load settings.",
@@ -102,5 +216,9 @@
     "conversionWebpLossless": "Lossless WebP conversion",
     "saveProcessing": "Save processing settings",
     "processingFailed": "Unable to update image processing settings."
+  },
+  "system": {
+    "title": "System status",
+    "description": "Review lightweight resource, persistent data, in-memory index, and recent maintenance state."
   }
 }

@@ -6,12 +6,20 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 type Filesystem struct {
 	imagesDirectory     string
 	thumbnailsDirectory string
 	temporaryDirectory  string
+}
+
+type FileEntry struct {
+	Key        string
+	Size       int64
+	ModifiedAt time.Time
+	Regular    bool
 }
 
 func NewFilesystem(dataDirectory string) *Filesystem {
@@ -135,6 +143,18 @@ func (f *Filesystem) RemoveTemporary(path string) error {
 	return nil
 }
 
+func (f *Filesystem) ListImages() ([]FileEntry, error) {
+	return listDirectory(f.imagesDirectory)
+}
+
+func (f *Filesystem) ListThumbnails() ([]FileEntry, error) {
+	return listDirectory(f.thumbnailsDirectory)
+}
+
+func (f *Filesystem) ListTemporary() ([]FileEntry, error) {
+	return listDirectory(f.temporaryDirectory)
+}
+
 func (f *Filesystem) resolveStorageKey(storageKey string) (string, error) {
 	if storageKey == "" || storageKey != filepath.Base(storageKey) || strings.ContainsAny(storageKey, "/\\\x00") {
 		return "", fmt.Errorf("invalid storage key")
@@ -151,4 +171,22 @@ func (f *Filesystem) resolveThumbnailKey(imageID string) (string, error) {
 		return "", fmt.Errorf("invalid thumbnail key")
 	}
 	return filepath.Join(f.thumbnailsDirectory, imageID), nil
+}
+
+func listDirectory(directory string) ([]FileEntry, error) {
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		return nil, fmt.Errorf("list data directory: %w", err)
+	}
+	result := make([]FileEntry, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, fmt.Errorf("inspect data entry: %w", err)
+		}
+		result = append(result, FileEntry{
+			Key: entry.Name(), Size: info.Size(), ModifiedAt: info.ModTime().UTC(), Regular: info.Mode().IsRegular(),
+		})
+	}
+	return result, nil
 }

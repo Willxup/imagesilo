@@ -3,7 +3,9 @@ package image
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -46,11 +48,75 @@ func (r *Repository) Create(ctx context.Context, image Image) error {
 }
 
 func (r *Repository) List(ctx context.Context, limit int) ([]Image, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	return r.ListFiltered(ctx, repositoryListFilter{Limit: limit})
+}
+
+type repositoryListFilter struct {
+	Limit          int
+	BeforeUnix     int64
+	BeforeID       string
+	Query          string
+	Visibility     Visibility
+	MIMEType       string
+	UploadedVia    string
+	CreatedFrom    *time.Time
+	CreatedTo      *time.Time
+	MinStoredBytes int64
+	MaxStoredBytes int64
+	MinWidth       int
+	MaxWidth       int
+	MinHeight      int
+	MaxHeight      int
+}
+
+func (r *Repository) ListFiltered(ctx context.Context, filter repositoryListFilter) ([]Image, error) {
+	var query strings.Builder
+	query.WriteString(`
 		SELECT id, original_name, storage_key, extension, mime_type, width, height,
 		       source_size, stored_size, source_sha256, stored_sha256, processing_summary,
 		       visibility, uploaded_via, uploaded_by_api_token_id, created_at
-		FROM images ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+		FROM images WHERE 1 = 1`)
+	args := make([]any, 0, 20)
+	if filter.BeforeID != "" {
+		query.WriteString(" AND (created_at < ? OR (created_at = ? AND id < ?))")
+		args = append(args, filter.BeforeUnix, filter.BeforeUnix, filter.BeforeID)
+	}
+	if filter.Query != "" {
+		pattern := "%" + escapeLike(strings.ToLower(filter.Query)) + "%"
+		query.WriteString(` AND (
+			LOWER(original_name) LIKE ? ESCAPE '\' OR LOWER(id) LIKE ? ESCAPE '\' OR
+			LOWER(HEX(source_sha256)) LIKE ? ESCAPE '\' OR LOWER(HEX(stored_sha256)) LIKE ? ESCAPE '\' OR
+			EXISTS (SELECT 1 FROM image_aliases WHERE image_aliases.image_id = images.id AND LOWER(alias_path) LIKE ? ESCAPE '\')
+		)`)
+		args = append(args, pattern, pattern, pattern, pattern, pattern)
+	}
+	if filter.Visibility != "" {
+		query.WriteString(" AND visibility = ?")
+		args = append(args, filter.Visibility)
+	}
+	if filter.MIMEType != "" {
+		query.WriteString(" AND mime_type = ?")
+		args = append(args, filter.MIMEType)
+	}
+	if filter.UploadedVia != "" {
+		query.WriteString(" AND uploaded_via = ?")
+		args = append(args, filter.UploadedVia)
+	}
+	if filter.CreatedFrom != nil {
+		query.WriteString(" AND created_at >= ?")
+		args = append(args, filter.CreatedFrom.Unix())
+	}
+	if filter.CreatedTo != nil {
+		query.WriteString(" AND created_at <= ?")
+		args = append(args, filter.CreatedTo.Unix())
+	}
+	appendIntegerFilter(&query, &args, "stored_size", filter.MinStoredBytes, filter.MaxStoredBytes)
+	appendIntegerFilter(&query, &args, "width", int64(filter.MinWidth), int64(filter.MaxWidth))
+	appendIntegerFilter(&query, &args, "height", int64(filter.MinHeight), int64(filter.MaxHeight))
+	query.WriteString(" ORDER BY created_at DESC, id DESC LIMIT ?")
+	args = append(args, filter.Limit)
+
+	rows, err := r.db.QueryContext(ctx, query.String(), args...)
 	if err != nil {
 		return nil, fmt.Errorf("list images: %w", err)
 	}
@@ -68,6 +134,30 @@ func (r *Repository) List(ctx context.Context, limit int) ([]Image, error) {
 		return nil, fmt.Errorf("iterate images: %w", err)
 	}
 	return images, nil
+}
+
+func (r *Repository) Get(ctx context.Context, id string) (Image, error) {
+	value, err := scanImage(r.db.QueryRowContext(ctx, `
+		SELECT id, original_name, storage_key, extension, mime_type, width, height,
+		       source_size, stored_size, source_sha256, stored_sha256, processing_summary,
+		       visibility, uploaded_via, uploaded_by_api_token_id, created_at
+		FROM images WHERE id = ?`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Image{}, ErrImageNotFound
+	}
+	return value, err
+}
+
+func (r *Repository) Delete(ctx context.Context, id string) (Image, error) {
+	value, err := scanImage(r.db.QueryRowContext(ctx, `
+		DELETE FROM images WHERE id = ?
+		RETURNING id, original_name, storage_key, extension, mime_type, width, height,
+		          source_size, stored_size, source_sha256, stored_sha256, processing_summary,
+		          visibility, uploaded_via, uploaded_by_api_token_id, created_at`, id))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Image{}, ErrImageNotFound
+	}
+	return value, err
 }
 
 func (r *Repository) UpdateVisibility(ctx context.Context, id string, visibility Visibility) (bool, error) {
@@ -117,4 +207,21 @@ func scanImage(row rowScanner) (Image, error) {
 	copy(value.StoredSHA256[:], storedHash)
 	value.CreatedAt = time.Unix(createdAt, 0).UTC()
 	return value, nil
+}
+
+func appendIntegerFilter(query *strings.Builder, args *[]any, column string, minimum, maximum int64) {
+	if minimum > 0 {
+		query.WriteString(" AND " + column + " >= ?")
+		*args = append(*args, minimum)
+	}
+	if maximum > 0 {
+		query.WriteString(" AND " + column + " <= ?")
+		*args = append(*args, maximum)
+	}
+}
+
+func escapeLike(value string) string {
+	value = strings.ReplaceAll(value, "\\", "\\\\")
+	value = strings.ReplaceAll(value, "%", "\\%")
+	return strings.ReplaceAll(value, "_", "\\_")
 }

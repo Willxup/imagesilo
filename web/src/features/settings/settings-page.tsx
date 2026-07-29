@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 
 import { apiRequest } from '../../lib/api-client'
 import type { AppSettings, Visibility } from '../../lib/api-types'
+import { SystemOverviewPanel } from '../system/system-overview-panel'
 
 export function SettingsPage() {
   const { t } = useTranslation()
@@ -69,7 +70,9 @@ export function SettingsPage() {
       <h1 className="page-title">{t('settings.title')}</h1>
       <p className="page-description">{t('settings.description')}</p>
 
-      <div className="mt-8 rounded-2xl border border-line bg-panel p-6">
+      <div className="mt-8"><SystemOverviewPanel /></div>
+
+      <div className="mt-6 rounded-2xl border border-line bg-panel p-6">
         <h2 className="text-xl font-semibold">{t('settings.defaultVisibility')}</h2>
         <p className="mt-2 text-sm text-muted">{t('settings.defaultVisibilityHelp')}</p>
         {settingsQuery.isLoading ? <p className="mt-4 text-muted">{t('common.loading')}</p> : null}

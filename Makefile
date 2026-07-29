@@ -1,7 +1,7 @@
 SHELL := /bin/sh
 GO_PACKAGES := ./cmd/... ./db/... ./internal/...
 
-.PHONY: build check clean docker-build format generate test web-build web-install web-sync
+.PHONY: build check clean docker-build e2e format generate test web-build web-install web-sync
 
 build: web-sync
 	mkdir -p bin
@@ -21,6 +21,9 @@ clean:
 
 docker-build:
 	docker buildx build --platform linux/amd64,linux/arm64 --file deploy/docker/Dockerfile .
+
+e2e: build
+	npm --prefix web run e2e
 
 format:
 	gofmt -w cmd db internal

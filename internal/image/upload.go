@@ -3,6 +3,7 @@ package image
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -335,6 +336,83 @@ func (s *Service) List(ctx context.Context, limit int) ([]Image, error) {
 	return s.repository.List(ctx, limit)
 }
 
+type listCursor struct {
+	CreatedAt int64  `json:"createdAt"`
+	ID        string `json:"id"`
+}
+
+func (s *Service) Search(ctx context.Context, filter ListFilter) (Page, error) {
+	if err := validateListFilter(filter); err != nil {
+		return Page{}, err
+	}
+	if filter.Limit <= 0 || filter.Limit > 100 {
+		filter.Limit = 50
+	}
+	repositoryFilter := repositoryListFilter{
+		Limit: filter.Limit + 1, Query: strings.TrimSpace(filter.Query), Visibility: filter.Visibility,
+		MIMEType: filter.MIMEType, UploadedVia: filter.UploadedVia, CreatedFrom: filter.CreatedFrom, CreatedTo: filter.CreatedTo,
+		MinStoredBytes: filter.MinStoredBytes, MaxStoredBytes: filter.MaxStoredBytes,
+		MinWidth: filter.MinWidth, MaxWidth: filter.MaxWidth, MinHeight: filter.MinHeight, MaxHeight: filter.MaxHeight,
+	}
+	if filter.Cursor != "" {
+		cursor, err := decodeListCursor(filter.Cursor)
+		if err != nil {
+			return Page{}, ErrInvalidListFilter
+		}
+		repositoryFilter.BeforeUnix = cursor.CreatedAt
+		repositoryFilter.BeforeID = cursor.ID
+	}
+	items, err := s.repository.ListFiltered(ctx, repositoryFilter)
+	if err != nil {
+		return Page{}, err
+	}
+	page := Page{Items: items}
+	if len(items) > filter.Limit {
+		page.Items = items[:filter.Limit]
+		last := page.Items[len(page.Items)-1]
+		page.NextCursor, err = encodeListCursor(listCursor{CreatedAt: last.CreatedAt.Unix(), ID: last.ID})
+		if err != nil {
+			return Page{}, err
+		}
+	}
+	return page, nil
+}
+
+func (s *Service) Get(ctx context.Context, id string) (Image, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil || parsed.String() != id {
+		return Image{}, ErrImageNotFound
+	}
+	return s.repository.Get(ctx, id)
+}
+
+func (s *Service) Delete(ctx context.Context, id string) (DeleteResult, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil || parsed.String() != id {
+		return DeleteResult{}, ErrImageNotFound
+	}
+	releaseChange := s.barrier.BeginChange()
+	deleted, err := s.repository.Delete(ctx, id)
+	if err != nil {
+		releaseChange()
+		return DeleteResult{}, err
+	}
+	s.index.RemoveImage(id)
+	releaseChange()
+
+	result := DeleteResult{ImageID: id, ImageFileDeleted: true, ThumbnailDeleted: true}
+	if err := s.storage.Remove(deleted.StorageKey); err != nil {
+		result.ImageFileDeleted = false
+		result.ImageCleanupError = err
+	}
+	if err := s.storage.RemoveThumbnail(id); err != nil {
+		result.ThumbnailDeleted = false
+		result.ThumbCleanupError = err
+	}
+	result.CleanupPending = !result.ImageFileDeleted || !result.ThumbnailDeleted
+	return result, nil
+}
+
 func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Visibility) (bool, error) {
 	if visibility != VisibilityPublic && visibility != VisibilityPrivate {
 		return false, fmt.Errorf("invalid image visibility")
@@ -365,4 +443,43 @@ func sanitizeOriginalName(name string) string {
 		name = string(runes[:255])
 	}
 	return name
+}
+
+func validateListFilter(filter ListFilter) error {
+	if len([]rune(strings.TrimSpace(filter.Query))) > 200 ||
+		(filter.Visibility != "" && filter.Visibility != VisibilityPublic && filter.Visibility != VisibilityPrivate) ||
+		(filter.MIMEType != "" && filter.MIMEType != "image/jpeg" && filter.MIMEType != "image/png" && filter.MIMEType != "image/webp" && filter.MIMEType != "image/gif") ||
+		(filter.UploadedVia != "" && filter.UploadedVia != "admin" && filter.UploadedVia != "api_token" && filter.UploadedVia != "import") ||
+		filter.MinStoredBytes < 0 || filter.MaxStoredBytes < 0 || filter.MinWidth < 0 || filter.MaxWidth < 0 || filter.MinHeight < 0 || filter.MaxHeight < 0 ||
+		(filter.MaxStoredBytes > 0 && filter.MinStoredBytes > filter.MaxStoredBytes) ||
+		(filter.MaxWidth > 0 && filter.MinWidth > filter.MaxWidth) ||
+		(filter.MaxHeight > 0 && filter.MinHeight > filter.MaxHeight) ||
+		(filter.CreatedFrom != nil && filter.CreatedTo != nil && filter.CreatedFrom.After(*filter.CreatedTo)) {
+		return ErrInvalidListFilter
+	}
+	return nil
+}
+
+func encodeListCursor(cursor listCursor) (string, error) {
+	value, err := json.Marshal(cursor)
+	if err != nil {
+		return "", fmt.Errorf("encode image list cursor: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(value), nil
+}
+
+func decodeListCursor(value string) (listCursor, error) {
+	raw, err := base64.RawURLEncoding.DecodeString(value)
+	if err != nil {
+		return listCursor{}, err
+	}
+	var cursor listCursor
+	if err := json.Unmarshal(raw, &cursor); err != nil {
+		return listCursor{}, err
+	}
+	id, err := uuid.Parse(cursor.ID)
+	if err != nil || id.String() != cursor.ID || cursor.CreatedAt <= 0 {
+		return listCursor{}, ErrInvalidListFilter
+	}
+	return cursor, nil
 }

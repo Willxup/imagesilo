@@ -39,3 +39,34 @@ type UploadOptions struct {
 	Limits               processor.Limits
 	Processing           processor.Options
 }
+
+type ListFilter struct {
+	Limit          int
+	Cursor         string
+	Query          string
+	Visibility     Visibility
+	MIMEType       string
+	UploadedVia    string
+	CreatedFrom    *time.Time
+	CreatedTo      *time.Time
+	MinStoredBytes int64
+	MaxStoredBytes int64
+	MinWidth       int
+	MaxWidth       int
+	MinHeight      int
+	MaxHeight      int
+}
+
+type Page struct {
+	Items      []Image
+	NextCursor string
+}
+
+type DeleteResult struct {
+	ImageID           string
+	ImageFileDeleted  bool
+	ThumbnailDeleted  bool
+	CleanupPending    bool
+	ImageCleanupError error
+	ThumbCleanupError error
+}

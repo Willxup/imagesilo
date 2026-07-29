@@ -1,7 +1,18 @@
 {
   "common": {
     "loading": "加载中…",
-    "working": "处理中…"
+    "working": "处理中…",
+    "all": "全部",
+    "clear": "清除",
+    "copied": "已复制",
+    "cancel": "取消",
+    "retry": "重试",
+    "copy": "复制",
+    "delete": "删除"
+  },
+  "preferences": {
+    "dark": "深色",
+    "light": "浅色"
   },
   "auth": {
     "email": "管理员邮箱",
@@ -14,40 +25,122 @@
     "primary": "主要导航",
     "upload": "上传",
     "images": "图片",
+    "aliases": "历史路径",
     "apiTokens": "API Token",
-    "settings": "设置"
+    "settings": "设置",
+    "system": "系统"
   },
   "upload": {
     "title": "上传图片",
-    "description": "上传 JPEG、PNG、WebP 或动态 GIF，并选择稳定直链是公开还是私密。",
+    "description": "拖放、选择或粘贴 JPEG、PNG、WebP 和动态 GIF；队列只存在于当前浏览器。",
     "chooseFiles": "选择图片文件",
+    "dropOrPaste": "拖放图片到这里，或直接粘贴剪贴板图片",
+    "dropHelp": "也可以使用下面的文件选择器；不支持的格式不会加入队列。",
     "runtime": "最多同时处理 {{concurrency}} 个文件；每批最多选择 {{count}} 个文件。",
     "tooMany": "每批最多选择 {{count}} 个文件。",
+    "unsupported": "部分文件不是支持的 JPEG、PNG、WebP 或 GIF，已忽略。",
     "visibility": "可见性",
     "visibilityDefault": "使用系统默认值",
     "uploadCount": "上传 {{count}} 个文件",
-    "success": "上传成功",
-    "failed": "上传失败，请检查文件格式和大小后重试。",
+    "empty": "还没有待上传文件。",
+    "progress": "上传进度 {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · 节省 {{percent}}%",
     "status": {
       "queued": "在浏览器中排队",
       "uploading": "上传并处理中",
       "complete": "已完成",
-      "failed": "失败"
+      "failed": "失败",
+      "canceled": "已取消"
     }
   },
   "images": {
-    "title": "最近图片",
-    "description": "图片直链从内存索引和本地文件系统交付。",
-    "empty": "还没有图片。",
+    "title": "图片管理",
+    "description": "分页搜索、筛选和管理图片；列表始终只加载缩略图。",
+    "empty": "没有符合条件的图片。",
     "failed": "图片列表加载失败。",
+    "viewMode": "视图方式",
+    "grid": "网格",
+    "list": "列表",
+    "search": "搜索",
+    "searchPlaceholder": "文件名、路径、UUID 或 SHA-256",
+    "visibility": "可见性",
+    "format": "格式",
+    "uploadedVia": "上传来源",
+    "source": {
+      "admin": "管理后台",
+      "api_token": "API Token",
+      "import": "导入"
+    },
+    "createdFrom": "开始日期",
+    "createdTo": "结束日期",
+    "minSize": "最小大小（MiB）",
+    "maxSize": "最大大小（MiB）",
+    "minWidth": "最小宽度",
+    "maxWidth": "最大宽度",
+    "minHeight": "最小高度",
+    "maxHeight": "最大高度",
+    "applyFilters": "应用筛选",
+    "resetFilters": "重置",
+    "selected": "已选择 {{count}} 张",
+    "selectImage": "选择图片 {{name}}",
     "makePrivate": "改为私密",
     "makePublic": "改为公开",
-    "visibilityFailed": "图片可见性修改失败。"
+    "deletePermanently": "永久删除",
+    "confirmBatchDelete": "确定永久删除选中的 {{count}} 张图片吗？此操作不可恢复。",
+    "confirmDelete": "确定永久删除“{{name}}”吗？此操作不可恢复。",
+    "copyDirect": "复制直链",
+    "details": "详情",
+    "loadMore": "加载更多",
+    "operationFailed": "操作失败，请重试。",
+    "batchCompleted": "已处理 {{count}} 个项目",
+    "batchSuccess": "全部操作成功。",
+    "batchStatus": {
+      "cleanup_pending": "数据库和索引已删除，文件等待巡检清理",
+      "not_found": "图片不存在",
+      "error": "操作失败",
+      "deleted": "已删除",
+      "updated": "已更新"
+    },
+    "detailFailed": "图片详情加载失败。",
+    "back": "返回图片列表",
+    "openImage": "打开图片",
+    "copyLinks": "复制链接格式",
+    "linkFormat": {
+      "direct": "复制直链",
+      "markdown": "复制 Markdown",
+      "html": "复制 HTML",
+      "bbcode": "复制 BBCode"
+    },
+    "metadata": "图片信息",
+    "sourceSize": "处理前大小",
+    "storedSize": "存储大小",
+    "sha256": "存储 SHA-256",
+    "uploadedAt": "上传时间",
+    "processing": "处理摘要",
+    "aliases": "历史路径",
+    "noAliases": "这张图片没有历史路径映射。"
   },
   "visibility": {
     "public": "公开",
     "private": "私密"
+  },
+  "aliases": {
+    "title": "历史路径映射",
+    "description": "单条创建、解析和删除旧 URL；访问旧路径时直接返回图片，不进行跳转。",
+    "create": "创建映射",
+    "resolve": "解析路径",
+    "path": "历史路径",
+    "imageId": "目标图片 UUID",
+    "source": "来源标记",
+    "created": "已创建 {{path}}",
+    "createFailed": "映射创建失败；请检查路径、图片 UUID 或冲突。",
+    "target": "目标图片：{{id}}",
+    "notFound": "没有找到该映射。",
+    "existing": "现有映射",
+    "listFailed": "映射列表加载失败。",
+    "empty": "还没有历史路径映射。",
+    "confirmDelete": "确定删除映射“{{path}}”吗？",
+    "deleteFailed": "映射删除失败。"
   },
   "apiTokens": {
     "title": "API Token",
@@ -69,7 +162,7 @@
     "scopeHelp": {
       "images:upload": "通过 API 上传图片。",
       "images:read_private": "读取私密图片字节。",
-      "images:delete": "图片管理接口启用后可删除图片。",
+      "images:delete": "永久删除单张或批量图片。",
       "aliases:write": "创建或导入历史 URL 映射。"
     },
     "status": {
@@ -80,7 +173,28 @@
   },
   "settings": {
     "title": "设置",
-    "description": "管理第二阶段的安全项和默认可见性。",
+    "description": "管理处理选项、默认可见性、系统状态和管理员密码。",
+    "overview": "系统概览",
+    "overviewHelp": "只显示当前图片、存储、内存、索引和维护状态，不采集访问趋势。",
+    "overviewFailed": "系统概览加载失败。",
+    "inspectNow": "立即巡检",
+    "rebuildIndexes": "重建缓存",
+    "confirmRebuild": "重建期间直链继续读取旧索引，写操作会短暂等待。继续吗？",
+    "maintenanceFailed": "维护操作失败。",
+    "imageCount": "图片数量",
+    "storageUsed": "存储用量",
+    "aliasCount": "历史路径",
+    "rss": "进程 RSS",
+    "heap": "Go Heap",
+    "goroutines": "Goroutine",
+    "indexConsistent": "数据库与图片/别名索引数量一致。",
+    "indexDifferent": "数据库与内存索引数量不一致，请检查缺失文件或执行重建。",
+    "indexCounts": "索引：图片 {{images}}、别名 {{aliases}}、Session {{sessions}}、Token {{tokens}}",
+    "lastInspection": "最近巡检",
+    "lastRebuild": "最近重建",
+    "notRun": "本次启动后尚未执行。",
+    "inspectionSummary": "缺失图片 {{missingImageCount}}，孤儿图片 {{orphanImageCount}}，孤儿缩略图 {{orphanThumbnailCount}}，临时文件 {{temporaryFiles}}。",
+    "rebuildSummary": "加载图片 {{images}}、别名 {{aliases}}、Session {{sessions}}、Token {{tokens}}；缺失图片 {{missingImageCount}}。",
     "defaultVisibility": "上传默认可见性",
     "defaultVisibilityHelp": "未显式选择可见性的上传使用此值。",
     "loadFailed": "设置加载失败。",
@@ -102,5 +216,9 @@
     "conversionWebpLossless": "WebP 无损转换",
     "saveProcessing": "保存处理设置",
     "processingFailed": "图片处理设置更新失败。"
+  },
+  "system": {
+    "title": "系统状态",
+    "description": "查看轻量资源、持久化数据、内存索引和最近维护结果。"
   }
 }
