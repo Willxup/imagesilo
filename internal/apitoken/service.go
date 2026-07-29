@@ -8,19 +8,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/google/uuid"
 )
 
 type Service struct {
 	repository *Repository
 	index      *Index
+	barrier    *indexbarrier.Barrier
 }
 
 func NewService(repository *Repository, index *Index) *Service {
-	return &Service{repository: repository, index: index}
+	return NewServiceWithBarrier(repository, index, indexbarrier.New())
+}
+
+func NewServiceWithBarrier(repository *Repository, index *Index, barrier *indexbarrier.Barrier) *Service {
+	return &Service{repository: repository, index: index, barrier: barrier}
 }
 
 func (s *Service) Load(ctx context.Context, now time.Time) error {
+	releaseRebuild := s.barrier.BeginRebuild()
+	defer releaseRebuild()
 	tokens, err := s.repository.ListActive(ctx, now)
 	if err != nil {
 		return err
@@ -57,6 +65,8 @@ func (s *Service) Create(ctx context.Context, name string, scopes []Scope, expir
 		ID: id.String(), Name: name, TokenPrefix: prefix, Scopes: normalizedScopes,
 		ExpiresAt: expiresAt, Status: "active", CreatedAt: now.UTC(),
 	}
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	if err := s.repository.Create(ctx, token, hash); err != nil {
 		return Token{}, "", err
 	}
@@ -69,6 +79,8 @@ func (s *Service) List(ctx context.Context) ([]Token, error) {
 }
 
 func (s *Service) Revoke(ctx context.Context, id string) error {
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	hash, err := s.repository.Revoke(ctx, id)
 	if err != nil {
 		return err
@@ -90,6 +102,8 @@ func (s *Service) Authenticate(plaintext string, now time.Time) (Identity, error
 }
 
 func (s *Service) CleanupExpired(now time.Time) int {
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	return s.index.PurgeExpired(now)
 }
 

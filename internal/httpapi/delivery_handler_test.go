@@ -32,6 +32,7 @@ func TestDeliveryUsesOnlyIndexAndFilesystem(t *testing.T) {
 		StorageKey: id, MIMEType: "image/jpeg", ETag: `"etag"`, Size: int64(len(content)),
 		LastModified: time.Unix(1_700_000_000, 0).UTC(), Visibility: "public", OriginalName: "sample.jpg",
 	})
+	index.AddAlias("/legacy/sample.jpg", id)
 
 	closedDB, err := sql.Open("sqlite3", ":memory:")
 	if err != nil {
@@ -57,5 +58,22 @@ func TestDeliveryUsesOnlyIndexAndFilesystem(t *testing.T) {
 	}
 	if string(body) != string(content[:4]) {
 		t.Fatalf("body = %q, want %q", body, content[:4])
+	}
+
+	aliasRequest := httptest.NewRequest(http.MethodGet, "/legacy/sample.jpg?download=1", nil)
+	aliasResponse := httptest.NewRecorder()
+	router.ServeHTTP(aliasResponse, aliasRequest)
+	if aliasResponse.Code != http.StatusOK || aliasResponse.Header().Get("Location") != "" {
+		t.Fatalf("alias response = %d, Location = %q", aliasResponse.Code, aliasResponse.Header().Get("Location"))
+	}
+	if string(aliasResponse.Body.Bytes()) != string(content) {
+		t.Fatalf("alias body = %q, want %q", aliasResponse.Body.Bytes(), content)
+	}
+
+	missRequest := httptest.NewRequest(http.MethodGet, "/legacy/missing.jpg", nil)
+	missResponse := httptest.NewRecorder()
+	router.ServeHTTP(missResponse, missRequest)
+	if missResponse.Code != http.StatusNotFound {
+		t.Fatalf("alias miss status = %d, want %d", missResponse.Code, http.StatusNotFound)
 	}
 }

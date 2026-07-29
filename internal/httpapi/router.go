@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	imagealias "github.com/Willxup/imagesilo/internal/alias"
 	"github.com/Willxup/imagesilo/internal/apitoken"
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
@@ -25,6 +26,7 @@ type Dependencies struct {
 	Logger                *slog.Logger
 	Auth                  *auth.Service
 	APITokens             *apitoken.Service
+	Aliases               *imagealias.Service
 	Images                *images.Service
 	Settings              *settings.Service
 	DeliveryIndex         *delivery.Index
@@ -66,6 +68,13 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Post("/api/v1/api-tokens", tokenHandler.create)
 		router.Delete("/api/v1/api-tokens/{tokenID}", tokenHandler.revoke)
 	}
+	if dependencies.Aliases != nil && dependencies.Auth != nil {
+		aliasHandler := newAliasHandler(dependencies.Aliases, authenticator)
+		router.Get("/api/v1/aliases", aliasHandler.list)
+		router.Get("/api/v1/aliases/resolve", aliasHandler.resolve)
+		router.Post("/api/v1/aliases", aliasHandler.create)
+		router.Delete("/api/v1/aliases/{aliasID}", aliasHandler.delete)
+	}
 	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil && dependencies.Storage != nil {
 		imageHandler := newImageHandler(dependencies.Images, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger)
 		router.Get("/api/v1/images", imageHandler.list)
@@ -81,14 +90,20 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		systemHandler := newSystemHandler(dependencies.Settings, authenticator, dependencies.ProcessingConcurrency)
 		router.Get("/api/v1/system", systemHandler.get)
 	}
+	var imageDelivery *deliveryHandler
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {
-		deliveryHandler := newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator)
-		router.Get("/image/{imageID}", deliveryHandler.serve)
+		imageDelivery = newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator)
+		router.Get("/image/{imageID}", imageDelivery.serve)
+		router.Head("/image/{imageID}", imageDelivery.serve)
 	}
 	if dependencies.UI != nil {
 		router.Handle("/assets/*", dependencies.UI.Assets())
 		router.Get("/admin", dependencies.UI.ServeIndex)
 		router.Get("/admin/*", dependencies.UI.ServeIndex)
+	}
+	if imageDelivery != nil {
+		router.Get("/*", imageDelivery.serveAlias)
+		router.Head("/*", imageDelivery.serveAlias)
 	}
 	return router
 }

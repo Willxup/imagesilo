@@ -283,10 +283,42 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        get: operations["listAliases"];
         put?: never;
         post: operations["createAlias"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/aliases/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["resolveAlias"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/aliases/{aliasId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["deleteAlias"];
         options?: never;
         head?: never;
         patch?: never;
@@ -446,6 +478,9 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ImageAliasList: {
+            items: components["schemas"]["ImageAlias"][];
+        };
         ImportResult: {
             /** Format: uuid */
             imageId: string;
@@ -532,6 +567,7 @@ export interface components {
     parameters: {
         ImageId: string;
         TokenId: string;
+        AliasId: string;
         /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
         CSRFToken: string;
         /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
@@ -1043,10 +1079,37 @@ export interface operations {
             409: components["responses"]["Conflict"];
         };
     };
+    listAliases: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 历史路径映射列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAliasList"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
     createAlias: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1065,7 +1128,63 @@ export interface operations {
                     "application/json": components["schemas"]["ImageAlias"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    resolveAlias: {
+        parameters: {
+            query: {
+                path: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已解析的历史路径映射 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageAlias"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+        };
+    };
+    deleteAlias: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
+            path: {
+                aliasId: components["parameters"]["AliasId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 历史路径映射已删除 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
         };
     };
 }

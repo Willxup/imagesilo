@@ -14,6 +14,7 @@ import (
 	"unicode"
 
 	"github.com/Willxup/imagesilo/internal/delivery"
+	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/google/uuid"
@@ -30,6 +31,7 @@ type Service struct {
 	index      *delivery.Index
 	processor  processor.Engine
 	gate       *processor.Gate
+	barrier    *indexbarrier.Barrier
 }
 
 func NewService(repository *Repository, filesystem *storage.Filesystem, index *delivery.Index) *Service {
@@ -43,7 +45,19 @@ func NewServiceWithProcessor(
 	engine processor.Engine,
 	gate *processor.Gate,
 ) *Service {
-	return &Service{repository: repository, storage: filesystem, index: index, processor: engine, gate: gate}
+	return NewServiceWithProcessorAndBarrier(repository, filesystem, index, engine, gate, indexbarrier.New())
+
+}
+
+func NewServiceWithProcessorAndBarrier(
+	repository *Repository,
+	filesystem *storage.Filesystem,
+	index *delivery.Index,
+	engine processor.Engine,
+	gate *processor.Gate,
+	barrier *indexbarrier.Barrier,
+) *Service {
+	return &Service{repository: repository, storage: filesystem, index: index, processor: engine, gate: gate, barrier: barrier}
 }
 
 func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName string, options UploadOptions, now time.Time) (Image, error) {
@@ -158,6 +172,8 @@ func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName str
 		UploadedByAPITokenID: options.UploadedByAPITokenID,
 		CreatedAt:            now.UTC(),
 	}
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	if err := s.repository.Create(ctx, value); err != nil {
 		return Image{}, err
 	}
@@ -323,6 +339,8 @@ func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Vi
 	if visibility != VisibilityPublic && visibility != VisibilityPrivate {
 		return false, fmt.Errorf("invalid image visibility")
 	}
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	updated, err := s.repository.UpdateVisibility(ctx, id, visibility)
 	if err != nil || !updated {
 		return updated, err

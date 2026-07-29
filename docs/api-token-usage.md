@@ -30,6 +30,20 @@ curl --fail --show-error \
   https://img.example.com/image/019fadca-23c6-7664-81bb-10bd20cff14d
 ```
 
+## curl 管理历史路径
+
+Token 需要 `aliases:write` Scope。一次请求只创建一条路径映射，冲突返回 `409` 且不会覆盖原映射：
+
+```bash
+curl --fail-with-body --show-error \
+  --header "Authorization: Bearer $IMAGESILO_TOKEN" \
+  --header "Content-Type: application/json" \
+  --data '{"path":"/i/2022/05/example.webp","imageId":"019fadca-23c6-7664-81bb-10bd20cff14d","source":"legacy-import"}' \
+  https://img.example.com/api/v1/aliases
+```
+
+访问 `/i/2022/05/example.webp` 时服务直接返回目标图片字节，不发送 301/302。批量迁移由调用端循环这一单条接口；查询、解析和删除契约见 OpenAPI。
+
 ## PicGo
 
 使用支持通用 multipart HTTP 请求的自定义上传插件，并填写：

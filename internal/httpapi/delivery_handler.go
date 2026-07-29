@@ -21,16 +21,13 @@ func newDeliveryHandler(index *delivery.Index, filesystem *storage.Filesystem, a
 }
 
 func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
-	for _, name := range []string{"token", "key", "api_key", "access_token"} {
-		if _, present := r.URL.Query()[name]; present {
-			writeError(w, r, http.StatusBadRequest, "url_token_forbidden", "Authentication tokens are not accepted in image URLs.")
-			return
-		}
+	if h.rejectURLToken(w, r) {
+		return
 	}
 	rawID := chi.URLParam(r, "imageID")
 	id, err := uuid.Parse(rawID)
 	if err != nil || id.String() != rawID {
-		http.NotFound(w, r)
+		h.serveAlias(w, r)
 		return
 	}
 	target, ok := h.index.Get(rawID)
@@ -38,6 +35,37 @@ func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
+	h.serveTarget(w, r, target)
+}
+
+func (h *deliveryHandler) serveAlias(w http.ResponseWriter, r *http.Request) {
+	if h.rejectURLToken(w, r) {
+		return
+	}
+	path, err := delivery.NormalizeAliasPath(r.URL.EscapedPath())
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	target, ok := h.index.GetAlias(path)
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h.serveTarget(w, r, target)
+}
+
+func (h *deliveryHandler) rejectURLToken(w http.ResponseWriter, r *http.Request) bool {
+	for _, name := range []string{"token", "key", "api_key", "access_token"} {
+		if _, present := r.URL.Query()[name]; present {
+			writeError(w, r, http.StatusBadRequest, "url_token_forbidden", "Authentication tokens are not accepted in image URLs.")
+			return true
+		}
+	}
+	return false
+}
+
+func (h *deliveryHandler) serveTarget(w http.ResponseWriter, r *http.Request, target delivery.Target) {
 	if target.Visibility == "private" {
 		w.Header().Set("Cache-Control", "private, no-store")
 		w.Header().Set("Vary", "Authorization, Cookie")

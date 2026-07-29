@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/google/uuid"
 )
 
@@ -21,13 +22,20 @@ type Service struct {
 	repository *Repository
 	index      *SessionIndex
 	dummyHash  string
+	barrier    *indexbarrier.Barrier
 }
 
 func NewService(repository *Repository, index *SessionIndex) (*Service, error) {
-	return &Service{repository: repository, index: index, dummyHash: dummyPasswordHash}, nil
+	return NewServiceWithBarrier(repository, index, indexbarrier.New())
+}
+
+func NewServiceWithBarrier(repository *Repository, index *SessionIndex, barrier *indexbarrier.Barrier) (*Service, error) {
+	return &Service{repository: repository, index: index, dummyHash: dummyPasswordHash, barrier: barrier}, nil
 }
 
 func (s *Service) LoadSessions(ctx context.Context, now time.Time) error {
+	releaseRebuild := s.barrier.BeginRebuild()
+	defer releaseRebuild()
 	sessions, err := s.repository.ListActiveSessions(ctx, now)
 	if err != nil {
 		return err
@@ -81,6 +89,8 @@ func (s *Service) Login(ctx context.Context, email, password string, now time.Ti
 		ExpiresAt: identity.ExpiresAt,
 		CreatedAt: now.UTC(),
 	}
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	if err := s.repository.CreateSession(ctx, session); err != nil {
 		return SessionIdentity{}, "", "", err
 	}
@@ -105,6 +115,8 @@ func (s *Service) Logout(ctx context.Context, token string) error {
 		return nil
 	}
 	hash := sha256.Sum256([]byte(token))
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	if err := s.repository.DeleteSessionByHash(ctx, hash); err != nil {
 		return err
 	}
@@ -147,6 +159,8 @@ func (s *Service) ChangePassword(
 		return err
 	}
 	keepSessionHash := sha256.Sum256([]byte(sessionToken))
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	if err := s.repository.ChangePasswordAndRevokeOtherSessions(ctx, identity.AdminID, newHash, keepSessionHash, now); err != nil {
 		return err
 	}
@@ -155,6 +169,8 @@ func (s *Service) ChangePassword(
 }
 
 func (s *Service) CleanupExpired(ctx context.Context, now time.Time) (int64, error) {
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
 	deleted, err := s.repository.DeleteExpiredSessions(ctx, now)
 	if err != nil {
 		return 0, err

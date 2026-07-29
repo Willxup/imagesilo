@@ -8,12 +8,15 @@ import (
 	"net/http"
 	"time"
 
+	imagealias "github.com/Willxup/imagesilo/internal/alias"
 	"github.com/Willxup/imagesilo/internal/apitoken"
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/config"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	"github.com/Willxup/imagesilo/internal/httpapi"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/indexbarrier"
+	"github.com/Willxup/imagesilo/internal/indexstate"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
@@ -28,19 +31,11 @@ type Application struct {
 func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logger) (*Application, error) {
 	applicationContext, cancel := context.WithCancel(ctx)
 	filesystem := storage.NewFilesystem(cfg.DataDirectory)
+	barrier := indexbarrier.New()
 	deliveryIndex := delivery.NewIndex()
-	loadResult, err := delivery.Load(ctx, db, filesystem, deliveryIndex)
-	if err != nil {
-		cancel()
-		return nil, err
-	}
-	for _, id := range loadResult.MissingIDs {
-		logger.Error("image file is missing and was excluded from delivery index", "image_id", id)
-	}
-
 	authRepository := auth.NewRepository(db)
 	sessionIndex := auth.NewSessionIndex()
-	authService, err := auth.NewService(authRepository, sessionIndex)
+	authService, err := auth.NewServiceWithBarrier(authRepository, sessionIndex, barrier)
 	if err != nil {
 		cancel()
 		return nil, err
@@ -49,23 +44,29 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		cancel()
 		return nil, err
 	}
-	if err := authService.LoadSessions(ctx, time.Now()); err != nil {
+	tokenRepository := apitoken.NewRepository(db)
+	tokenIndex := apitoken.NewIndex()
+	tokenService := apitoken.NewServiceWithBarrier(tokenRepository, tokenIndex, barrier)
+	rebuilder := indexstate.NewRebuilder(
+		db, filesystem, authRepository, tokenRepository,
+		deliveryIndex, sessionIndex, tokenIndex, barrier,
+	)
+	loadResult, err := rebuilder.Rebuild(ctx, time.Now())
+	if err != nil {
 		cancel()
 		return nil, err
 	}
-	tokenRepository := apitoken.NewRepository(db)
-	tokenIndex := apitoken.NewIndex()
-	tokenService := apitoken.NewService(tokenRepository, tokenIndex)
-	if err := tokenService.Load(ctx, time.Now()); err != nil {
-		cancel()
-		return nil, err
+	for _, id := range loadResult.Delivery.MissingIDs {
+		logger.Error("image file is missing and was excluded from delivery index", "image_id", id)
 	}
 
 	imageRepository := images.NewRepository(db)
-	imageService := images.NewServiceWithProcessor(
+	imageService := images.NewServiceWithProcessorAndBarrier(
 		imageRepository, filesystem, deliveryIndex,
 		processor.NewEngine(), processor.NewGate(cfg.ProcessingConcurrency),
+		barrier,
 	)
+	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	ui, err := webui.New()
 	if err != nil {
@@ -79,6 +80,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		Logger:                logger,
 		Auth:                  authService,
 		APITokens:             tokenService,
+		Aliases:               aliasService,
 		Images:                imageService,
 		Settings:              settingsService,
 		DeliveryIndex:         deliveryIndex,

@@ -388,11 +388,34 @@ paths:
         '409':
           $ref: '#/components/responses/Conflict'
   /api/v1/aliases:
+    get:
+      operationId: listAliases
+      security:
+        - sessionCookie: []
+        - bearerToken: [aliases:write]
+      parameters:
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: 历史路径映射列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageAliasList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
     post:
       operationId: createAlias
       security:
         - sessionCookie: []
         - bearerToken: [aliases:write]
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
         required: true
         content:
@@ -406,8 +429,60 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImageAlias'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/aliases/resolve:
+    get:
+      operationId: resolveAlias
+      security:
+        - sessionCookie: []
+        - bearerToken: [aliases:write]
+      parameters:
+        - name: path
+          in: query
+          required: true
+          schema: { type: string, maxLength: 2048 }
+      responses:
+        '200':
+          description: 已解析的历史路径映射
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageAlias'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/aliases/{aliasId}:
+    delete:
+      operationId: deleteAlias
+      security:
+        - sessionCookie: []
+        - bearerToken: [aliases:write]
+      parameters:
+        - $ref: '#/components/parameters/AliasId'
+        - $ref: '#/components/parameters/CSRFTokenForSession'
+      responses:
+        '204':
+          description: 历史路径映射已删除
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
 components:
   securitySchemes:
     sessionCookie:
@@ -427,6 +502,13 @@ components:
         format: uuid
     TokenId:
       name: tokenId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    AliasId:
+      name: aliasId
       in: path
       required: true
       schema:
@@ -630,6 +712,13 @@ components:
         imageId: { type: string, format: uuid }
         source: { type: string }
         createdAt: { type: string, format: date-time }
+    ImageAliasList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/ImageAlias' }
     ImportResult:
       type: object
       required: [imageId, standardUrl, sha256, alias]

@@ -19,10 +19,12 @@ import (
 	"time"
 
 	"github.com/Willxup/imagesilo/db/migrations"
+	imagealias "github.com/Willxup/imagesilo/internal/alias"
 	"github.com/Willxup/imagesilo/internal/apitoken"
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/platform/database"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
@@ -41,6 +43,7 @@ type phaseTwoFixture struct {
 	sessionCookies []*http.Cookie
 	csrfToken      string
 	logs           *bytes.Buffer
+	deliveryIndex  *delivery.Index
 }
 
 func TestPhaseTwoSessionRotationCSRFRateLimitAndHeaders(t *testing.T) {
@@ -228,23 +231,26 @@ func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate,
 	}); err != nil {
 		t.Fatalf("CreateAdmin() error = %v", err)
 	}
-	authService, err := auth.NewService(authRepository, auth.NewSessionIndex())
+	barrier := indexbarrier.New()
+	authService, err := auth.NewServiceWithBarrier(authRepository, auth.NewSessionIndex(), barrier)
 	if err != nil {
 		t.Fatalf("auth.NewService() error = %v", err)
 	}
-	tokenService := apitoken.NewService(apitoken.NewRepository(db), apitoken.NewIndex())
+	tokenService := apitoken.NewServiceWithBarrier(apitoken.NewRepository(db), apitoken.NewIndex(), barrier)
 	filesystem := storage.NewFilesystem(dataDirectory)
 	deliveryIndex := delivery.NewIndex()
-	imageService := images.NewServiceWithProcessor(images.NewRepository(db), filesystem, deliveryIndex, engine, gate)
+	imageService := images.NewServiceWithProcessorAndBarrier(images.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
+	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	var logs bytes.Buffer
 	router := NewRouter(Dependencies{
 		DB: db, Logger: slog.New(slog.NewJSONHandler(&logs, nil)), Auth: authService, APITokens: tokenService,
-		Images: imageService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
+		Aliases: aliasService, Images: imageService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
 		CookieSecure: false, ProcessingConcurrency: processingConcurrency,
 	})
 	return &phaseTwoFixture{
 		t: t, db: db, router: router, authService: authService, tokenService: tokenService, dataDirectory: dataDirectory, logs: &logs,
+		deliveryIndex: deliveryIndex,
 	}
 }
 
