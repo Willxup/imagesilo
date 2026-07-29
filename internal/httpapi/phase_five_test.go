@@ -118,7 +118,7 @@ func TestPhaseFiveOverviewInspectionAndManualRebuild(t *testing.T) {
 	}
 	after := fixture.request(http.MethodGet, "/api/v1/overview", nil, cookies, "", "")
 	var finalOverview overviewResponse
-	if err := json.Unmarshal(after.Body.Bytes(), &finalOverview); after.Code != http.StatusOK || err != nil || finalOverview.IndexConsistent ||
+	if err := json.Unmarshal(after.Body.Bytes(), &finalOverview); after.Code != http.StatusOK || err != nil || finalOverview.IndexConsistent || finalOverview.MissingImageCount != 1 ||
 		finalOverview.LastInspection == nil || finalOverview.LastRebuild == nil {
 		t.Fatalf("final overview status = %d, value = %+v, error = %v", after.Code, finalOverview, err)
 	}

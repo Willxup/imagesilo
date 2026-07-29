@@ -19,8 +19,11 @@ const overview = {
   goroutines: 9,
   indexes: { images: 12, aliases: 3, sessions: 1, tokens: 2 },
   indexConsistent: true,
+  missingImageCount: 0,
+  missingImageIds: [],
   lastInspection: null,
   lastRebuild: null,
+  lastDaily: null,
 } as SystemOverview
 
 function renderPage() {
@@ -62,5 +65,17 @@ describe('SystemPage', () => {
     vi.mocked(apiRequest).mockRejectedValue(new Error('offline'))
     renderPage()
     expect(await screen.findByText('系统概览加载失败。')).toBeInTheDocument()
+  })
+
+  it('makes missing formal files explicit without implying database deletion', async () => {
+    vi.mocked(apiRequest).mockResolvedValue({
+      ...overview,
+      indexConsistent: false,
+      missingImageCount: 1,
+      missingImageIds: ['019c1234-5678-7abc-8def-0123456789ab'],
+    } as SystemOverview)
+    renderPage()
+    expect(await screen.findByText(/数据库中有 1 张图片缺少正式文件/)).toBeInTheDocument()
+    expect(screen.getByText('019c1234-5678-7abc-8def-0123456789ab')).toBeInTheDocument()
   })
 })

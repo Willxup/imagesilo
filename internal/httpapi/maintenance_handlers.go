@@ -42,17 +42,30 @@ type rebuildResponse struct {
 }
 
 type overviewResponse struct {
-	ImageCount      int64               `json:"imageCount"`
-	StoredBytes     int64               `json:"storedBytes"`
-	AliasCount      int64               `json:"aliasCount"`
-	HeapAllocBytes  uint64              `json:"heapAllocBytes"`
-	HeapSysBytes    uint64              `json:"heapSysBytes"`
-	RSSBytes        uint64              `json:"rssBytes"`
-	Goroutines      int                 `json:"goroutines"`
-	Indexes         indexStatsResponse  `json:"indexes"`
-	IndexConsistent bool                `json:"indexConsistent"`
-	LastInspection  *inspectionResponse `json:"lastInspection"`
-	LastRebuild     *rebuildResponse    `json:"lastRebuild"`
+	ImageCount        int64               `json:"imageCount"`
+	StoredBytes       int64               `json:"storedBytes"`
+	AliasCount        int64               `json:"aliasCount"`
+	HeapAllocBytes    uint64              `json:"heapAllocBytes"`
+	HeapSysBytes      uint64              `json:"heapSysBytes"`
+	RSSBytes          uint64              `json:"rssBytes"`
+	Goroutines        int                 `json:"goroutines"`
+	Indexes           indexStatsResponse  `json:"indexes"`
+	IndexConsistent   bool                `json:"indexConsistent"`
+	MissingImageCount int                 `json:"missingImageCount"`
+	MissingImageIDs   []string            `json:"missingImageIds"`
+	LastInspection    *inspectionResponse `json:"lastInspection"`
+	LastRebuild       *rebuildResponse    `json:"lastRebuild"`
+	LastDaily         *dailyResponse      `json:"lastDaily"`
+}
+
+type dailyResponse struct {
+	CompletedAt             time.Time          `json:"completedAt"`
+	Inspection              inspectionResponse `json:"inspection"`
+	RemovedTemporaryFiles   int                `json:"removedTemporaryFiles"`
+	RemovedOrphanImages     int                `json:"removedOrphanImages"`
+	RemovedOrphanThumbnails int                `json:"removedOrphanThumbnails"`
+	CleanupFailures         int                `json:"cleanupFailures"`
+	IndexConsistent         bool               `json:"indexConsistent"`
 }
 
 func newMaintenanceHandler(service *maintenance.Service, authenticator *authenticator) *maintenanceHandler {
@@ -104,7 +117,8 @@ func toOverviewResponse(value maintenance.Overview) overviewResponse {
 			Images: value.Indexes.Images, Aliases: value.Indexes.Aliases,
 			Sessions: value.Indexes.Sessions, Tokens: value.Indexes.Tokens,
 		},
-		IndexConsistent: value.IndexConsistent,
+		IndexConsistent: value.IndexConsistent, MissingImageCount: value.MissingImageCount,
+		MissingImageIDs: append([]string(nil), value.MissingImageIDs...),
 	}
 	if value.LastInspection != nil {
 		inspection := toInspectionResponse(*value.LastInspection)
@@ -113,6 +127,16 @@ func toOverviewResponse(value maintenance.Overview) overviewResponse {
 	if value.LastRebuild != nil {
 		rebuild := toRebuildResponse(*value.LastRebuild)
 		response.LastRebuild = &rebuild
+	}
+	if value.LastDaily != nil {
+		daily := dailyResponse{
+			CompletedAt: value.LastDaily.CompletedAt, Inspection: toInspectionResponse(value.LastDaily.Inspection),
+			RemovedTemporaryFiles:   value.LastDaily.RemovedTemporaryFiles,
+			RemovedOrphanImages:     value.LastDaily.RemovedOrphanImages,
+			RemovedOrphanThumbnails: value.LastDaily.RemovedOrphanThumbnails,
+			CleanupFailures:         value.LastDaily.CleanupFailures, IndexConsistent: value.LastDaily.IndexConsistent,
+		}
+		response.LastDaily = &daily
 	}
 	return response
 }

@@ -94,6 +94,9 @@ func TestRebuildBarrierCannotOverwriteConcurrentIndexChanges(t *testing.T) {
 		rebuildDone <- err
 	}()
 	<-snapshotLoaded
+	if target, ok := deliveryIndex.Get(imageID); !ok || target.StorageKey != imageID {
+		t.Fatalf("old delivery index was not readable during rebuild: %+v, %t", target, ok)
+	}
 
 	type mutationResult struct {
 		name string

@@ -157,7 +157,7 @@ func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName str
 
 	value := Image{
 		ID:                   id.String(),
-		OriginalName:         sanitizeOriginalName(originalName),
+		OriginalName:         SanitizeOriginalName(originalName),
 		StorageKey:           storageKey,
 		Extension:            metadata.Extension,
 		MIMEType:             metadata.MIMEType,
@@ -427,7 +427,7 @@ func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Vi
 	return true, nil
 }
 
-func sanitizeOriginalName(name string) string {
+func SanitizeOriginalName(name string) string {
 	name = filepath.Base(strings.TrimSpace(name))
 	name = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) || r == '/' || r == '\\' {

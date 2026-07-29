@@ -10,6 +10,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/importer"
 	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
@@ -29,6 +30,7 @@ type Dependencies struct {
 	APITokens             *apitoken.Service
 	Aliases               *imagealias.Service
 	Images                *images.Service
+	Importer              *importer.Service
 	Settings              *settings.Service
 	Maintenance           *maintenance.Service
 	DeliveryIndex         *delivery.Index
@@ -87,6 +89,10 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Delete("/api/v1/images/{imageID}", imageHandler.delete)
 		router.Get("/api/v1/images/{imageID}/thumbnail", imageHandler.thumbnail)
 		router.Patch("/api/v1/images/{imageID}/visibility", imageHandler.changeVisibility)
+	}
+	if dependencies.Importer != nil && dependencies.Auth != nil && dependencies.Settings != nil {
+		importHandler := newImportHandler(dependencies.Importer, dependencies.Settings, authenticator)
+		router.Post("/api/v1/imports", importHandler.create)
 	}
 	if dependencies.Settings != nil && dependencies.Auth != nil {
 		settingsHandler := newSettingsHandler(dependencies.Settings, authenticator)

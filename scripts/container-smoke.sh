@@ -15,6 +15,13 @@ png_response="${TMPDIR:-/tmp}/${container}-png.json"
 gif_response="${TMPDIR:-/tmp}/${container}-gif.json"
 conversion_response="${TMPDIR:-/tmp}/${container}-conversion.json"
 webp_response="${TMPDIR:-/tmp}/${container}-webp.json"
+import_response="${TMPDIR:-/tmp}/${container}-import.json"
+import_conflict_response="${TMPDIR:-/tmp}/${container}-import-conflict.json"
+import_source="${TMPDIR:-/tmp}/${container}-import-source.jpg"
+import_token_response="${TMPDIR:-/tmp}/${container}-import-token.json"
+import_manifest="${TMPDIR:-/tmp}/${container}-import.tsv"
+import_result="${TMPDIR:-/tmp}/${container}-import-result.jsonl"
+overview_response="${TMPDIR:-/tmp}/${container}-overview.json"
 converted_webp="${TMPDIR:-/tmp}/${container}-converted.webp"
 smoke_email="admin@example.com"
 smoke_password="ImageSilo-${suffix}-Smoke-Password!"
@@ -24,6 +31,8 @@ cleanup() {
   docker volume rm "$volume" >/dev/null 2>&1 || true
   rm -f "$cookie_file" "$upload_response" "$system_response" "$png_response" "$gif_response" \
     "$conversion_response" "$webp_response" "$converted_webp"
+  rm -f "$import_response" "$import_conflict_response" "$import_source" "$import_token_response" \
+    "$import_manifest" "$import_result" "$overview_response"
 }
 trap cleanup EXIT INT TERM
 
@@ -167,12 +176,45 @@ curl --fail --silent --show-error \
 test "$(jq --raw-output '.mimeType' "$webp_response")" = "image/webp"
 test "$(jq --raw-output '.sourceSha256' "$webp_response")" = "$(jq --raw-output '.storedSha256' "$webp_response")"
 
+go run ./tests/performance/image_stdout.go -format jpeg -width 160 -height 120 -quality 90 >"$import_source"
+import_source_hash="$(hash_stdin <"$import_source")"
+curl --fail --silent --show-error \
+  --cookie "$cookie_file" \
+  --header "X-CSRF-Token: ${csrf_token}" \
+  --header 'Content-Type: application/json' \
+  --data '{"name":"container importer","scopes":["images:upload","aliases:write"]}' \
+  "${base_url}/api/v1/api-tokens" >"$import_token_response"
+import_token="$(jq --raw-output '.token' "$import_token_response")"
+printf '/legacy/container-import.jpg\t%s\n' "$import_source" >"$import_manifest"
+IMAGESILO_BASE_URL="$base_url" IMAGESILO_TOKEN="$import_token" \
+  scripts/import-manifest.sh --manifest "$import_manifest" --output "$import_result" --visibility public
+jq --raw-output '.response | fromjson' "$import_result" >"$import_response"
+import_id="$(jq --raw-output '.imageId' "$import_response")"
+test "$(jq --raw-output '.sha256' "$import_response")" = "$import_source_hash"
+
+curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_response"
+images_before_conflict="$(jq '.imageCount' "$overview_response")"
+conflict_status="$(curl --silent --show-error \
+  --output "$import_conflict_response" \
+  --write-out '%{http_code}' \
+  --cookie "$cookie_file" \
+  --header "X-CSRF-Token: ${csrf_token}" \
+  --form "file=@${import_source};filename=legacy-import.jpg;type=image/jpeg" \
+  --form 'alias=/legacy/container-import.jpg' \
+  --form 'visibility=public' \
+  "${base_url}/api/v1/imports")"
+test "$conflict_status" = "409"
+curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_response"
+test "$(jq '.imageCount' "$overview_response")" = "$images_before_conflict"
+
 curl --fail --silent --show-error \
   --cookie "$cookie_file" \
   "${base_url}$(jq --raw-output '.thumbnailUrl' "$webp_response")" >/dev/null
 test "$(docker inspect --format '{{.Config.User}}' "$container")" = "10001:10001"
 test "$(docker inspect --format '{{.State.Health.Status}}' "$container")" = "healthy"
 curl --fail --silent --show-error "${base_url}/admin/login" | grep -q '<div id="root"></div>'
+
+docker exec "$container" rm "/data/images/${import_id}"
 
 docker stop --timeout 15 "$container" >/dev/null
 docker run --detach --rm \
@@ -188,5 +230,9 @@ wait_healthy "$container"
 
 restarted_hash="$(curl --fail --silent --show-error "${base_url}/image/${image_id}" | hash_stdin)"
 test "$restarted_hash" = "$expected_hash"
+curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/overview" >"$overview_response"
+test "$(jq '.missingImageCount' "$overview_response")" = "1"
+test "$(jq --raw-output --arg id "$import_id" '.missingImageIds | index($id) != null' "$overview_response")" = "true"
+test "$(curl --silent --output /dev/null --write-out '%{http_code}' "${base_url}/legacy/container-import.jpg")" = "404"
 
 printf 'ImageSilo container smoke passed: platform=%s image_id=%s sha256=%s\n' "$platform" "$image_id" "$expected_hash"

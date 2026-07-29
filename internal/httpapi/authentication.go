@@ -48,6 +48,10 @@ func (a *authenticator) requireSession(w http.ResponseWriter, r *http.Request, r
 }
 
 func (a *authenticator) requireScope(w http.ResponseWriter, r *http.Request, scope apitoken.Scope) (principal, bool) {
+	return a.requireScopes(w, r, scope)
+}
+
+func (a *authenticator) requireScopes(w http.ResponseWriter, r *http.Request, scopes ...apitoken.Scope) (principal, bool) {
 	if a.sessions != nil {
 		cookie, err := r.Cookie(sessionCookieName)
 		if err == nil {
@@ -71,9 +75,11 @@ func (a *authenticator) requireScope(w http.ResponseWriter, r *http.Request, sco
 		writeError(w, r, http.StatusUnauthorized, "invalid_token", "Bearer token is invalid or expired.")
 		return principal{}, false
 	}
-	if !identity.HasScope(scope) {
-		writeError(w, r, http.StatusForbidden, "insufficient_scope", "Bearer token does not have the required scope.")
-		return principal{}, false
+	for _, scope := range scopes {
+		if !identity.HasScope(scope) {
+			writeError(w, r, http.StatusForbidden, "insufficient_scope", "Bearer token does not have the required scope.")
+			return principal{}, false
+		}
 	}
 	return principal{APIToken: &identity}, true
 }

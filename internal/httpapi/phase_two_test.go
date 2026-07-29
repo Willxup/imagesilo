@@ -24,6 +24,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/auth"
 	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/importer"
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
 	"github.com/Willxup/imagesilo/internal/maintenance"
@@ -246,6 +247,7 @@ func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate,
 	deliveryIndex := delivery.NewIndex()
 	rebuilder := indexstate.NewRebuilder(db, filesystem, authRepository, tokenRepository, deliveryIndex, sessionIndex, tokenIndex, barrier)
 	imageService := images.NewServiceWithProcessorAndBarrier(images.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
+	importService := importer.NewService(importer.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
 	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
 	settingsService := settings.NewService(settings.NewRepository(db))
 	var logs bytes.Buffer
@@ -253,7 +255,7 @@ func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate,
 	maintenanceService := maintenance.NewService(maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger)
 	router := NewRouter(Dependencies{
 		DB: db, Logger: logger, Auth: authService, APITokens: tokenService,
-		Aliases: aliasService, Images: imageService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
+		Aliases: aliasService, Images: imageService, Importer: importService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
 		Maintenance: maintenanceService, CookieSecure: false, ProcessingConcurrency: processingConcurrency,
 	})
 	return &phaseTwoFixture{

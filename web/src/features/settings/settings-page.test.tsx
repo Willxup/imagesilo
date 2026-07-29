@@ -34,8 +34,11 @@ describe('SettingsPage', () => {
         goroutines: 8,
         indexes: { images: 0, aliases: 0, sessions: 1, tokens: 0 },
         indexConsistent: true,
+        missingImageCount: 0,
+        missingImageIds: [],
         lastInspection: null,
         lastRebuild: null,
+        lastDaily: null,
       } as SystemOverview
     })
   })

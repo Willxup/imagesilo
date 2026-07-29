@@ -34,9 +34,11 @@ CI 只能显式使用 `--password-stdin`，密码不会出现在进程参数中�
 printf '%s\n' "$CI_SMOKE_PASSWORD" | IMAGESILO_DATA_DIR="$PWD/data" ./bin/imagesilo admin create --email admin@example.com --password-stdin
 ```
 
-管理后台入口为 `/admin/login`。登录后可以上传公开/私密图片、修改现有图片的可见性、设置默认可见性、修改管理员密码，以及创建和吊销具名 API Token。
+管理后台入口为 `/admin/login`。登录后可以上传、搜索、筛选、批量管理和永久删除图片，维护历史路径，查看轻量资源与索引状态，手动巡检/重建，以及创建和吊销具名 API Token。
 
 API Token 的 curl、PicGo 与 ShareX 配置见 [`docs/api-token-usage.md`](docs/api-token-usage.md)。HTTP 契约的唯一事实来源为 [`api/openapi.yaml`](api/openapi.yaml)。
+
+单张图片与旧 URL 的迁移见 [`docs/imports.md`](docs/imports.md)；每日巡检、孤儿文件安全清理和停止容器后备份整个 `/data` 的步骤见 [`docs/operations.md`](docs/operations.md)。
 
 ## 部署边界
 

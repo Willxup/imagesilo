@@ -11,6 +11,7 @@ check: web-sync
 	test -z "$$(gofmt -l cmd db internal)"
 	go vet $(GO_PACKAGES)
 	go test $(GO_PACKAGES)
+	bash -n scripts/*.sh
 	npm --prefix web run lint
 	npm --prefix web run typecheck
 	npm --prefix web run test

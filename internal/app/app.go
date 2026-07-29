@@ -15,6 +15,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/delivery"
 	"github.com/Willxup/imagesilo/internal/httpapi"
 	images "github.com/Willxup/imagesilo/internal/image"
+	"github.com/Willxup/imagesilo/internal/importer"
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
 	"github.com/Willxup/imagesilo/internal/maintenance"
@@ -61,17 +62,26 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		logger.Error("image file is missing and was excluded from delivery index", "image_id", id)
 	}
 
+	engine := processor.NewEngine()
+	gate := processor.NewGate(cfg.ProcessingConcurrency)
 	imageRepository := images.NewRepository(db)
 	imageService := images.NewServiceWithProcessorAndBarrier(
 		imageRepository, filesystem, deliveryIndex,
-		processor.NewEngine(), processor.NewGate(cfg.ProcessingConcurrency),
+		engine, gate,
 		barrier,
 	)
+	importService := importer.NewService(importer.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
 	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
+	settingsService := settings.NewService(settings.NewRepository(db))
+	currentSettings, err := settingsService.Get(ctx)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("load application settings: %w", err)
+	}
 	maintenanceService := maintenance.NewService(
 		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger,
 	)
-	settingsService := settings.NewService(settings.NewRepository(db))
+	maintenanceService.RecordStartupMissing(loadResult.Delivery.MissingIDs)
 	ui, err := webui.New()
 	if err != nil {
 		cancel()
@@ -86,6 +96,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		APITokens:             tokenService,
 		Aliases:               aliasService,
 		Images:                imageService,
+		Importer:              importService,
 		Settings:              settingsService,
 		Maintenance:           maintenanceService,
 		DeliveryIndex:         deliveryIndex,
@@ -94,7 +105,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		ProcessingConcurrency: cfg.ProcessingConcurrency,
 		UI:                    ui,
 	})
-	go runExpirationCleanup(applicationContext, logger, authService, tokenService)
+	go runMaintenance(applicationContext, logger, authService, tokenService, maintenanceService, currentSettings.MaintenanceHour)
 	return application, nil
 }
 
@@ -102,14 +113,26 @@ func (a *Application) Close() {
 	a.cancel()
 }
 
-func runExpirationCleanup(ctx context.Context, logger *slog.Logger, sessions *auth.Service, tokens *apitoken.Service) {
-	ticker := time.NewTicker(time.Minute)
-	defer ticker.Stop()
+func runMaintenance(
+	ctx context.Context,
+	logger *slog.Logger,
+	sessions *auth.Service,
+	tokens *apitoken.Service,
+	maintenanceService *maintenance.Service,
+	maintenanceHour int,
+) {
+	authTicker := time.NewTicker(time.Minute)
+	dailyTimer := time.NewTimer(untilNextMaintenance(time.Now(), maintenanceHour))
+	defer authTicker.Stop()
+	defer dailyTimer.Stop()
+	if _, _, err := maintenanceService.CleanupStaleTemporary(time.Now(), 24*time.Hour); err != nil {
+		logger.Error("startup temporary cleanup failed", "error", err)
+	}
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case now := <-ticker.C:
+		case now := <-authTicker.C:
 			deletedSessions, err := sessions.CleanupExpired(ctx, now)
 			if err != nil {
 				logger.Error("expired session cleanup failed", "error", err)
@@ -122,6 +145,23 @@ func runExpirationCleanup(ctx context.Context, logger *slog.Logger, sessions *au
 					"api_tokens", removedTokens,
 				)
 			}
+		case now := <-dailyTimer.C:
+			if _, err := maintenanceService.Daily(ctx, now, 24*time.Hour); err != nil {
+				logger.Error("daily maintenance failed", "error", err)
+			}
+			dailyTimer.Reset(untilNextMaintenance(time.Now(), maintenanceHour))
 		}
 	}
+}
+
+func untilNextMaintenance(now time.Time, hour int) time.Duration {
+	if hour < 0 || hour > 23 {
+		hour = 3
+	}
+	utc := now.UTC()
+	next := time.Date(utc.Year(), utc.Month(), utc.Day(), hour, 0, 0, 0, time.UTC)
+	if !next.After(utc) {
+		next = next.Add(24 * time.Hour)
+	}
+	return next.Sub(utc)
 }

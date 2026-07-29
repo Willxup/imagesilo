@@ -52,9 +52,16 @@ function Overview({ value }: { value: SystemOverview }) {
         <p className={value.indexConsistent ? 'text-accent' : 'text-danger'}>{value.indexConsistent ? t('settings.indexConsistent') : t('settings.indexDifferent')}</p>
         <p className="mt-2 text-muted">{t('settings.indexCounts', value.indexes)}</p>
       </div>
-      <div className="mt-4 grid gap-4 lg:grid-cols-2">
+      {value.missingImageCount > 0 ? (
+        <div className="mt-4 rounded-xl bg-danger-soft p-4 text-sm text-danger" role="alert">
+          <p className="font-medium">{t('settings.missingImages', { count: value.missingImageCount })}</p>
+          {value.missingImageIds.length > 0 ? <code className="mt-2 block break-all text-xs">{value.missingImageIds.join(', ')}</code> : null}
+        </div>
+      ) : null}
+      <div className="mt-4 grid gap-4 lg:grid-cols-3">
         <MaintenanceSummary title={t('settings.lastInspection')} value={value.lastInspection ? [new Date(value.lastInspection.checkedAt).toLocaleString(), t('settings.inspectionSummary', value.lastInspection)] : null} />
         <MaintenanceSummary title={t('settings.lastRebuild')} value={value.lastRebuild ? [new Date(value.lastRebuild.completedAt).toLocaleString(), t('settings.rebuildSummary', value.lastRebuild)] : null} />
+        <MaintenanceSummary title={t('settings.lastDaily')} value={value.lastDaily ? [new Date(value.lastDaily.completedAt).toLocaleString(), t('settings.dailySummary', value.lastDaily)] : null} />
       </div>
     </div>
   )

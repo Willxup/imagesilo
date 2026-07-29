@@ -540,7 +540,10 @@ paths:
     post:
       operationId: importImage
       security:
+        - sessionCookie: []
         - bearerToken: [images:upload, aliases:write]
+      parameters:
+        - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
         required: true
         content:
@@ -550,7 +553,7 @@ paths:
               required: [file, alias]
               properties:
                 file: { type: string, format: binary }
-                alias: { type: string, example: /i/2022/05/example.webp }
+                alias: { type: string, maxLength: 2048, example: /i/2022/05/example.webp }
                 visibility:
                   $ref: '#/components/schemas/Visibility'
       responses:
@@ -560,8 +563,16 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ImportResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/aliases:
     get:
       operationId: listAliases
@@ -960,9 +971,20 @@ components:
           type: array
           maxItems: 100
           items: { type: string, format: uuid }
+    DailyMaintenanceResult:
+      type: object
+      required: [completedAt, inspection, removedTemporaryFiles, removedOrphanImages, removedOrphanThumbnails, cleanupFailures, indexConsistent]
+      properties:
+        completedAt: { type: string, format: date-time }
+        inspection: { $ref: '#/components/schemas/InspectionResult' }
+        removedTemporaryFiles: { type: integer, minimum: 0 }
+        removedOrphanImages: { type: integer, minimum: 0 }
+        removedOrphanThumbnails: { type: integer, minimum: 0 }
+        cleanupFailures: { type: integer, minimum: 0 }
+        indexConsistent: { type: boolean }
     SystemOverview:
       type: object
-      required: [imageCount, storedBytes, aliasCount, heapAllocBytes, heapSysBytes, rssBytes, goroutines, indexes, indexConsistent, lastInspection, lastRebuild]
+      required: [imageCount, storedBytes, aliasCount, heapAllocBytes, heapSysBytes, rssBytes, goroutines, indexes, indexConsistent, missingImageCount, missingImageIds, lastInspection, lastRebuild, lastDaily]
       properties:
         imageCount: { type: integer, format: int64, minimum: 0 }
         storedBytes: { type: integer, format: int64, minimum: 0 }
@@ -973,6 +995,11 @@ components:
         goroutines: { type: integer, minimum: 0 }
         indexes: { $ref: '#/components/schemas/IndexStats' }
         indexConsistent: { type: boolean }
+        missingImageCount: { type: integer, minimum: 0 }
+        missingImageIds:
+          type: array
+          maxItems: 100
+          items: { type: string, format: uuid }
         lastInspection:
           oneOf:
             - $ref: '#/components/schemas/InspectionResult'
@@ -980,6 +1007,10 @@ components:
         lastRebuild:
           oneOf:
             - $ref: '#/components/schemas/RebuildResult'
+            - type: 'null'
+        lastDaily:
+          oneOf:
+            - $ref: '#/components/schemas/DailyMaintenanceResult'
             - type: 'null'
     CreateAliasRequest:
       type: object

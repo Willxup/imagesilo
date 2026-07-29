@@ -143,6 +143,17 @@ func (f *Filesystem) RemoveTemporary(path string) error {
 	return nil
 }
 
+func (f *Filesystem) RemoveTemporaryKey(key string) error {
+	path, err := f.resolveTemporaryKey(key)
+	if err != nil {
+		return err
+	}
+	if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("remove temporary file: %w", err)
+	}
+	return nil
+}
+
 func (f *Filesystem) ListImages() ([]FileEntry, error) {
 	return listDirectory(f.imagesDirectory)
 }
@@ -171,6 +182,13 @@ func (f *Filesystem) resolveThumbnailKey(imageID string) (string, error) {
 		return "", fmt.Errorf("invalid thumbnail key")
 	}
 	return filepath.Join(f.thumbnailsDirectory, imageID), nil
+}
+
+func (f *Filesystem) resolveTemporaryKey(key string) (string, error) {
+	if key == "" || key != filepath.Base(key) || strings.ContainsAny(key, "/\\\x00") || !fs.ValidPath(key) {
+		return "", fmt.Errorf("invalid temporary key")
+	}
+	return filepath.Join(f.temporaryDirectory, key), nil
 }
 
 func listDirectory(directory string) ([]FileEntry, error) {

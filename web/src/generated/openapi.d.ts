@@ -616,6 +616,16 @@ export interface components {
             missingImageCount: number;
             missingImageIds: string[];
         };
+        DailyMaintenanceResult: {
+            /** Format: date-time */
+            completedAt: string;
+            inspection: components["schemas"]["InspectionResult"];
+            removedTemporaryFiles: number;
+            removedOrphanImages: number;
+            removedOrphanThumbnails: number;
+            cleanupFailures: number;
+            indexConsistent: boolean;
+        };
         SystemOverview: {
             /** Format: int64 */
             imageCount: number;
@@ -632,8 +642,11 @@ export interface components {
             goroutines: number;
             indexes: components["schemas"]["IndexStats"];
             indexConsistent: boolean;
+            missingImageCount: number;
+            missingImageIds: string[];
             lastInspection: components["schemas"]["InspectionResult"] | null;
             lastRebuild: components["schemas"]["RebuildResult"] | null;
+            lastDaily: components["schemas"]["DailyMaintenanceResult"] | null;
         };
         CreateAliasRequest: {
             path: string;
@@ -1422,7 +1435,10 @@ export interface operations {
     importImage: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description 使用管理员 Session 上传时必填；使用 Bearer Token 时忽略。 */
+                "X-CSRF-Token"?: components["parameters"]["CSRFTokenForSession"];
+            };
             path?: never;
             cookie?: never;
         };
@@ -1447,7 +1463,11 @@ export interface operations {
                     "application/json": components["schemas"]["ImportResult"];
                 };
             };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listAliases: {
