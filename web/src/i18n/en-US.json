@@ -1,0 +1,32 @@
+{
+  "common": {
+    "loading": "Loading…",
+    "working": "Working…"
+  },
+  "auth": {
+    "email": "Administrator email",
+    "password": "Password",
+    "signIn": "Sign in",
+    "signOut": "Sign out",
+    "invalidCredentials": "The email or password is incorrect."
+  },
+  "nav": {
+    "primary": "Primary navigation",
+    "upload": "Upload",
+    "images": "Images"
+  },
+  "upload": {
+    "title": "Upload image",
+    "phaseOneHelp": "Phase one validates a single JPEG streaming upload, reliable storage, and a stable URL.",
+    "chooseFile": "Choose a JPEG file",
+    "upload": "Upload JPEG",
+    "success": "Upload complete",
+    "failed": "Upload failed. Check the file type and size, then try again."
+  },
+  "images": {
+    "title": "Recent images",
+    "description": "Image links are delivered from the in-memory index and local filesystem.",
+    "empty": "No images yet.",
+    "failed": "Unable to load images."
+  }
+}

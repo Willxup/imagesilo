@@ -1,0 +1,67 @@
+@import "tailwindcss";
+
+@theme {
+  --color-canvas: #f5f7f6;
+  --color-panel: #ffffff;
+  --color-ink: #16201d;
+  --color-muted: #64716d;
+  --color-line: #dce3e0;
+  --color-accent: #0b7a5c;
+  --color-accent-soft: #dff4ec;
+  --color-danger: #b42318;
+  --color-danger-soft: #fee4e2;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #0f1513;
+    --color-panel: #17201d;
+    --color-ink: #f0f6f3;
+    --color-muted: #a6b4af;
+    --color-line: #2c3834;
+    --color-accent: #62d2ae;
+    --color-accent-soft: #193d32;
+    --color-danger: #ff8a80;
+    --color-danger-soft: #3d211f;
+  }
+}
+
+html {
+  background: var(--color-canvas);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+@layer components {
+  .field {
+    @apply mt-2 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20;
+  }
+
+  .button-primary {
+    @apply inline-flex items-center justify-center rounded-xl bg-accent px-4 py-3 font-semibold text-white transition hover:brightness-95 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .button-secondary {
+    @apply inline-flex items-center justify-center rounded-xl border border-line bg-panel px-3 py-2 text-sm font-medium transition hover:bg-canvas;
+  }
+
+  .nav-link {
+    @apply rounded-lg px-3 py-2 text-sm font-medium text-muted transition hover:bg-canvas hover:text-ink;
+  }
+
+  .nav-link.active {
+    @apply bg-accent-soft text-accent;
+  }
+
+  .page-title {
+    @apply text-3xl font-semibold tracking-tight;
+  }
+
+  .page-description {
+    @apply mt-2 text-muted;
+  }
+}

@@ -1,0 +1,371 @@
+openapi: 3.1.0
+info:
+  title: ImageSilo API
+  version: 0.1.0
+  description: ImageSilo V1 的唯一 HTTP 契约来源。
+servers:
+  - url: /
+paths:
+  /healthz:
+    get:
+      operationId: getLiveness
+      responses:
+        '200':
+          description: 进程存活
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+  /readyz:
+    get:
+      operationId: getReadiness
+      responses:
+        '200':
+          description: 数据库、存储和索引就绪
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: 登录成功并设置安全 Session Cookie
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+  /api/v1/auth/session:
+    get:
+      operationId: getCurrentSession
+      security:
+        - sessionCookie: []
+      responses:
+        '200':
+          description: 当前管理员 Session
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdminSession'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      security:
+        - sessionCookie: []
+      responses:
+        '204':
+          description: Session 已撤销
+  /api/v1/images:
+    get:
+      operationId: listImages
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+      responses:
+        '200':
+          description: 第一阶段的最近图片列表
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageList'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+    post:
+      operationId: uploadImage
+      security:
+        - sessionCookie: []
+        - bearerToken: [images:upload]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                visibility:
+                  $ref: '#/components/schemas/Visibility'
+      responses:
+        '201':
+          description: 图片上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Image'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
+  /image/{imageId}:
+    get:
+      operationId: deliverImage
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+      responses:
+        '200':
+          description: 图片字节；私密图片需要 Session 或 images:read_private Scope
+          headers:
+            ETag:
+              schema: { type: string }
+            Last-Modified:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            image/jpeg: { schema: { type: string, format: binary } }
+            image/png: { schema: { type: string, format: binary } }
+            image/webp: { schema: { type: string, format: binary } }
+            image/gif: { schema: { type: string, format: binary } }
+        '206':
+          description: Range 局部响应
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+  /api/v1/api-tokens:
+    post:
+      operationId: createApiToken
+      security:
+        - sessionCookie: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiTokenRequest'
+      responses:
+        '201':
+          description: Token 明文仅在本响应返回一次
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreatedApiToken'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/imports:
+    post:
+      operationId: importImage
+      security:
+        - bearerToken: [images:upload, aliases:write]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, alias]
+              properties:
+                file: { type: string, format: binary }
+                alias: { type: string, example: /i/2022/05/example.webp }
+                visibility:
+                  $ref: '#/components/schemas/Visibility'
+      responses:
+        '201':
+          description: 原始图片与一个历史别名成功导入
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportResult'
+        '409':
+          $ref: '#/components/responses/Conflict'
+  /api/v1/aliases:
+    post:
+      operationId: createAlias
+      security:
+        - sessionCookie: []
+        - bearerToken: [aliases:write]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateAliasRequest'
+      responses:
+        '201':
+          description: 别名创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImageAlias'
+        '409':
+          $ref: '#/components/responses/Conflict'
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: imagesilo_session
+    bearerToken:
+      type: http
+      scheme: bearer
+  parameters:
+    ImageId:
+      name: imageId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+  schemas:
+    Visibility:
+      type: string
+      enum: [public, private]
+    ApiTokenScope:
+      type: string
+      enum: [images:upload, images:read_private, images:delete, aliases:write]
+    HealthResponse:
+      type: object
+      required: [status]
+      properties:
+        status: { type: string }
+    LoginRequest:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 1, maxLength: 1024 }
+    AdminSession:
+      type: object
+      required: [adminId, email, expiresAt]
+      properties:
+        adminId: { type: string, format: uuid }
+        email: { type: string, format: email }
+        expiresAt: { type: string, format: date-time }
+    Image:
+      type: object
+      required: [id, originalName, mimeType, width, height, sourceSize, storedSize, sourceSha256, storedSha256, visibility, standardUrl, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        originalName: { type: string }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
+        width: { type: integer, minimum: 1 }
+        height: { type: integer, minimum: 1 }
+        sourceSize: { type: integer, format: int64, minimum: 1 }
+        storedSize: { type: integer, format: int64, minimum: 1 }
+        sourceSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        storedSha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        visibility: { $ref: '#/components/schemas/Visibility' }
+        standardUrl: { type: string }
+        createdAt: { type: string, format: date-time }
+    ImageList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/Image' }
+    CreateApiTokenRequest:
+      type: object
+      additionalProperties: false
+      required: [name, scopes]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 100 }
+        scopes:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { $ref: '#/components/schemas/ApiTokenScope' }
+        expiresAt: { type: [string, 'null'], format: date-time }
+    CreatedApiToken:
+      type: object
+      required: [id, name, token, tokenPrefix, scopes, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        token: { type: string, writeOnly: true }
+        tokenPrefix: { type: string }
+        scopes:
+          type: array
+          items: { $ref: '#/components/schemas/ApiTokenScope' }
+        createdAt: { type: string, format: date-time }
+    CreateAliasRequest:
+      type: object
+      additionalProperties: false
+      required: [path, imageId, source]
+      properties:
+        path: { type: string }
+        imageId: { type: string, format: uuid }
+        source: { type: string, minLength: 1, maxLength: 100 }
+    ImageAlias:
+      type: object
+      required: [id, path, imageId, source, createdAt]
+      properties:
+        id: { type: string, format: uuid }
+        path: { type: string }
+        imageId: { type: string, format: uuid }
+        source: { type: string }
+        createdAt: { type: string, format: date-time }
+    ImportResult:
+      type: object
+      required: [imageId, standardUrl, sha256, alias]
+      properties:
+        imageId: { type: string, format: uuid }
+        standardUrl: { type: string }
+        sha256: { type: string, pattern: '^[0-9a-f]{64}$' }
+        alias: { $ref: '#/components/schemas/ImageAlias' }
+    Error:
+      type: object
+      required: [code, message, requestId]
+      properties:
+        code: { type: string }
+        message: { type: string }
+        requestId: { type: string }
+        fields:
+          type: object
+          additionalProperties: { type: string }
+  responses:
+    BadRequest:
+      description: 请求无效
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: 缺少或认证信息无效
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Forbidden:
+      description: 已认证但 Scope 不足
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    NotFound:
+      description: 资源不存在
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Conflict:
+      description: 唯一路径冲突
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooManyRequests:
+      description: 请求被限速
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ServiceUnavailable:
+      description: 服务未就绪或图片解码安全门满载
+      headers:
+        Retry-After: { schema: { type: integer, minimum: 1 } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

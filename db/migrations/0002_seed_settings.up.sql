@@ -1,0 +1,31 @@
+INSERT INTO app_settings (
+    singleton,
+    max_upload_bytes,
+    max_batch_count,
+    max_total_pixels,
+    compression_enabled,
+    jpeg_quality,
+    webp_quality,
+    png_compression_level,
+    conversion_enabled,
+    conversion_webp_quality,
+    conversion_webp_lossless,
+    default_visibility,
+    maintenance_hour,
+    updated_at
+) VALUES (
+    1,
+    20971520,
+    20,
+    40000000,
+    0,
+    85,
+    82,
+    6,
+    0,
+    82,
+    0,
+    'public',
+    3,
+    unixepoch()
+);

@@ -1,0 +1,32 @@
+{
+  "common": {
+    "loading": "加载中…",
+    "working": "处理中…"
+  },
+  "auth": {
+    "email": "管理员邮箱",
+    "password": "密码",
+    "signIn": "登录",
+    "signOut": "退出",
+    "invalidCredentials": "邮箱或密码不正确。"
+  },
+  "nav": {
+    "primary": "主要导航",
+    "upload": "上传",
+    "images": "图片"
+  },
+  "upload": {
+    "title": "上传图片",
+    "phaseOneHelp": "第一阶段先验证单张 JPEG 的流式上传、可靠落盘和稳定直链。",
+    "chooseFile": "选择 JPEG 文件",
+    "upload": "上传 JPEG",
+    "success": "上传成功",
+    "failed": "上传失败，请检查文件格式和大小后重试。"
+  },
+  "images": {
+    "title": "最近图片",
+    "description": "图片直链从内存索引和本地文件系统交付。",
+    "empty": "还没有图片。",
+    "failed": "图片列表加载失败。"
+  }
+}

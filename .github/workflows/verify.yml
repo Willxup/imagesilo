@@ -1,0 +1,67 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: true
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix web ci
+      - name: Run quality gate
+        run: make check
+
+  container-smoke:
+    needs: quality
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            suffix: amd64
+            port: 18080
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            suffix: arm64
+            port: 18081
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Set up Go for the deterministic JPEG smoke fixture
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: .go-version
+          cache: true
+      - name: Build native container image
+        run: docker build --platform "${{ matrix.platform }}" --file deploy/docker/Dockerfile --tag "imagesilo:smoke-${{ matrix.suffix }}" .
+      - name: Run login, upload, delivery, and restart smoke test
+        env:
+          IMAGE: imagesilo:smoke-${{ matrix.suffix }}
+          PLATFORM: ${{ matrix.platform }}
+          PORT: ${{ matrix.port }}
+          SMOKE_SUFFIX: ${{ matrix.suffix }}
+        run: bash scripts/container-smoke.sh
