@@ -10,6 +10,9 @@ concurrencies="${CONCURRENCIES:-1 2}"
 requests="${REQUESTS:-8}"
 cpu_limit="${CPU_LIMIT:-1}"
 memory_limit="${MEMORY_LIMIT:-2g}"
+fixture_width="${FIXTURE_WIDTH:-5000}"
+fixture_height="${FIXTURE_HEIGHT:-3200}"
+conversion_enabled="${CONVERSION_ENABLED:-true}"
 container="imagesilo-processing-bench-${suffix}"
 data_dir="${work_dir}/data"
 result_file="${work_dir}/results/benchmark.jsonl"
@@ -62,7 +65,8 @@ for concurrency in $concurrencies; do
   base_url="http://127.0.0.1:${port}"
   wait_ready "$base_url"
   IMAGESILO_BENCH_PASSWORD="$password" "$bench_client" \
-    -base-url "$base_url" -concurrency "$concurrency" -requests "$requests" | tee -a "$result_file"
+    -base-url "$base_url" -concurrency "$concurrency" -requests "$requests" \
+    -width "$fixture_width" -height "$fixture_height" -conversion-enabled="$conversion_enabled" | tee -a "$result_file"
   memory_current="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.current')"
   memory_peak="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.peak')"
   printf '{"concurrency":%s,"memoryCurrentBytes":%s,"memoryPeakBytes":%s}\n' \

@@ -37,16 +37,17 @@ type result struct {
 	SourceFixtureSize int     `json:"sourceFixtureBytes"`
 }
 
-const (
-	benchmarkWidth  = 8000
-	benchmarkHeight = 5000
-)
-
 func main() {
 	baseURL := flag.String("base-url", "http://127.0.0.1:18086", "ImageSilo base URL")
 	concurrency := flag.Int("concurrency", 1, "parallel upload count")
 	requests := flag.Int("requests", 16, "total upload count")
+	width := flag.Int("width", 5000, "source fixture width")
+	height := flag.Int("height", 3200, "source fixture height")
+	conversionEnabled := flag.Bool("conversion-enabled", true, "enable PNG to WebP conversion")
 	flag.Parse()
+	if *concurrency < 1 || *requests < 1 || *width < 1 || *height < 1 {
+		fatal("concurrency, requests, width, and height must be positive")
+	}
 	password := os.Getenv("IMAGESILO_BENCH_PASSWORD")
 	if password == "" {
 		fatal("IMAGESILO_BENCH_PASSWORD is required")
@@ -57,8 +58,8 @@ func main() {
 	}
 	client := &http.Client{Jar: jar, Timeout: 2 * time.Minute}
 	csrfToken := login(client, *baseURL, password)
-	updateProcessing(client, *baseURL, csrfToken)
-	pngBytes := benchmarkPNG()
+	updateProcessing(client, *baseURL, csrfToken, *conversionEnabled)
+	pngBytes := benchmarkPNG(*width, *height)
 	body, contentType := multipartBody(pngBytes)
 
 	jobs := make(chan struct{})
@@ -120,8 +121,8 @@ func main() {
 		Concurrency: *concurrency, Requests: *requests, Successes: successes, BusyResponses: busy,
 		P95Milliseconds:  float64(values[p95Index].Microseconds()) / 1000,
 		ThroughputPerSec: float64(successes) / elapsed.Seconds(),
-		SourceFormat:     "png", SourceWidth: benchmarkWidth, SourceHeight: benchmarkHeight,
-		SourcePixels: benchmarkWidth * benchmarkHeight, SourceFixtureSize: len(pngBytes),
+		SourceFormat:     "png", SourceWidth: *width, SourceHeight: *height,
+		SourcePixels: *width * *height, SourceFixtureSize: len(pngBytes),
 	}
 	if err := json.NewEncoder(os.Stdout).Encode(output); err != nil {
 		fatal(err.Error())
@@ -148,8 +149,14 @@ func login(client *http.Client, baseURL, password string) string {
 	return session.CSRFToken
 }
 
-func updateProcessing(client *http.Client, baseURL, csrfToken string) {
-	body := []byte(`{"compressionEnabled":false,"jpegQuality":85,"webpQuality":82,"pngCompressionLevel":6,"conversionEnabled":true,"conversionWebpQuality":82,"conversionWebpLossless":false}`)
+func updateProcessing(client *http.Client, baseURL, csrfToken string, conversionEnabled bool) {
+	body, err := json.Marshal(map[string]any{
+		"compressionEnabled": false, "jpegQuality": 85, "webpQuality": 82, "pngCompressionLevel": 6,
+		"conversionEnabled": conversionEnabled, "conversionWebpQuality": 82, "conversionWebpLossless": false,
+	})
+	if err != nil {
+		fatal(err.Error())
+	}
 	request, err := http.NewRequest(http.MethodPatch, baseURL+"/api/v1/settings/processing", bytes.NewReader(body))
 	if err != nil {
 		fatal(err.Error())
@@ -182,10 +189,10 @@ func multipartBody(data []byte) ([]byte, string) {
 	return body.Bytes(), writer.FormDataContentType()
 }
 
-func benchmarkPNG() []byte {
-	value := image.NewRGBA(image.Rect(0, 0, benchmarkWidth, benchmarkHeight))
-	for y := 0; y < benchmarkHeight; y++ {
-		for x := 0; x < benchmarkWidth; x++ {
+func benchmarkPNG(width, height int) []byte {
+	value := image.NewRGBA(image.Rect(0, 0, width, height))
+	for y := 0; y < height; y++ {
+		for x := 0; x < width; x++ {
 			value.SetRGBA(x, y, color.RGBA{
 				R: uint8((x*13 + y*3) % 256), G: uint8((x*5 + y*11) % 256),
 				B: uint8((x + y*7) % 256), A: 255,

@@ -92,6 +92,8 @@ curl --fail --silent --show-error \
   "${base_url}/api/v1/system" >"$system_response"
 test "$(jq --raw-output '.vipsVersion' "$system_response")" = "8.18.4"
 test "$(jq '.supportedFormats | length' "$system_response")" = "4"
+test "$(jq '.processingConcurrency' "$system_response")" = "2"
+test "$(jq '.maxTotalPixels' "$system_response")" = "16000000"
 
 go run ./tests/performance/jpeg_stdout.go -width 3000 -height 2000 -quality 90 |
   curl --fail --silent --show-error \

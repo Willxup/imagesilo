@@ -11,6 +11,9 @@ password="ImageSilo-${suffix}-Benchmark-Password!"
 concurrencies="${CONCURRENCIES:-1 2 4 8}"
 requests="${REQUESTS:-16}"
 diagnostics="${BENCH_DIAGNOSTICS:-false}"
+fixture_width="${FIXTURE_WIDTH:-5000}"
+fixture_height="${FIXTURE_HEIGHT:-3200}"
+conversion_enabled="${CONVERSION_ENABLED:-true}"
 
 cleanup() {
   docker rm --force "$container" >/dev/null 2>&1 || true
@@ -49,7 +52,8 @@ for concurrency in $concurrencies; do
   base_url="http://127.0.0.1:${port}"
   wait_ready "$base_url"
   IMAGESILO_BENCH_PASSWORD="$password" go run ./tests/performance/upload_benchmark.go \
-    -base-url "$base_url" -concurrency "$concurrency" -requests "$requests"
+    -base-url "$base_url" -concurrency "$concurrency" -requests "$requests" \
+    -width "$fixture_width" -height "$fixture_height" -conversion-enabled="$conversion_enabled"
   memory_current="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.current')"
   memory_peak="$(docker exec "$container" sh -c 'cat /sys/fs/cgroup/memory.peak')"
   printf '{"concurrency":%s,"memoryCurrentBytes":%s,"memoryPeakBytes":%s}\n' \

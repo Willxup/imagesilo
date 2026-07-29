@@ -21,7 +21,7 @@ import (
 
 const (
 	maxUploadBytes = 20 << 20
-	maxTotalPixels = 40_000_000
+	maxTotalPixels = 16_000_000
 )
 
 type Service struct {
