@@ -1,12 +1,85 @@
-# ImageSilo
+<p align="center">
+  <a href="./README.md"><strong>English</strong></a> ｜ <a href="./README.zh.md">简体中文</a>
+</p>
 
-ImageSilo 是一个单进程、Docker 优先的自托管图床。V1 使用 Go、React、TypeScript、SQLite 和本地文件存储，目标是在保持公开 URL 稳定的同时，安全地完成图片上传、交付与管理。
+<h1 align="center">ImageSilo</h1>
 
-项目当前按照 [`docs/development-status.md`](docs/development-status.md) 记录的阶段门推进，产品与架构基线来自 `ImageSilo-可执行开发计划.md` 1.9。
+<p align="center">A lightweight, self-hosted home for your images.</p>
 
-## 本地验证
+<p align="center">
+  <a href="https://github.com/Willxup/imagesilo/releases"><img src="https://img.shields.io/github/v/release/Willxup/imagesilo?include_prereleases&amp;style=flat-square" alt="Latest release" /></a>
+  <a href="https://github.com/Willxup/imagesilo/actions/workflows/verify.yml"><img src="https://img.shields.io/github/actions/workflow/status/Willxup/imagesilo/verify.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="CI status" /></a>
+  <a href="https://github.com/Willxup/imagesilo/pkgs/container/imagesilo"><img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker image on GHCR" /></a>
+  <img src="https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-FCC624?style=flat-square&amp;logo=linux&amp;logoColor=black" alt="Linux amd64 and arm64" />
+</p>
 
-需要 Go 1.26.5 和 Node.js 26.5.0。首次检出后执行：
+ImageSilo is a Docker-first image host built as one Go process with SQLite and local file storage. It provides authenticated uploads, stable public URLs, historical aliases, scoped API tokens, image processing, and a responsive React administration interface without Redis, an external database, or a background job service.
+
+> The current release is `v0.1.0-rc.1`. Production deployments should pin an immutable version tag or digest; ImageSilo does not publish `latest` automatically.
+
+## Features
+
+- Store JPEG, PNG, WebP, and GIF images with strict decoding and a 16 MP safety limit
+- Preserve original bytes or explicitly compress and convert static images to WebP
+- Deliver public images and historical aliases with Range, ETag, conditional request, and HEAD support
+- Keep the delivery hot path in memory, with no SQLite lookup per image request
+- Manage public/private visibility, administrator sessions, CSRF protection, login rate limits, and scoped API tokens
+- Upload, search, filter, inspect, batch-update, and permanently delete images from the built-in web interface
+- Import legacy URLs, verify bytes by SHA-256, inspect storage, and rebuild in-memory indexes
+- Run as a non-root, multi-architecture container with image processing concurrency set to `1` by default
+
+## Quick Start
+
+Docker is the supported production runtime. The following starts a local evaluation instance with a named volume:
+
+```bash
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.1
+
+docker pull "$IMAGESILO_IMAGE"
+docker volume create imagesilo-data
+
+docker run --rm --interactive --tty \
+  --volume imagesilo-data:/data \
+  "$IMAGESILO_IMAGE" \
+  admin create --email admin@example.com
+
+docker run --detach \
+  --name imagesilo \
+  --restart unless-stopped \
+  --publish 127.0.0.1:8080:8080 \
+  --env IMAGESILO_COOKIE_SECURE=false \
+  --env IMAGESILO_PROCESSING_CONCURRENCY=1 \
+  --volume imagesilo-data:/data \
+  "$IMAGESILO_IMAGE"
+```
+
+Open `http://127.0.0.1:8080/admin/login`, then sign in with the administrator account you created.
+
+For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECURE=true`, and back up the complete `/data` directory while writes are stopped. See the [deployment guide](./docs/deployment.md) before exposing the service.
+
+## Design Boundaries
+
+| Area | ImageSilo V1 |
+| --- | --- |
+| Runtime | One Go process in one container |
+| Metadata | SQLite in `/data/db` |
+| Images | Local files in `/data/images` |
+| Cache | Local thumbnails in `/data/cache` |
+| Processing | libvips, concurrency `1` by default |
+| Platforms | `linux/amd64`, `linux/arm64` |
+| Production storage | Docker named volume or local bind mount |
+
+NFS and SMB are not supported. Do not run two ImageSilo containers against the same writable `/data` directory.
+
+## Local Development
+
+### Prerequisites
+
+- Go 1.26.5
+- Node.js 26.5.0
+- npm
+
+### Build and Verify
 
 ```bash
 npm --prefix web ci
@@ -14,32 +87,32 @@ make check
 make build
 ```
 
-本地运行时必须显式指定可写数据目录：
+Create an administrator and run the local binary:
 
 ```bash
-IMAGESILO_DATA_DIR="$PWD/data" IMAGESILO_COOKIE_SECURE=false ./bin/imagesilo serve
+IMAGESILO_DATA_DIR="$PWD/data" \
+  ./bin/imagesilo admin create --email admin@example.com
+
+IMAGESILO_DATA_DIR="$PWD/data" \
+IMAGESILO_COOKIE_SECURE=false \
+  ./bin/imagesilo serve
 ```
 
-访问 `/healthz` 检查进程存活，访问 `/readyz` 检查 SQLite 是否就绪。
+Use `/healthz` for liveness and `/readyz` for SQLite readiness. Run `make e2e` for the single-worker browser workflow.
 
-首次创建管理员时默认从真实终端无回显读取并确认密码：
+## Documentation
 
-```bash
-IMAGESILO_DATA_DIR="$PWD/data" ./bin/imagesilo admin create --email admin@example.com
-```
+| Topic | Guide |
+| --- | --- |
+| Docker deployment, backup, upgrade, and rollback | [Deployment](./docs/deployment.md) |
+| API tokens, curl, PicGo, and ShareX | [API token usage](./docs/api-token-usage.md) |
+| Legacy image and URL migration | [Imports](./docs/imports.md) |
+| Inspection, cleanup, and index rebuilds | [Operations](./docs/operations.md) |
+| Architecture and data model | [Architecture](./docs/architecture.md) · [Data model](./docs/data-model.md) |
+| Security and lightweight resource evidence | [Security audit](./docs/security-audit.md) · [Performance baseline](./docs/performance-baseline.md) |
+| Release images and acceptance checks | [Release guide](./docs/release.md) |
+| HTTP API contract | [OpenAPI](./api/openapi.yaml) |
 
-CI 只能显式使用 `--password-stdin`，密码不会出现在进程参数中：
+## Project Status
 
-```bash
-printf '%s\n' "$CI_SMOKE_PASSWORD" | IMAGESILO_DATA_DIR="$PWD/data" ./bin/imagesilo admin create --email admin@example.com --password-stdin
-```
-
-管理后台入口为 `/admin/login`。登录后可以上传、搜索、筛选、批量管理和永久删除图片，维护历史路径，查看轻量资源与索引状态，手动巡检/重建，以及创建和吊销具名 API Token。
-
-API Token 的 curl、PicGo 与 ShareX 配置见 [`docs/api-token-usage.md`](docs/api-token-usage.md)。HTTP 契约的唯一事实来源为 [`api/openapi.yaml`](api/openapi.yaml)。
-
-单张图片与旧 URL 的迁移见 [`docs/imports.md`](docs/imports.md)；每日巡检和孤儿文件安全清理见 [`docs/operations.md`](docs/operations.md)；Docker 部署、升级、完整 `/data` 备份和回滚见 [`docs/deployment.md`](docs/deployment.md)；双架构发布候选与受限资源验收见 [`docs/release.md`](docs/release.md)；安全边界、依赖例外和精简镜像证据见 [`docs/security-audit.md`](docs/security-audit.md)。
-
-## 部署边界
-
-V1 唯一支持的生产部署方式是 Docker Engine + Docker Compose。`/data` 必须使用 Docker 本地 named volume 或宿主机本地文件系统 bind mount；不支持 NFS 或 SMB。
+Stages 0–7 are complete, including native amd64/arm64 verification and the public `v0.1.0-rc.1` release candidate. Production migration remains a separate, environment-specific step. See [development status](./docs/development-status.md) for the current evidence and remaining work.
