@@ -75,11 +75,12 @@ func (s *Service) Login(ctx context.Context, email, password string, now time.Ti
 		return SessionIdentity{}, "", "", fmt.Errorf("generate session id: %w", err)
 	}
 	identity := SessionIdentity{
-		SessionID: sessionID.String(),
-		AdminID:   admin.ID,
-		Email:     admin.Email,
-		CSRFHash:  csrfHash,
-		ExpiresAt: now.Add(sessionLifetime).UTC(),
+		SessionID:   sessionID.String(),
+		AdminID:     admin.ID,
+		DisplayName: admin.DisplayName,
+		Email:       admin.Email,
+		CSRFHash:    csrfHash,
+		ExpiresAt:   now.Add(sessionLifetime).UTC(),
 	}
 	session := Session{
 		ID:        identity.SessionID,
@@ -96,6 +97,26 @@ func (s *Service) Login(ctx context.Context, email, password string, now time.Ti
 	}
 	s.index.Add(hash, identity)
 	return identity, token, csrfToken, nil
+}
+
+func (s *Service) UpdateProfile(ctx context.Context, identity SessionIdentity, displayName, email string, now time.Time) (SessionIdentity, error) {
+	displayName, err := NormalizeDisplayName(displayName)
+	if err != nil {
+		return SessionIdentity{}, err
+	}
+	email, err = NormalizeEmail(email)
+	if err != nil {
+		return SessionIdentity{}, err
+	}
+	releaseChange := s.barrier.BeginChange()
+	defer releaseChange()
+	if err := s.repository.UpdateProfile(ctx, identity.AdminID, displayName, email, now); err != nil {
+		return SessionIdentity{}, err
+	}
+	s.index.UpdateAdmin(identity.AdminID, displayName, email)
+	identity.DisplayName = displayName
+	identity.Email = email
+	return identity, nil
 }
 
 func (s *Service) Authenticate(token string, now time.Time) (SessionIdentity, error) {

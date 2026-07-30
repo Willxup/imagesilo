@@ -17,10 +17,13 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) CreateAdmin(ctx context.Context, admin Admin) error {
+	if admin.DisplayName == "" {
+		admin.DisplayName = "ImageSilo"
+	}
 	_, err := r.db.ExecContext(ctx, `
-		INSERT INTO admin(id, email, password_hash, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?)`,
-		admin.ID, admin.Email, admin.PasswordHash, admin.CreatedAt.Unix(), admin.UpdatedAt.Unix(),
+		INSERT INTO admin(id, display_name, email, password_hash, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?)`,
+		admin.ID, admin.DisplayName, admin.Email, admin.PasswordHash, admin.CreatedAt.Unix(), admin.UpdatedAt.Unix(),
 	)
 	if err != nil {
 		if isUniqueConstraint(err) {
@@ -33,26 +36,44 @@ func (r *Repository) CreateAdmin(ctx context.Context, admin Admin) error {
 
 func (r *Repository) FindAdminByEmail(ctx context.Context, email string) (Admin, error) {
 	return r.findAdmin(ctx, `
-		SELECT id, email, password_hash, created_at, updated_at
+		SELECT id, display_name, email, password_hash, created_at, updated_at
 		FROM admin WHERE email = ?`, email)
 }
 
 func (r *Repository) FindAdminByID(ctx context.Context, id string) (Admin, error) {
 	return r.findAdmin(ctx, `
-		SELECT id, email, password_hash, created_at, updated_at
+		SELECT id, display_name, email, password_hash, created_at, updated_at
 		FROM admin WHERE id = ?`, id)
 }
 
 func (r *Repository) findAdmin(ctx context.Context, query, value string) (Admin, error) {
 	var admin Admin
 	var createdAt, updatedAt int64
-	err := r.db.QueryRowContext(ctx, query, value).Scan(&admin.ID, &admin.Email, &admin.PasswordHash, &createdAt, &updatedAt)
+	err := r.db.QueryRowContext(ctx, query, value).Scan(&admin.ID, &admin.DisplayName, &admin.Email, &admin.PasswordHash, &createdAt, &updatedAt)
 	if err != nil {
 		return Admin{}, err
 	}
 	admin.CreatedAt = time.Unix(createdAt, 0).UTC()
 	admin.UpdatedAt = time.Unix(updatedAt, 0).UTC()
 	return admin, nil
+}
+
+func (r *Repository) UpdateProfile(ctx context.Context, adminID, displayName, email string, now time.Time) error {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE admin SET display_name = ?, email = ?, updated_at = ? WHERE id = ?`,
+		displayName, email, now.Unix(), adminID,
+	)
+	if err != nil {
+		if isUniqueConstraint(err) {
+			return ErrAdminExists
+		}
+		return fmt.Errorf("update administrator profile: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil || updated != 1 {
+		return fmt.Errorf("administrator profile update affected %d rows", updated)
+	}
+	return nil
 }
 
 func (r *Repository) CreateSession(ctx context.Context, session Session) error {
@@ -123,7 +144,7 @@ func (r *Repository) ChangePasswordAndRevokeOtherSessions(
 
 func (r *Repository) ListActiveSessions(ctx context.Context, now time.Time) (map[[32]byte]SessionIdentity, error) {
 	rows, err := r.db.QueryContext(ctx, `
-		SELECT sessions.id, sessions.admin_id, admin.email, sessions.token_hash, sessions.csrf_hash, sessions.expires_at
+		SELECT sessions.id, sessions.admin_id, admin.display_name, admin.email, sessions.token_hash, sessions.csrf_hash, sessions.expires_at
 		FROM sessions
 		JOIN admin ON admin.id = sessions.admin_id
 		WHERE sessions.expires_at > ?`, now.Unix())
@@ -137,7 +158,7 @@ func (r *Repository) ListActiveSessions(ctx context.Context, now time.Time) (map
 		var identity SessionIdentity
 		var rawHash, rawCSRFHash []byte
 		var expiresAt int64
-		if err := rows.Scan(&identity.SessionID, &identity.AdminID, &identity.Email, &rawHash, &rawCSRFHash, &expiresAt); err != nil {
+		if err := rows.Scan(&identity.SessionID, &identity.AdminID, &identity.DisplayName, &identity.Email, &rawHash, &rawCSRFHash, &expiresAt); err != nil {
 			return nil, fmt.Errorf("scan active session: %w", err)
 		}
 		if len(rawHash) != 32 || len(rawCSRFHash) != 32 {

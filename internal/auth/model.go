@@ -4,6 +4,7 @@ import "time"
 
 type Admin struct {
 	ID           string
+	DisplayName  string
 	Email        string
 	PasswordHash string
 	CreatedAt    time.Time
@@ -20,9 +21,10 @@ type Session struct {
 }
 
 type SessionIdentity struct {
-	SessionID string
-	AdminID   string
-	Email     string
-	CSRFHash  [32]byte
-	ExpiresAt time.Time
+	SessionID   string
+	AdminID     string
+	DisplayName string
+	Email       string
+	CSRFHash    [32]byte
+	ExpiresAt   time.Time
 }

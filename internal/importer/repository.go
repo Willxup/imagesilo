@@ -37,11 +37,11 @@ func (r *Repository) Create(ctx context.Context, image images.Image, alias image
 		INSERT INTO images(
 			id, original_name, storage_key, extension, mime_type, width, height,
 			source_size, stored_size, source_sha256, stored_sha256, processing_summary,
-			visibility, uploaded_via, uploaded_by_api_token_id, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, ?)`,
+			visibility, uploaded_via, uploaded_by_api_token_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'import', ?, ?, ?)`,
 		image.ID, image.OriginalName, image.StorageKey, image.Extension, image.MIMEType, image.Width, image.Height,
 		image.SourceSize, image.StoredSize, image.SourceSHA256[:], image.StoredSHA256[:], image.ProcessingSummary,
-		image.Visibility, image.UploadedByAPITokenID, image.CreatedAt.Unix(),
+		image.Visibility, image.UploadedByAPITokenID, image.CreatedAt.Unix(), image.UpdatedAt.Unix(),
 	); err != nil {
 		return fmt.Errorf("create imported image record: %w", err)
 	}

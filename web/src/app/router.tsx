@@ -2,17 +2,16 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 
 import { AuthGuard } from '../features/auth/auth-guard'
 import { LoginPage } from '../features/auth/login-page'
-import { ImageListPage } from '../features/images/image-list-page'
-import { ImageDetailPage } from '../features/images/image-detail-page'
-import { UploadPage } from '../features/upload/upload-page'
-import { ApiTokenPage } from '../features/api-tokens/api-token-page'
-import { SettingsPage } from '../features/settings/settings-page'
-import { AliasPage } from '../features/aliases/alias-page'
-import { SystemPage } from '../features/system/system-page'
+import { SetupPage } from '../features/auth/setup-page'
 import { AdminLayout } from '../components/layout/admin-layout'
+import { AliasPage, ApiTokenPage, ImageDetailPage, ImageListPage, SettingsPage, SystemPage, UploadPage } from './lazy-pages'
 
 export const router = createBrowserRouter(
   [
+    {
+      path: '/admin/setup',
+      element: <SetupPage />,
+    },
     {
       path: '/admin/login',
       element: <LoginPage />,

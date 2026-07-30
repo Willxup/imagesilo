@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -17,6 +18,21 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	}
 	if cfg.ProcessingConcurrency != 1 {
 		t.Fatalf("ProcessingConcurrency = %d, want lightweight default 1", cfg.ProcessingConcurrency)
+	}
+}
+
+func TestPrepareDataDirectoriesIncludesMigrationMount(t *testing.T) {
+	dataDirectory := filepath.Join(t.TempDir(), "data")
+	cfg := Config{DataDirectory: dataDirectory}
+	if err := cfg.PrepareDataDirectories(); err != nil {
+		t.Fatalf("PrepareDataDirectories() error = %v", err)
+	}
+	info, err := os.Stat(filepath.Join(dataDirectory, "migrations"))
+	if err != nil {
+		t.Fatalf("Stat(migrations) error = %v", err)
+	}
+	if !info.IsDir() {
+		t.Fatal("migrations path is not a directory")
 	}
 }
 

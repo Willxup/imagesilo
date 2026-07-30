@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client'
 
 import { App } from './app/App'
 import './i18n/config'
+import 'sonner/dist/styles.css'
 import './styles/globals.css'
 
 const savedTheme = localStorage.getItem('imagesilo_theme')

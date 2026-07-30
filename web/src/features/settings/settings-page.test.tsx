@@ -1,10 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
 import { apiRequest } from '../../lib/api-client'
-import type { AppSettings, SystemOverview } from '../../lib/api-types'
+import type { AppSettings } from '../../lib/api-types'
+import { AuthContext } from '../auth/auth-context'
 import { SettingsPage } from './settings-page'
 
 vi.mock('../../lib/api-client', () => ({ apiRequest: vi.fn() }))
@@ -24,31 +25,29 @@ describe('SettingsPage', () => {
           conversionWebpLossless: false,
         } as AppSettings
       }
-      return {
-        imageCount: 0,
-        storedBytes: 0,
-        aliasCount: 0,
-        heapAllocBytes: 1024,
-        heapSysBytes: 2048,
-        rssBytes: 4096,
-        goroutines: 8,
-        indexes: { images: 0, aliases: 0, sessions: 1, tokens: 0 },
-        indexConsistent: true,
-        missingImageCount: 0,
-        missingImageIds: [],
-        lastInspection: null,
-        lastRebuild: null,
-        lastDaily: null,
-      } as SystemOverview
+      throw new Error(`unexpected request: ${path}`)
     })
   })
 
-  it('shows the lightweight overview and keeps byte-changing defaults off', async () => {
+  it('shows account settings without duplicating the system overview', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={queryClient}><SettingsPage /></QueryClientProvider>)
-    expect(await screen.findByText('系统概览')).toBeInTheDocument()
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={{
+          session: { adminId: '019c1234-5678-7abc-8def-0123456789ab', displayName: 'ImageSilo', email: 'admin@example.com', csrfToken: 'isc_test', expiresAt: '2026-07-30T00:00:00Z' },
+          setupStatus: { initialized: true }, isLoading: false,
+          refresh: vi.fn(), refreshSetup: vi.fn(), logout: vi.fn(),
+        }}>
+          <SettingsPage />
+        </AuthContext.Provider>
+      </QueryClientProvider>,
+    )
+    expect(await screen.findByText('管理员资料')).toBeInTheDocument()
+    expect(screen.queryByText('系统概览')).not.toBeInTheDocument()
     expect(await screen.findByLabelText('启用同格式压缩')).not.toBeChecked()
     expect(screen.getByLabelText('将 JPEG 和 PNG 转为 WebP')).not.toBeChecked()
-    expect(screen.getByText('数据库与图片/别名索引数量一致。')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
+    expect(screen.getAllByRole('alert')).toHaveLength(2)
+    expect(screen.getAllByText('此项为必填项。')).toHaveLength(2)
   })
 })

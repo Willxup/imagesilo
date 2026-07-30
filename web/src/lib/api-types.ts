@@ -1,10 +1,13 @@
 import type { components } from '../generated/openapi'
 
 export type AdminSession = components['schemas']['AdminSession']
+export type SetupStatus = components['schemas']['SetupStatus']
+export type SetupRequest = components['schemas']['SetupRequest']
 export type Image = components['schemas']['Image']
 export type ImageList = components['schemas']['ImageList']
 export type ImageDetail = components['schemas']['ImageDetail']
 export type DeleteImageResult = components['schemas']['DeleteImageResult']
+export type WebPConversionResult = components['schemas']['WebPConversionResult']
 export type BatchOperationResult = components['schemas']['BatchOperationResult']
 export type Visibility = components['schemas']['Visibility']
 export type ApiTokenScope = components['schemas']['ApiTokenScope']
@@ -19,3 +22,4 @@ export type RebuildResult = components['schemas']['RebuildResult']
 export type DailyMaintenanceResult = components['schemas']['DailyMaintenanceResult']
 export type ImageAlias = components['schemas']['ImageAlias']
 export type ImageAliasList = components['schemas']['ImageAliasList']
+export type ImportResult = components['schemas']['ImportResult']

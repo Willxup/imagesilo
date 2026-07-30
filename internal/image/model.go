@@ -30,6 +30,7 @@ type Image struct {
 	UploadedVia          string
 	UploadedByAPITokenID *string
 	CreatedAt            time.Time
+	UpdatedAt            time.Time
 }
 
 type UploadOptions struct {
@@ -69,4 +70,13 @@ type DeleteResult struct {
 	CleanupPending    bool
 	ImageCleanupError error
 	ThumbCleanupError error
+}
+
+type ConversionResult struct {
+	Image               Image
+	OriginalFileDeleted bool
+	ThumbnailUpdated    bool
+	CleanupPending      bool
+	OriginalFileError   error
+	ThumbnailError      error
 }

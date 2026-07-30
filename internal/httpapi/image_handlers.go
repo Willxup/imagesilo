@@ -81,6 +81,13 @@ type deleteImageResponse struct {
 	CleanupPending   bool   `json:"cleanupPending"`
 }
 
+type conversionResponse struct {
+	Image               imageResponse `json:"image"`
+	OriginalFileDeleted bool          `json:"originalFileDeleted"`
+	ThumbnailUpdated    bool          `json:"thumbnailUpdated"`
+	CleanupPending      bool          `json:"cleanupPending"`
+}
+
 type batchOperationItem struct {
 	ImageID        string `json:"imageId"`
 	Status         string `json:"status"`
@@ -284,6 +291,44 @@ func (h *imageHandler) changeVisibility(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (h *imageHandler) convertToWebP(w http.ResponseWriter, r *http.Request) {
+	if _, ok := h.authenticator.requireSession(w, r, true); !ok {
+		return
+	}
+	currentSettings, err := h.settings.Get(r.Context())
+	if err != nil {
+		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to read image processing settings.")
+		return
+	}
+	result, err := h.service.ConvertToWebP(r.Context(), chi.URLParam(r, "imageID"), processor.Options{
+		ConversionEnabled: true, ConversionWebPQuality: currentSettings.ConversionWebPQuality,
+		ConversionWebPLossless: currentSettings.ConversionWebPLossless,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, images.ErrImageNotFound):
+			writeError(w, r, http.StatusNotFound, "image_not_found", "Image was not found.")
+		case errors.Is(err, images.ErrConversionNotSupported):
+			writeError(w, r, http.StatusConflict, "conversion_not_supported", err.Error())
+		case errors.Is(err, images.ErrProcessingBusy):
+			w.Header().Set("Retry-After", "1")
+			writeError(w, r, http.StatusServiceUnavailable, "processing_busy", "Image processor is at capacity. Retry shortly.")
+		case errors.Is(err, images.ErrProcessingUnavailable):
+			writeError(w, r, http.StatusServiceUnavailable, "processing_unavailable", "Image byte processing is unavailable in this build.")
+		default:
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to convert image to WebP.")
+		}
+		return
+	}
+	if result.CleanupPending {
+		h.logger.Warn("image WebP conversion cleanup pending", "image_id", result.Image.ID, "original_file_error", result.OriginalFileError, "thumbnail_error", result.ThumbnailError)
+	}
+	writeJSON(w, http.StatusOK, conversionResponse{
+		Image: toImageResponse(result.Image), OriginalFileDeleted: result.OriginalFileDeleted,
+		ThumbnailUpdated: result.ThumbnailUpdated, CleanupPending: result.CleanupPending,
+	})
 }
 
 func (h *imageHandler) delete(w http.ResponseWriter, r *http.Request) {

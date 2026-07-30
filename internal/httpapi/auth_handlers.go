@@ -32,15 +32,21 @@ type loginRequest struct {
 }
 
 type sessionResponse struct {
-	AdminID   string    `json:"adminId"`
-	Email     string    `json:"email"`
-	CSRFToken string    `json:"csrfToken"`
-	ExpiresAt time.Time `json:"expiresAt"`
+	AdminID     string    `json:"adminId"`
+	DisplayName string    `json:"displayName"`
+	Email       string    `json:"email"`
+	CSRFToken   string    `json:"csrfToken"`
+	ExpiresAt   time.Time `json:"expiresAt"`
 }
 
 type changePasswordRequest struct {
 	CurrentPassword string `json:"currentPassword"`
 	NewPassword     string `json:"newPassword"`
+}
+
+type updateProfileRequest struct {
+	DisplayName string `json:"displayName"`
+	Email       string `json:"email"`
 }
 
 func newAuthHandler(service *auth.Service, authenticator *authenticator, cookieSecure bool) *authHandler {
@@ -153,6 +159,36 @@ func (h *authHandler) changePassword(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
+func (h *authHandler) updateProfile(w http.ResponseWriter, r *http.Request) {
+	principal, ok := h.authenticator.requireSession(w, r, true)
+	if !ok {
+		return
+	}
+	var request updateProfileRequest
+	if err := decodeJSON(w, r, &request); err != nil {
+		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid profile request.")
+		return
+	}
+	identity, err := h.service.UpdateProfile(r.Context(), *principal.Session, request.DisplayName, request.Email, time.Now())
+	if err != nil {
+		switch {
+		case errors.Is(err, auth.ErrInvalidDisplayName), errors.Is(err, auth.ErrInvalidEmail):
+			writeError(w, r, http.StatusBadRequest, "invalid_profile", err.Error())
+		case errors.Is(err, auth.ErrAdminExists):
+			writeError(w, r, http.StatusConflict, "email_conflict", "Administrator email is already in use.")
+		default:
+			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to update administrator profile.")
+		}
+		return
+	}
+	csrfCookie, err := r.Cookie(csrfCookieName)
+	if err != nil {
+		writeError(w, r, http.StatusUnauthorized, "invalid_session", "Administrator session is missing its CSRF token.")
+		return
+	}
+	writeJSON(w, http.StatusOK, toSessionResponse(identity, csrfCookie.Value))
+}
+
 func (h *authHandler) setSessionCookies(w http.ResponseWriter, token, csrfToken string, expiresAt time.Time) {
 	maxAge := int(expiresAt.Sub(time.Now()).Seconds())
 	http.SetCookie(w, &http.Cookie{
@@ -193,7 +229,7 @@ func (h *authHandler) clearSessionCookies(w http.ResponseWriter) {
 }
 
 func toSessionResponse(identity auth.SessionIdentity, csrfToken string) sessionResponse {
-	return sessionResponse{AdminID: identity.AdminID, Email: identity.Email, CSRFToken: csrfToken, ExpiresAt: identity.ExpiresAt}
+	return sessionResponse{AdminID: identity.AdminID, DisplayName: identity.DisplayName, Email: identity.Email, CSRFToken: csrfToken, ExpiresAt: identity.ExpiresAt}
 }
 
 func remoteAddress(r *http.Request) string {

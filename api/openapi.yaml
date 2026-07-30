@@ -28,6 +28,33 @@ paths:
                 $ref: '#/components/schemas/HealthResponse'
         '503':
           $ref: '#/components/responses/ServiceUnavailable'
+  /api/v1/setup/status:
+    get:
+      operationId: getSetupStatus
+      responses:
+        '200':
+          description: 是否已完成首次初始化
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/SetupStatus' }
+  /api/v1/setup:
+    post:
+      operationId: initializeImageSilo
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SetupRequest' }
+      responses:
+        '201':
+          description: 首次初始化完成并创建管理员 Session
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminSession' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/auth/login:
     post:
       operationId: login
@@ -98,6 +125,32 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+  /api/v1/auth/profile:
+    patch:
+      operationId: updateAdministratorProfile
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateProfileRequest' }
+      responses:
+        '200':
+          description: 管理员显示名称和邮箱已更新
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AdminSession' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
   /api/v1/images:
     get:
       operationId: listImages
@@ -304,6 +357,30 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+  /api/v1/images/{imageId}/convert-webp:
+    post:
+      operationId: convertImageToWebP
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/ImageId'
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '200':
+          description: 保持图片 ID 和 URL 不变，将现有 JPEG 或 PNG 原子替换为 WebP
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/WebPConversionResult' }
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/images/{imageId}/thumbnail:
     get:
       operationId: getImageThumbnail
@@ -735,11 +812,33 @@ components:
       properties:
         email: { type: string, format: email, maxLength: 254 }
         password: { type: string, minLength: 1, maxLength: 1024 }
+    SetupStatus:
+      type: object
+      required: [initialized]
+      properties:
+        initialized: { type: boolean }
+    SetupRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, email, password, defaultVisibility, compressionEnabled, jpegQuality, webpQuality, pngCompressionLevel, conversionEnabled, conversionWebpQuality, conversionWebpLossless]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        email: { type: string, format: email, maxLength: 254 }
+        password: { type: string, minLength: 12, maxLength: 1024 }
+        defaultVisibility: { $ref: '#/components/schemas/Visibility' }
+        compressionEnabled: { type: boolean }
+        jpegQuality: { type: integer, minimum: 1, maximum: 100 }
+        webpQuality: { type: integer, minimum: 1, maximum: 100 }
+        pngCompressionLevel: { type: integer, minimum: 0, maximum: 9 }
+        conversionEnabled: { type: boolean }
+        conversionWebpQuality: { type: integer, minimum: 1, maximum: 100 }
+        conversionWebpLossless: { type: boolean }
     AdminSession:
       type: object
-      required: [adminId, email, csrfToken, expiresAt]
+      required: [adminId, displayName, email, csrfToken, expiresAt]
       properties:
         adminId: { type: string, format: uuid }
+        displayName: { type: string }
         email: { type: string, format: email }
         csrfToken: { type: string, pattern: '^isc_[A-Za-z0-9_-]{43}$' }
         expiresAt: { type: string, format: date-time }
@@ -750,6 +849,13 @@ components:
       properties:
         currentPassword: { type: string, minLength: 1, maxLength: 1024 }
         newPassword: { type: string, minLength: 12, maxLength: 1024 }
+    UpdateProfileRequest:
+      type: object
+      additionalProperties: false
+      required: [displayName, email]
+      properties:
+        displayName: { type: string, minLength: 1, maxLength: 80 }
+        email: { type: string, format: email, maxLength: 254 }
     Image:
       type: object
       required: [id, originalName, mimeType, extension, width, height, sourceSize, storedSize, sourceSha256, storedSha256, processingSummary, visibility, uploadedVia, standardUrl, thumbnailUrl, createdAt]
@@ -794,6 +900,14 @@ components:
         imageId: { type: string, format: uuid }
         imageFileDeleted: { type: boolean }
         thumbnailDeleted: { type: boolean }
+        cleanupPending: { type: boolean }
+    WebPConversionResult:
+      type: object
+      required: [image, originalFileDeleted, thumbnailUpdated, cleanupPending]
+      properties:
+        image: { $ref: '#/components/schemas/Image' }
+        originalFileDeleted: { type: boolean }
+        thumbnailUpdated: { type: boolean }
         cleanupPending: { type: boolean }
     BatchImageRequest:
       type: object

@@ -14,6 +14,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
+	"github.com/Willxup/imagesilo/internal/setup"
 	"github.com/Willxup/imagesilo/internal/webui"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -32,6 +33,7 @@ type Dependencies struct {
 	Images                *images.Service
 	Importer              *importer.Service
 	Settings              *settings.Service
+	Setup                 *setup.Service
 	Maintenance           *maintenance.Service
 	DeliveryIndex         *delivery.Index
 	Storage               *storage.Filesystem
@@ -59,12 +61,19 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		writeJSON(w, http.StatusOK, healthResponse{Status: "ready"})
 	})
 
+	var authHandler *authHandler
 	if dependencies.Auth != nil {
-		authHandler := newAuthHandler(dependencies.Auth, authenticator, dependencies.CookieSecure)
+		authHandler = newAuthHandler(dependencies.Auth, authenticator, dependencies.CookieSecure)
 		router.Post("/api/v1/auth/login", authHandler.login)
 		router.Get("/api/v1/auth/session", authHandler.current)
 		router.Post("/api/v1/auth/logout", authHandler.logout)
 		router.Post("/api/v1/auth/password", authHandler.changePassword)
+		router.Patch("/api/v1/auth/profile", authHandler.updateProfile)
+	}
+	if dependencies.Setup != nil && authHandler != nil {
+		setupHandler := newSetupHandler(dependencies.Setup, authHandler)
+		router.Get("/api/v1/setup/status", setupHandler.status)
+		router.Post("/api/v1/setup", setupHandler.initialize)
 	}
 	if dependencies.APITokens != nil && dependencies.Auth != nil {
 		tokenHandler := newAPITokenHandler(dependencies.APITokens, authenticator)
@@ -89,6 +98,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Delete("/api/v1/images/{imageID}", imageHandler.delete)
 		router.Get("/api/v1/images/{imageID}/thumbnail", imageHandler.thumbnail)
 		router.Patch("/api/v1/images/{imageID}/visibility", imageHandler.changeVisibility)
+		router.Post("/api/v1/images/{imageID}/convert-webp", imageHandler.convertToWebP)
 	}
 	if dependencies.Importer != nil && dependencies.Auth != nil && dependencies.Settings != nil {
 		importHandler := newImportHandler(dependencies.Importer, dependencies.Settings, authenticator)
@@ -115,6 +125,9 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Head("/image/{imageID}", imageDelivery.serve)
 	}
 	if dependencies.UI != nil {
+		router.Get("/", func(w http.ResponseWriter, r *http.Request) {
+			http.Redirect(w, r, "/admin", http.StatusTemporaryRedirect)
+		})
 		router.Handle("/assets/*", dependencies.UI.Assets())
 		router.Handle("/brand/*", dependencies.UI.Assets())
 		router.Get("/admin", dependencies.UI.ServeIndex)

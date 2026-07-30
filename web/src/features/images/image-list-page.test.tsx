@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
 import { apiRequest } from '../../lib/api-client'
@@ -36,7 +36,10 @@ const image = {
 } as Image
 
 describe('ImageListPage', () => {
+  afterEach(cleanup)
+
   beforeEach(() => {
+    vi.mocked(apiRequest).mockReset()
     vi.mocked(apiRequest).mockResolvedValue({ items: [image] } as ImageList)
   })
 
@@ -57,6 +60,30 @@ describe('ImageListPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
     await waitFor(() => {
       expect(vi.mocked(apiRequest).mock.calls.some(([path]) => String(path).includes('q=legacy%2Fsample'))).toBe(true)
+    })
+  })
+
+  it('animates and highlights advanced filters and submits the shared date picker value', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ImageListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await screen.findByRole('img', { name: 'sample.jpg' })
+
+    const advanced = screen.getByRole('button', { name: '高级筛选' })
+    fireEvent.click(advanced)
+    expect(advanced).toHaveAttribute('aria-expanded', 'true')
+    expect(advanced).toHaveAttribute('data-open', 'true')
+
+    fireEvent.click(screen.getByRole('button', { name: '开始日期' }))
+    fireEvent.click(screen.getByRole('button', { name: '今天' }))
+    fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
+    await waitFor(() => {
+      expect(vi.mocked(apiRequest).mock.calls.some(([path]) => String(path).includes('createdFrom='))).toBe(true)
     })
   })
 })

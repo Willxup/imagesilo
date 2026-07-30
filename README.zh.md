@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="./assets/brand/imagesilo-logo-card.png" alt="ImageSilo" width="560" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/imagesilo-logo-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/brand/imagesilo-logo-card.png" />
+    <img src="./assets/brand/imagesilo-logo-card.png" alt="ImageSilo" width="560" />
+  </picture>
 </p>
 
 <p align="center">
@@ -25,7 +29,7 @@ ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 
 
 - 严格解码 JPEG、PNG、WebP 和 GIF，并设置 16 MP 像素安全边界
 - 默认保持原始字节，也可明确压缩或将静态图片转换为 WebP
-- 标准公开 URL 和历史别名支持 Range、ETag、条件请求与 HEAD
+- 标准公开 URL、历史别名和保留路径的迁移文件支持 Range、条件请求与 HEAD
 - 图片交付热路径完全使用内存索引，每次读取不查询 SQLite
 - 支持公开/私密可见性、管理员 Session、CSRF、防登录爆破和分 Scope API Token
 - 内置管理界面可上传、搜索、筛选、查看详情、批量修改和永久删除图片
@@ -42,11 +46,6 @@ export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.1
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
 
-docker run --rm --interactive --tty \
-  --volume imagesilo-data:/data \
-  "$IMAGESILO_IMAGE" \
-  admin create --email admin@example.com
-
 docker run --detach \
   --name imagesilo \
   --restart unless-stopped \
@@ -57,9 +56,11 @@ docker run --detach \
   "$IMAGESILO_IMAGE"
 ```
 
-打开 `http://127.0.0.1:8080/admin/login`，使用刚创建的管理员账号登录。
+首次启动后打开 `http://127.0.0.1:8080/admin/setup`，在一次性初始化页面中创建管理员账号，并保存默认可见性与图片处理策略。自动化部署仍可使用 `imagesilo admin create` 命令。
 
 生产环境应在反向代理终止 HTTPS、保持 `IMAGESILO_COOKIE_SECURE=true`，并在停止写入时完整备份 `/data`。对外开放前请先阅读[部署指南](./docs/deployment.md)。
+
+如果需要完整保留旧图床的 URL 目录树，可以将原目录只读挂载到 `/data/migrations`，无需逐条创建历史路径。例如 `/data/migrations/i/2022/04/example.jpg` 会直接通过 `/i/2022/04/example.jpg` 访问。相同路径同时存在时，后台管理的历史路径映射优先；该目录只公开 JPEG、PNG、WebP 和 GIF 文件。
 
 ## 设计边界
 
@@ -68,6 +69,7 @@ docker run --detach \
 | 运行时 | 一个容器内的单个 Go 进程 |
 | 元数据 | `/data/db` 中的 SQLite |
 | 图片 | `/data/images` 中的本地文件 |
+| 保留路径迁移 | `/data/migrations` 中的只读图片目录树 |
 | 缓存 | `/data/cache` 中的本地缩略图 |
 | 图片处理 | libvips，默认并发 `1` |
 | 平台 | `linux/amd64`、`linux/arm64` |

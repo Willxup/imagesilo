@@ -22,6 +22,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
+	"github.com/Willxup/imagesilo/internal/setup"
 	"github.com/Willxup/imagesilo/internal/webui"
 )
 
@@ -73,6 +74,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	importService := importer.NewService(importer.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
 	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
 	settingsService := settings.NewService(settings.NewRepository(db))
+	setupService := setup.NewService(db)
 	currentSettings, err := settingsService.Get(ctx)
 	if err != nil {
 		cancel()
@@ -98,6 +100,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		Images:                imageService,
 		Importer:              importService,
 		Settings:              settingsService,
+		Setup:                 setupService,
 		Maintenance:           maintenanceService,
 		DeliveryIndex:         deliveryIndex,
 		Storage:               filesystem,

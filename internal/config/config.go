@@ -87,6 +87,7 @@ func (c Config) PrepareDataDirectories() error {
 	for _, path := range []string{
 		filepath.Join(c.DataDirectory, "db"),
 		filepath.Join(c.DataDirectory, "images"),
+		filepath.Join(c.DataDirectory, "migrations"),
 		filepath.Join(c.DataDirectory, "cache", "thumbnails"),
 		filepath.Join(c.DataDirectory, "tmp"),
 	} {

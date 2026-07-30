@@ -5,9 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"net/mail"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/Willxup/imagesilo/db/migrations"
@@ -30,7 +28,7 @@ func admin(args []string) error {
 	if err := flags.Parse(args[1:]); err != nil {
 		return err
 	}
-	normalizedEmail, err := normalizeEmail(*email)
+	normalizedEmail, err := auth.NormalizeEmail(*email)
 	if err != nil {
 		return err
 	}
@@ -67,6 +65,7 @@ func admin(args []string) error {
 	now := time.Now().UTC()
 	if err := auth.NewRepository(db).CreateAdmin(context.Background(), auth.Admin{
 		ID:           id.String(),
+		DisplayName:  "ImageSilo",
 		Email:        normalizedEmail,
 		PasswordHash: passwordHash,
 		CreatedAt:    now,
@@ -76,15 +75,6 @@ func admin(args []string) error {
 	}
 	fmt.Fprintf(os.Stdout, "administrator created for %s\n", normalizedEmail)
 	return nil
-}
-
-func normalizeEmail(raw string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(raw))
-	address, err := mail.ParseAddress(normalized)
-	if err != nil || address.Address != normalized {
-		return "", fmt.Errorf("invalid administrator email address")
-	}
-	return normalized, nil
 }
 
 func readNewPassword(fromStdin bool) (string, error) {

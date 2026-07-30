@@ -121,6 +121,101 @@ func TestDeliveryRangeConditionalHeadAndConcurrentReads(t *testing.T) {
 	}
 }
 
+func TestDeliveryServesMigrationDirectoryAsPublicPathFallback(t *testing.T) {
+	dataDirectory := t.TempDir()
+	for _, directory := range []string{"images", "tmp", filepath.Join("migrations", "i", "2022", "04")} {
+		if err := os.MkdirAll(filepath.Join(dataDirectory, directory), 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", directory, err)
+		}
+	}
+	migrationContent := []byte("mounted-migration-image")
+	migrationPath := filepath.Join(dataDirectory, "migrations", "i", "2022", "04", "sample.jpg")
+	if err := os.WriteFile(migrationPath, migrationContent, 0o640); err != nil {
+		t.Fatalf("WriteFile(migration) error = %v", err)
+	}
+
+	index := delivery.NewIndex()
+	router := NewRouter(Dependencies{
+		DeliveryIndex: index,
+		Storage:       storage.NewFilesystem(dataDirectory),
+		Logger:        slog.New(slog.DiscardHandler),
+	})
+
+	response := deliveryRequest(router, http.MethodGet, "/i/2022/04/sample.jpg", nil)
+	if response.Code != http.StatusOK || response.Body.String() != string(migrationContent) {
+		t.Fatalf("migration response = %d %q", response.Code, response.Body.String())
+	}
+	if response.Header().Get("Content-Type") != "image/jpeg" || response.Header().Get("Location") != "" {
+		t.Fatalf("migration headers Content-Type = %q, Location = %q", response.Header().Get("Content-Type"), response.Header().Get("Location"))
+	}
+	ranged := deliveryRequest(router, http.MethodGet, "/i/2022/04/sample.jpg", map[string]string{"Range": "bytes=0-6"})
+	if ranged.Code != http.StatusPartialContent || ranged.Body.String() != string(migrationContent[:7]) {
+		t.Fatalf("migration range = %d %q", ranged.Code, ranged.Body.String())
+	}
+	head := deliveryRequest(router, http.MethodHead, "/i/2022/04/sample.jpg", nil)
+	if head.Code != http.StatusOK || head.Body.Len() != 0 || head.Header().Get("Content-Length") != strconv.Itoa(len(migrationContent)) {
+		t.Fatalf("migration HEAD = %d, body = %d, Content-Length = %q", head.Code, head.Body.Len(), head.Header().Get("Content-Length"))
+	}
+}
+
+func TestDeliveryMigrationFallbackRejectsUnsafeAndNonImageFiles(t *testing.T) {
+	dataDirectory := t.TempDir()
+	migrationsDirectory := filepath.Join(dataDirectory, "migrations")
+	if err := os.MkdirAll(migrationsDirectory, 0o750); err != nil {
+		t.Fatalf("MkdirAll(migrations): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(migrationsDirectory, "notes.txt"), []byte("not public"), 0o640); err != nil {
+		t.Fatalf("WriteFile(notes): %v", err)
+	}
+	outsidePath := filepath.Join(dataDirectory, "outside.jpg")
+	if err := os.WriteFile(outsidePath, []byte("outside"), 0o640); err != nil {
+		t.Fatalf("WriteFile(outside): %v", err)
+	}
+	if err := os.Symlink(outsidePath, filepath.Join(migrationsDirectory, "escape.jpg")); err != nil {
+		t.Skipf("Symlink unavailable: %v", err)
+	}
+
+	router := NewRouter(Dependencies{
+		DeliveryIndex: delivery.NewIndex(),
+		Storage:       storage.NewFilesystem(dataDirectory),
+		Logger:        slog.New(slog.DiscardHandler),
+	})
+	for _, requestPath := range []string{"/notes.txt", "/escape.jpg", "/%2e%2e/outside.jpg"} {
+		response := deliveryRequest(router, http.MethodGet, requestPath, nil)
+		if response.Code != http.StatusNotFound {
+			t.Fatalf("GET %s status = %d, want %d", requestPath, response.Code, http.StatusNotFound)
+		}
+	}
+}
+
+func TestDeliveryAliasTakesPrecedenceOverMigrationFile(t *testing.T) {
+	dataDirectory := t.TempDir()
+	for _, directory := range []string{"images", "tmp", filepath.Join("migrations", "legacy")} {
+		if err := os.MkdirAll(filepath.Join(dataDirectory, directory), 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", directory, err)
+		}
+	}
+	const imageID = "019c1234-5678-7abc-8def-0123456789ab"
+	aliasContent := []byte("managed-alias")
+	if err := os.WriteFile(filepath.Join(dataDirectory, "images", imageID), aliasContent, 0o640); err != nil {
+		t.Fatalf("WriteFile(alias target): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDirectory, "migrations", "legacy", "sample.jpg"), []byte("migration-file"), 0o640); err != nil {
+		t.Fatalf("WriteFile(migration): %v", err)
+	}
+	index := delivery.NewIndex()
+	index.Add(imageID, delivery.Target{
+		StorageKey: imageID, MIMEType: "image/jpeg", ETag: `"alias"`, Size: int64(len(aliasContent)),
+		LastModified: time.Unix(1_700_000_000, 0).UTC(), Visibility: "public", OriginalName: "sample.jpg",
+	})
+	index.AddAlias("/legacy/sample.jpg", imageID)
+	router := NewRouter(Dependencies{DeliveryIndex: index, Storage: storage.NewFilesystem(dataDirectory), Logger: slog.New(slog.DiscardHandler)})
+	response := deliveryRequest(router, http.MethodGet, "/legacy/sample.jpg", nil)
+	if response.Code != http.StatusOK || response.Body.String() != string(aliasContent) {
+		t.Fatalf("alias precedence response = %d %q", response.Code, response.Body.String())
+	}
+}
+
 func newDeliveryTestRouter(t *testing.T, content []byte) (http.Handler, string) {
 	t.Helper()
 	dataDirectory := t.TempDir()

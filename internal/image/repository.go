@@ -18,12 +18,15 @@ func NewRepository(db *sql.DB) *Repository {
 }
 
 func (r *Repository) Create(ctx context.Context, image Image) error {
+	if image.UpdatedAt.IsZero() {
+		image.UpdatedAt = image.CreatedAt
+	}
 	_, err := r.db.ExecContext(ctx, `
 		INSERT INTO images(
 			id, original_name, storage_key, extension, mime_type, width, height,
 			source_size, stored_size, source_sha256, stored_sha256, processing_summary,
-			visibility, uploaded_via, uploaded_by_api_token_id, created_at
-		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			visibility, uploaded_via, uploaded_by_api_token_id, created_at, updated_at
+		) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		image.ID,
 		image.OriginalName,
 		image.StorageKey,
@@ -40,6 +43,7 @@ func (r *Repository) Create(ctx context.Context, image Image) error {
 		image.UploadedVia,
 		image.UploadedByAPITokenID,
 		image.CreatedAt.Unix(),
+		image.UpdatedAt.Unix(),
 	)
 	if err != nil {
 		return fmt.Errorf("create image record: %w", err)
@@ -74,7 +78,7 @@ func (r *Repository) ListFiltered(ctx context.Context, filter repositoryListFilt
 	query.WriteString(`
 		SELECT id, original_name, storage_key, extension, mime_type, width, height,
 		       source_size, stored_size, source_sha256, stored_sha256, processing_summary,
-		       visibility, uploaded_via, uploaded_by_api_token_id, created_at
+		       visibility, uploaded_via, uploaded_by_api_token_id, created_at, updated_at
 		FROM images WHERE 1 = 1`)
 	args := make([]any, 0, 20)
 	if filter.BeforeID != "" {
@@ -140,7 +144,7 @@ func (r *Repository) Get(ctx context.Context, id string) (Image, error) {
 	value, err := scanImage(r.db.QueryRowContext(ctx, `
 		SELECT id, original_name, storage_key, extension, mime_type, width, height,
 		       source_size, stored_size, source_sha256, stored_sha256, processing_summary,
-		       visibility, uploaded_via, uploaded_by_api_token_id, created_at
+		       visibility, uploaded_via, uploaded_by_api_token_id, created_at, updated_at
 		FROM images WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Image{}, ErrImageNotFound
@@ -153,7 +157,7 @@ func (r *Repository) Delete(ctx context.Context, id string) (Image, error) {
 		DELETE FROM images WHERE id = ?
 		RETURNING id, original_name, storage_key, extension, mime_type, width, height,
 		          source_size, stored_size, source_sha256, stored_sha256, processing_summary,
-		          visibility, uploaded_via, uploaded_by_api_token_id, created_at`, id))
+		          visibility, uploaded_via, uploaded_by_api_token_id, created_at, updated_at`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Image{}, ErrImageNotFound
 	}
@@ -172,6 +176,25 @@ func (r *Repository) UpdateVisibility(ctx context.Context, id string, visibility
 	return updated == 1, nil
 }
 
+func (r *Repository) UpdateContent(ctx context.Context, value Image) (bool, error) {
+	result, err := r.db.ExecContext(ctx, `
+		UPDATE images SET
+			original_name = ?, storage_key = ?, extension = ?, mime_type = ?, width = ?, height = ?,
+			stored_size = ?, stored_sha256 = ?, processing_summary = ?, updated_at = ?
+		WHERE id = ?`,
+		value.OriginalName, value.StorageKey, value.Extension, value.MIMEType, value.Width, value.Height,
+		value.StoredSize, value.StoredSHA256[:], value.ProcessingSummary, value.UpdatedAt.Unix(), value.ID,
+	)
+	if err != nil {
+		return false, fmt.Errorf("update image content: %w", err)
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("count image content update: %w", err)
+	}
+	return updated == 1, nil
+}
+
 type rowScanner interface {
 	Scan(dest ...any) error
 }
@@ -179,7 +202,7 @@ type rowScanner interface {
 func scanImage(row rowScanner) (Image, error) {
 	var value Image
 	var sourceHash, storedHash []byte
-	var createdAt int64
+	var createdAt, updatedAt int64
 	if err := row.Scan(
 		&value.ID,
 		&value.OriginalName,
@@ -197,6 +220,7 @@ func scanImage(row rowScanner) (Image, error) {
 		&value.UploadedVia,
 		&value.UploadedByAPITokenID,
 		&createdAt,
+		&updatedAt,
 	); err != nil {
 		return Image{}, fmt.Errorf("scan image: %w", err)
 	}
@@ -206,6 +230,7 @@ func scanImage(row rowScanner) (Image, error) {
 	copy(value.SourceSHA256[:], sourceHash)
 	copy(value.StoredSHA256[:], storedHash)
 	value.CreatedAt = time.Unix(createdAt, 0).UTC()
+	value.UpdatedAt = time.Unix(updatedAt, 0).UTC()
 	return value, nil
 }
 

@@ -172,6 +172,7 @@ func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName str
 		UploadedVia:          options.UploadedVia,
 		UploadedByAPITokenID: options.UploadedByAPITokenID,
 		CreatedAt:            now.UTC(),
+		UpdatedAt:            now.UTC(),
 	}
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
@@ -184,7 +185,7 @@ func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName str
 		MIMEType:     value.MIMEType,
 		ETag:         fmt.Sprintf("\"%x\"", value.StoredSHA256),
 		Size:         value.StoredSize,
-		LastModified: value.CreatedAt,
+		LastModified: value.UpdatedAt,
 		Visibility:   string(value.Visibility),
 		OriginalName: value.OriginalName,
 	})
@@ -425,6 +426,162 @@ func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Vi
 	}
 	s.index.UpdateVisibility(id, string(visibility))
 	return true, nil
+}
+
+func (s *Service) ConvertToWebP(ctx context.Context, id string, options processor.Options) (ConversionResult, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil || parsed.String() != id {
+		return ConversionResult{}, ErrImageNotFound
+	}
+	release, ok := s.gate.TryAcquire()
+	if !ok {
+		return ConversionResult{}, ErrProcessingBusy
+	}
+	defer release()
+	defer processor.TrimMemory()
+
+	value, err := s.repository.Get(ctx, id)
+	if err != nil {
+		return ConversionResult{}, err
+	}
+	if value.MIMEType != "image/jpeg" && value.MIMEType != "image/png" {
+		return ConversionResult{}, ErrConversionNotSupported
+	}
+	sourcePath, err := s.storage.ImagePath(value.StorageKey)
+	if err != nil {
+		return ConversionResult{}, err
+	}
+	limits := processor.Limits{MaxBytes: value.StoredSize, MaxTotalPixels: int64(value.Width) * int64(value.Height)}
+	sourceMetadata, err := processor.InspectFile(ctx, sourcePath, limits)
+	if err != nil {
+		return ConversionResult{}, mapProcessorError(err)
+	}
+	output, err := s.storage.CreateTemporary()
+	if err != nil {
+		return ConversionResult{}, err
+	}
+	outputPath := output.Name()
+	if err := output.Close(); err != nil {
+		s.storage.RemoveTemporary(outputPath)
+		return ConversionResult{}, err
+	}
+	defer s.storage.RemoveTemporary(outputPath)
+	options.ConversionEnabled = true
+	plan := processor.Plan{Action: processor.ActionConvert, OutputFormat: processor.FormatWebP}
+	if err := s.processor.Transform(sourcePath, outputPath, sourceMetadata, options, plan); err != nil {
+		return ConversionResult{}, mapProcessorError(err)
+	}
+	metadata, err := processor.InspectFile(ctx, outputPath, processor.Limits{MaxBytes: value.StoredSize * 4, MaxTotalPixels: limits.MaxTotalPixels})
+	if err != nil || metadata.Format != processor.FormatWebP || metadata.Width != value.Width || metadata.Height != value.Height {
+		if err == nil {
+			err = processor.ErrInvalidImage
+		}
+		return ConversionResult{}, mapProcessorError(err)
+	}
+	storedSize, storedDigest, err := hashFile(outputPath)
+	if err != nil {
+		return ConversionResult{}, err
+	}
+
+	thumbnail, err := s.storage.CreateTemporary()
+	if err != nil {
+		return ConversionResult{}, err
+	}
+	thumbnailPath := thumbnail.Name()
+	if err := thumbnail.Close(); err != nil {
+		s.storage.RemoveTemporary(thumbnailPath)
+		return ConversionResult{}, err
+	}
+	defer func() {
+		if thumbnailPath != "" {
+			_ = s.storage.RemoveTemporary(thumbnailPath)
+		}
+	}()
+	if err := s.processor.Thumbnail(outputPath, thumbnailPath); err != nil {
+		if !errors.Is(err, processor.ErrUnavailable) {
+			return ConversionResult{}, err
+		}
+		thumbnailPath = ""
+	}
+
+	storageID, err := uuid.NewV7()
+	if err != nil {
+		return ConversionResult{}, fmt.Errorf("generate replacement storage key: %w", err)
+	}
+	newStorageKey := storageID.String()
+	if _, err := s.storage.CommitTemporary(outputPath, newStorageKey); err != nil {
+		return ConversionResult{}, err
+	}
+	databaseCommitted := false
+	defer func() {
+		if !databaseCommitted {
+			_ = s.storage.Remove(newStorageKey)
+		}
+	}()
+
+	summaryBytes, err := json.Marshal(processingSummary{
+		Action: processor.ActionConvert, SourceFormat: sourceMetadata.Format, StoredFormat: processor.FormatWebP,
+		Preserved: false, ConversionEnabled: true,
+	})
+	if err != nil {
+		return ConversionResult{}, err
+	}
+	oldStorageKey := value.StorageKey
+	value.OriginalName = replaceExtension(value.OriginalName, metadata.Extension)
+	value.StorageKey = newStorageKey
+	value.Extension = metadata.Extension
+	value.MIMEType = metadata.MIMEType
+	value.Width = metadata.Width
+	value.Height = metadata.Height
+	value.StoredSize = storedSize
+	value.StoredSHA256 = storedDigest
+	value.ProcessingSummary = string(summaryBytes)
+	value.UpdatedAt = time.Now().UTC()
+
+	releaseChange := s.barrier.BeginChange()
+	updated, err := s.repository.UpdateContent(ctx, value)
+	if err != nil || !updated {
+		releaseChange()
+		if err == nil {
+			err = ErrImageNotFound
+		}
+		return ConversionResult{}, err
+	}
+	databaseCommitted = true
+	s.index.Add(value.ID, delivery.Target{
+		StorageKey:   value.StorageKey,
+		MIMEType:     value.MIMEType,
+		ETag:         fmt.Sprintf("\"%x\"", value.StoredSHA256),
+		Size:         value.StoredSize,
+		LastModified: value.UpdatedAt,
+		Visibility:   string(value.Visibility),
+		OriginalName: value.OriginalName,
+	})
+	releaseChange()
+
+	result := ConversionResult{Image: value, OriginalFileDeleted: true, ThumbnailUpdated: thumbnailPath == ""}
+	if thumbnailPath != "" {
+		if err := s.storage.CommitThumbnailTemporary(thumbnailPath, value.ID); err != nil {
+			result.ThumbnailError = err
+		} else {
+			result.ThumbnailUpdated = true
+			thumbnailPath = ""
+		}
+	}
+	if err := s.storage.Remove(oldStorageKey); err != nil {
+		result.OriginalFileDeleted = false
+		result.OriginalFileError = err
+	}
+	result.CleanupPending = !result.OriginalFileDeleted || !result.ThumbnailUpdated
+	return result, nil
+}
+
+func replaceExtension(name, extension string) string {
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	if base == "" {
+		base = "image"
+	}
+	return SanitizeOriginalName(base + extension)
 }
 
 func SanitizeOriginalName(name string) string {

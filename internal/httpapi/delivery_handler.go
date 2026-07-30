@@ -3,6 +3,9 @@ package httpapi
 import (
 	"mime"
 	"net/http"
+	"net/url"
+	"path"
+	"strings"
 
 	"github.com/Willxup/imagesilo/internal/delivery"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
@@ -48,11 +51,51 @@ func (h *deliveryHandler) serveAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	target, ok := h.index.GetAlias(path)
-	if !ok {
-		http.NotFound(w, r)
+	if ok {
+		h.serveTarget(w, r, target)
 		return
 	}
-	h.serveTarget(w, r, target)
+	if h.serveMigration(w, r, path) {
+		return
+	}
+	http.NotFound(w, r)
+}
+
+func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request, canonicalPath string) bool {
+	decoded, err := url.PathUnescape(canonicalPath)
+	if err != nil {
+		return false
+	}
+	relativePath := strings.TrimPrefix(decoded, "/")
+	mimeType, ok := migrationMIMETypes[strings.ToLower(path.Ext(relativePath))]
+	if !ok {
+		return false
+	}
+	file, err := h.storage.OpenMigration(relativePath)
+	if err != nil {
+		return false
+	}
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+
+	w.Header().Set("Content-Type", mimeType)
+	w.Header().Set("Cache-Control", "public, no-cache")
+	if disposition := mime.FormatMediaType("inline", map[string]string{"filename": path.Base(relativePath)}); disposition != "" {
+		w.Header().Set("Content-Disposition", disposition)
+	}
+	http.ServeContent(w, r, path.Base(relativePath), info.ModTime(), file)
+	return true
+}
+
+var migrationMIMETypes = map[string]string{
+	".gif":  "image/gif",
+	".jpeg": "image/jpeg",
+	".jpg":  "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
 }
 
 func (h *deliveryHandler) rejectURLToken(w http.ResponseWriter, r *http.Request) bool {

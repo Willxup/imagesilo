@@ -23,7 +23,9 @@ type Snapshot struct {
 
 func Build(ctx context.Context, db *sql.DB, filesystem *storage.Filesystem) (Snapshot, LoadResult, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT id, storage_key, mime_type, stored_sha256, stored_size, created_at, visibility, original_name
+		SELECT id, storage_key, mime_type, stored_sha256, stored_size,
+		       CASE WHEN updated_at > 0 THEN updated_at ELSE created_at END,
+		       visibility, original_name
 		FROM images ORDER BY id`)
 	if err != nil {
 		return Snapshot{}, LoadResult{}, fmt.Errorf("load delivery targets: %w", err)

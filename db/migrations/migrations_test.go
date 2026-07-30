@@ -25,8 +25,8 @@ func TestApplyIsIdempotent(t *testing.T) {
 	if err := db.QueryRow("SELECT count(*) FROM schema_migrations").Scan(&count); err != nil {
 		t.Fatalf("count migrations: %v", err)
 	}
-	if count != 4 {
-		t.Fatalf("migration count = %d, want 4", count)
+	if count != 6 {
+		t.Fatalf("migration count = %d, want 6", count)
 	}
 	var maxTotalPixels int64
 	if err := db.QueryRow("SELECT max_total_pixels FROM app_settings WHERE singleton = 1").Scan(&maxTotalPixels); err != nil {
@@ -34,6 +34,16 @@ func TestApplyIsIdempotent(t *testing.T) {
 	}
 	if maxTotalPixels != 16_000_000 {
 		t.Fatalf("max_total_pixels = %d, want 16000000", maxTotalPixels)
+	}
+	var displayName string
+	if _, err := db.Exec(`INSERT INTO admin(id, email, password_hash, created_at, updated_at) VALUES ('admin', 'admin@example.com', 'hash', 1, 1)`); err != nil {
+		t.Fatalf("insert migrated administrator: %v", err)
+	}
+	if err := db.QueryRow("SELECT display_name FROM admin WHERE id = 'admin'").Scan(&displayName); err != nil {
+		t.Fatalf("read display_name: %v", err)
+	}
+	if displayName != "ImageSilo" {
+		t.Fatalf("display_name = %q, want ImageSilo", displayName)
 	}
 }
 

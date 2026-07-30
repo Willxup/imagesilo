@@ -135,6 +135,44 @@ func TestAnimatedGIFAlwaysPreservesFrames(t *testing.T) {
 	}
 }
 
+func TestConvertToWebPReplacesStoredContentAndKeepsImageIdentity(t *testing.T) {
+	engine := &fakeEngine{transform: func(_, outputPath string, plan processor.Plan) error {
+		if plan.Action != processor.ActionConvert || plan.OutputFormat != processor.FormatWebP {
+			return errors.New("unexpected conversion plan")
+		}
+		return os.WriteFile(outputPath, onePixelWebP(t), 0o600)
+	}}
+	service, filesystem, _, closeDB := newProcessingTestService(t, engine)
+	defer closeDB()
+	value, err := service.Upload(context.Background(), bytes.NewReader(onePixelJPEG(t)), "existing.jpg", processingUploadOptions(processor.Options{}), time.Now())
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	oldStorageKey := value.StorageKey
+	result, err := service.ConvertToWebP(context.Background(), value.ID, processor.Options{ConversionWebPQuality: 82})
+	if err != nil {
+		t.Fatalf("ConvertToWebP() error = %v", err)
+	}
+	if result.Image.ID != value.ID || result.Image.MIMEType != "image/webp" || result.Image.Extension != ".webp" || result.Image.OriginalName != "existing.webp" {
+		t.Fatalf("converted image = %+v", result.Image)
+	}
+	if result.Image.StorageKey == oldStorageKey || result.CleanupPending {
+		t.Fatalf("conversion result = %+v", result)
+	}
+	if old, err := filesystem.Open(oldStorageKey); err == nil {
+		old.Close()
+		t.Fatal("old stored file still exists")
+	}
+	stored, err := filesystem.Open(result.Image.StorageKey)
+	if err != nil {
+		t.Fatalf("Open(new stored image) error = %v", err)
+	}
+	stored.Close()
+	if _, err := service.ConvertToWebP(context.Background(), value.ID, processor.Options{ConversionWebPQuality: 82}); !errors.Is(err, ErrConversionNotSupported) {
+		t.Fatalf("second ConvertToWebP() error = %v", err)
+	}
+}
+
 func TestFullProcessingGateAndInvalidImageLeaveNoTemporaryFiles(t *testing.T) {
 	dataDirectory := prepareUploadTestData(t)
 	db, err := database.Open(filepath.Join(dataDirectory, "db", "imagesilo.db"))

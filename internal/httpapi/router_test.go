@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/Willxup/imagesilo/internal/platform/database"
+	"github.com/Willxup/imagesilo/internal/webui"
 )
 
 func TestHealthRoutes(t *testing.T) {
@@ -25,5 +26,24 @@ func TestHealthRoutes(t *testing.T) {
 		if response.Code != http.StatusOK {
 			t.Fatalf("GET %s status = %d, want %d", path, response.Code, http.StatusOK)
 		}
+	}
+}
+
+func TestRootRedirectsToAdmin(t *testing.T) {
+	ui, err := webui.New()
+	if err != nil {
+		t.Fatalf("webui.New() error = %v", err)
+	}
+
+	router := NewRouter(Dependencies{UI: ui})
+	request := httptest.NewRequest(http.MethodGet, "/", nil)
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+
+	if response.Code != http.StatusTemporaryRedirect {
+		t.Fatalf("GET / status = %d, want %d", response.Code, http.StatusTemporaryRedirect)
+	}
+	if location := response.Header().Get("Location"); location != "/admin" {
+		t.Fatalf("GET / Location = %q, want %q", location, "/admin")
 	}
 }

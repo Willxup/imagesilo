@@ -1,5 +1,9 @@
 <p align="center">
-  <img src="./assets/brand/imagesilo-logo-card.png" alt="ImageSilo" width="560" />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/brand/imagesilo-logo-dark.svg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/brand/imagesilo-logo-card.png" />
+    <img src="./assets/brand/imagesilo-logo-card.png" alt="ImageSilo" width="560" />
+  </picture>
 </p>
 
 <p align="center">
@@ -25,7 +29,7 @@ ImageSilo is a Docker-first image host built as one Go process with SQLite and l
 
 - Store JPEG, PNG, WebP, and GIF images with strict decoding and a 16 MP safety limit
 - Preserve original bytes or explicitly compress and convert static images to WebP
-- Deliver public images and historical aliases with Range, ETag, conditional request, and HEAD support
+- Deliver public images, historical aliases, and path-preserving migration files with Range, conditional request, and HEAD support
 - Keep the delivery hot path in memory, with no SQLite lookup per image request
 - Manage public/private visibility, administrator sessions, CSRF protection, login rate limits, and scoped API tokens
 - Upload, search, filter, inspect, batch-update, and permanently delete images from the built-in web interface
@@ -42,11 +46,6 @@ export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.1
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
 
-docker run --rm --interactive --tty \
-  --volume imagesilo-data:/data \
-  "$IMAGESILO_IMAGE" \
-  admin create --email admin@example.com
-
 docker run --detach \
   --name imagesilo \
   --restart unless-stopped \
@@ -57,9 +56,11 @@ docker run --detach \
   "$IMAGESILO_IMAGE"
 ```
 
-Open `http://127.0.0.1:8080/admin/login`, then sign in with the administrator account you created.
+Open `http://127.0.0.1:8080/admin/setup` on the first launch. The one-time setup page creates the administrator account and saves the initial visibility and processing policy. The `imagesilo admin create` command remains available for scripted deployments.
 
 For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECURE=true`, and back up the complete `/data` directory while writes are stopped. See the [deployment guide](./docs/deployment.md) before exposing the service.
+
+To preserve an existing image URL tree without creating one alias at a time, mount it read-only at `/data/migrations`. A file mounted as `/data/migrations/i/2022/04/example.jpg` is immediately available at `/i/2022/04/example.jpg`. Managed historical aliases take precedence when both sources contain the same path; only JPEG, PNG, WebP, and GIF files are exposed.
 
 ## Design Boundaries
 
@@ -68,6 +69,7 @@ For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECUR
 | Runtime | One Go process in one container |
 | Metadata | SQLite in `/data/db` |
 | Images | Local files in `/data/images` |
+| Path-preserving migrations | Read-only image tree in `/data/migrations` |
 | Cache | Local thumbnails in `/data/cache` |
 | Processing | libvips, concurrency `1` by default |
 | Platforms | `linux/amd64`, `linux/arm64` |

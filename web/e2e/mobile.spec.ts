@@ -7,8 +7,9 @@ test('mobile administrator can login, upload, manage, and copy a link', async ({
   const imageName = 'mobile-e2e.webp'
   await uploadTinyImage(page, imageName)
 
-  await page.getByRole('link', { name: '图片' }).click()
-  const card = page.getByRole('article').filter({ hasText: imageName })
+  await page.getByRole('button', { name: '打开菜单' }).click()
+  await page.getByRole('link', { name: '图片管理' }).click()
+  const card = page.locator('article').filter({ hasText: imageName })
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: '改为私密' }).click()
   await expect(card.getByText('私密', { exact: true })).toBeVisible()

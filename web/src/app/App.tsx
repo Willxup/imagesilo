@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { RouterProvider } from 'react-router-dom'
+import { Toaster } from 'sonner'
 
 import { AuthProvider } from '../features/auth/auth-provider'
 import { router } from './router'
@@ -18,6 +19,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RouterProvider router={router} />
+        <Toaster closeButton expand richColors duration={4000} position="top-right" visibleToasts={4} toastOptions={{ className: 'imagesilo-toast' }} />
       </AuthProvider>
     </QueryClientProvider>
   )

@@ -42,6 +42,18 @@ func (i *SessionIndex) RemoveAllExcept(keep [32]byte) {
 	i.mu.Unlock()
 }
 
+func (i *SessionIndex) UpdateAdmin(adminID, displayName, email string) {
+	i.mu.Lock()
+	for hash, identity := range i.sessions {
+		if identity.AdminID == adminID {
+			identity.DisplayName = displayName
+			identity.Email = email
+			i.sessions[hash] = identity
+		}
+	}
+	i.mu.Unlock()
+}
+
 func (i *SessionIndex) PurgeExpired(now time.Time) int {
 	i.mu.Lock()
 	removed := 0

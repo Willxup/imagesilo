@@ -36,6 +36,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/setup/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getSetupStatus"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["initializeImageSilo"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/login": {
         parameters: {
             query?: never;
@@ -98,6 +130,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["updateAdministratorProfile"];
         trace?: never;
     };
     "/api/v1/images": {
@@ -178,6 +226,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["updateImageVisibility"];
+        trace?: never;
+    };
+    "/api/v1/images/{imageId}/convert-webp": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["convertImageToWebP"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/images/{imageId}/thumbnail": {
@@ -436,9 +500,27 @@ export interface components {
             email: string;
             password: string;
         };
+        SetupStatus: {
+            initialized: boolean;
+        };
+        SetupRequest: {
+            displayName: string;
+            /** Format: email */
+            email: string;
+            password: string;
+            defaultVisibility: components["schemas"]["Visibility"];
+            compressionEnabled: boolean;
+            jpegQuality: number;
+            webpQuality: number;
+            pngCompressionLevel: number;
+            conversionEnabled: boolean;
+            conversionWebpQuality: number;
+            conversionWebpLossless: boolean;
+        };
         AdminSession: {
             /** Format: uuid */
             adminId: string;
+            displayName: string;
             /** Format: email */
             email: string;
             csrfToken: string;
@@ -448,6 +530,11 @@ export interface components {
         ChangePasswordRequest: {
             currentPassword: string;
             newPassword: string;
+        };
+        UpdateProfileRequest: {
+            displayName: string;
+            /** Format: email */
+            email: string;
         };
         Image: {
             /** Format: uuid */
@@ -486,6 +573,12 @@ export interface components {
             imageId: string;
             imageFileDeleted: boolean;
             thumbnailDeleted: boolean;
+            cleanupPending: boolean;
+        };
+        WebPConversionResult: {
+            image: components["schemas"]["Image"];
+            originalFileDeleted: boolean;
+            thumbnailUpdated: boolean;
             cleanupPending: boolean;
         };
         BatchImageRequest: {
@@ -806,6 +899,52 @@ export interface operations {
             503: components["responses"]["ServiceUnavailable"];
         };
     };
+    getSetupStatus: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 是否已完成首次初始化 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetupStatus"];
+                };
+            };
+        };
+    };
+    initializeImageSilo: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetupRequest"];
+            };
+        };
+        responses: {
+            /** @description 首次初始化完成并创建管理员 Session */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            409: components["responses"]["Conflict"];
+        };
+    };
     login: {
         parameters: {
             query?: never;
@@ -902,6 +1041,37 @@ export interface operations {
             400: components["responses"]["BadRequest"];
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
+        };
+    };
+    updateAdministratorProfile: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProfileRequest"];
+            };
+        };
+        responses: {
+            /** @description 管理员显示名称和邮箱已更新 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminSession"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            409: components["responses"]["Conflict"];
         };
     };
     listImages: {
@@ -1118,6 +1288,36 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+        };
+    };
+    convertImageToWebP: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path: {
+                imageId: components["parameters"]["ImageId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 保持图片 ID 和 URL 不变，将现有 JPEG 或 PNG 原子替换为 WebP */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WebPConversionResult"];
+                };
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     getImageThumbnail: {

@@ -11,6 +11,7 @@ import (
 
 type Filesystem struct {
 	imagesDirectory     string
+	migrationsDirectory string
 	thumbnailsDirectory string
 	temporaryDirectory  string
 }
@@ -25,9 +26,30 @@ type FileEntry struct {
 func NewFilesystem(dataDirectory string) *Filesystem {
 	return &Filesystem{
 		imagesDirectory:     filepath.Join(dataDirectory, "images"),
+		migrationsDirectory: filepath.Join(dataDirectory, "migrations"),
 		thumbnailsDirectory: filepath.Join(dataDirectory, "cache", "thumbnails"),
 		temporaryDirectory:  filepath.Join(dataDirectory, "tmp"),
 	}
+}
+
+func (f *Filesystem) OpenMigration(relativePath string) (*os.File, error) {
+	if relativePath == "" || !fs.ValidPath(relativePath) || strings.ContainsAny(relativePath, "\\\x00") {
+		return nil, fmt.Errorf("invalid migration path")
+	}
+	file, err := os.OpenInRoot(f.migrationsDirectory, relativePath)
+	if err != nil {
+		return nil, fmt.Errorf("open migration file: %w", err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, fmt.Errorf("inspect migration file: %w", err)
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return nil, fmt.Errorf("migration path is not a regular file")
+	}
+	return file, nil
 }
 
 func (f *Filesystem) CommitThumbnailTemporary(temporaryPath, imageID string) error {
@@ -80,6 +102,10 @@ func (f *Filesystem) Open(storageKey string) (*os.File, error) {
 		return nil, fmt.Errorf("open stored image: %w", err)
 	}
 	return file, nil
+}
+
+func (f *Filesystem) ImagePath(storageKey string) (string, error) {
+	return f.resolveStorageKey(storageKey)
 }
 
 func (f *Filesystem) OpenThumbnail(imageID string) (*os.File, error) {

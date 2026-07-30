@@ -1,6 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
+import { useState } from 'react'
+import { toast } from 'sonner'
 
+import { Button } from '../../components/ui/button'
+import { Card } from '../../components/ui/card'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
+import { Icon } from '../../components/ui/icon'
 import { apiRequest } from '../../lib/api-client'
 import { formatBytes } from '../../lib/image-links'
 import type { InspectionResult, RebuildResult, SystemOverview } from '../../lib/api-types'
@@ -8,30 +14,33 @@ import type { InspectionResult, RebuildResult, SystemOverview } from '../../lib/
 export function SystemOverviewPanel() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
+  const [rebuildOpen, setRebuildOpen] = useState(false)
   const query = useQuery({ queryKey: ['overview'], queryFn: () => apiRequest<SystemOverview>('/api/v1/overview') })
   const inspection = useMutation({
     mutationFn: () => apiRequest<InspectionResult>('/api/v1/maintenance/inspect', { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['overview'] }),
+    onMutate: () => toast.loading(t('toast.inspectionRunning'), { id: 'system-inspection' }),
+    onSuccess: (result) => { toast.success(t('toast.inspectionComplete'), { id: 'system-inspection', description: t('settings.inspectionSummary', result) }); return queryClient.invalidateQueries({ queryKey: ['overview'] }) },
+	onError: () => toast.error(t('settings.maintenanceFailed'), { id: 'system-inspection' }),
   })
   const rebuild = useMutation({
     mutationFn: () => apiRequest<RebuildResult>('/api/v1/maintenance/rebuild', { method: 'POST' }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['overview'] }),
+    onMutate: () => toast.loading(t('toast.rebuildRunning'), { id: 'system-rebuild' }),
+    onSuccess: (result) => { setRebuildOpen(false); toast.success(t('toast.rebuildComplete'), { id: 'system-rebuild', description: t('settings.rebuildSummary', result) }); return queryClient.invalidateQueries({ queryKey: ['overview'] }) },
+	onError: () => toast.error(t('settings.maintenanceFailed'), { id: 'system-rebuild' }),
   })
   return (
-    <section className="rounded-2xl border border-line bg-panel p-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div><h2 className="text-xl font-semibold">{t('settings.overview')}</h2><p className="mt-2 text-sm text-muted">{t('settings.overviewHelp')}</p></div>
+    <section className="surface-panel system-overview-panel p-6">
+      <div className="system-overview-header">
+        <div><h2 className="text-xl font-semibold">{t('settings.overview')}</h2><p className="mt-2 text-xs leading-[18px] text-muted-foreground">{t('settings.overviewHelp')}</p></div>
         <div className="flex flex-wrap gap-2">
-          <button className="button-secondary" type="button" disabled={inspection.isPending} onClick={() => inspection.mutate()}>{inspection.isPending ? t('common.working') : t('settings.inspectNow')}</button>
-          <button className="button-secondary" type="button" disabled={rebuild.isPending} onClick={() => {
-            if (window.confirm(t('settings.confirmRebuild'))) rebuild.mutate()
-          }}>{rebuild.isPending ? t('common.working') : t('settings.rebuildIndexes')}</button>
+          <Button className="standard-action-button" variant="outline" type="button" disabled={inspection.isPending} onClick={() => inspection.mutate()}><Icon name={inspection.isPending ? 'loader' : 'search'} className={inspection.isPending ? 'animate-spin' : ''} />{inspection.isPending ? t('common.working') : t('settings.inspectNow')}</Button>
+          <Button className="standard-action-button" variant="destructive" type="button" disabled={rebuild.isPending} onClick={() => setRebuildOpen(true)}><Icon name={rebuild.isPending ? 'loader' : 'refresh'} className={rebuild.isPending ? 'animate-spin' : ''} />{rebuild.isPending ? t('common.working') : t('settings.rebuildIndexes')}</Button>
         </div>
       </div>
-      {query.isLoading ? <p className="mt-4 text-muted">{t('common.loading')}</p> : null}
+      {query.isLoading ? <p className="mt-4 text-muted-foreground">{t('common.loading')}</p> : null}
       {query.isError ? <p className="mt-4 text-danger">{t('settings.overviewFailed')}</p> : null}
       {query.data ? <Overview value={query.data} /> : null}
-      {(inspection.isError || rebuild.isError) ? <p className="mt-4 text-danger">{t('settings.maintenanceFailed')}</p> : null}
+      <ConfirmDialog open={rebuildOpen} onOpenChange={setRebuildOpen} title={t('settings.rebuildTitle')} description={t('settings.confirmRebuild')} confirmLabel={t('settings.rebuildIndexes')} cancelLabel={t('common.cancel')} closeLabel={t('common.close')} destructive pending={rebuild.isPending} onConfirm={() => rebuild.mutate()} />
     </section>
   )
 }
@@ -46,11 +55,22 @@ function Overview({ value }: { value: SystemOverview }) {
   return (
     <div className="mt-5">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map(([label, number]) => <div className="rounded-xl bg-canvas p-4" key={label}><p className="text-sm text-muted">{label}</p><p className="mt-1 text-2xl font-semibold">{number}</p></div>)}
+        {cards.map(([label, number], index) => (
+          <Card className="p-5 md:p-6" key={label}>
+            <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90">
+              <Icon name={index < 3 ? 'images' : index === 5 ? 'activity' : 'server'} className="h-6 w-6" />
+            </span>
+            <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
+            <p className="mt-2 text-title-sm font-bold text-gray-800 dark:text-white/90">{number}</p>
+          </Card>
+        ))}
       </div>
-      <div className="mt-4 rounded-xl bg-canvas p-4 text-sm">
-        <p className={value.indexConsistent ? 'text-accent' : 'text-danger'}>{value.indexConsistent ? t('settings.indexConsistent') : t('settings.indexDifferent')}</p>
-        <p className="mt-2 text-muted">{t('settings.indexCounts', value.indexes)}</p>
+      <div className="system-index-status" data-consistent={value.indexConsistent || undefined}>
+        <Icon name={value.indexConsistent ? 'check' : 'activity'} />
+        <div>
+          <p className={value.indexConsistent ? 'text-green' : 'text-danger'}>{value.indexConsistent ? t('settings.indexConsistent') : t('settings.indexDifferent')}</p>
+          <p className="mt-1 text-xs leading-[18px] text-muted-foreground">{t('settings.indexCounts', value.indexes)}</p>
+        </div>
       </div>
       {value.missingImageCount > 0 ? (
         <div className="mt-4 rounded-xl bg-danger-soft p-4 text-sm text-danger" role="alert">
@@ -58,16 +78,6 @@ function Overview({ value }: { value: SystemOverview }) {
           {value.missingImageIds.length > 0 ? <code className="mt-2 block break-all text-xs">{value.missingImageIds.join(', ')}</code> : null}
         </div>
       ) : null}
-      <div className="mt-4 grid gap-4 lg:grid-cols-3">
-        <MaintenanceSummary title={t('settings.lastInspection')} value={value.lastInspection ? [new Date(value.lastInspection.checkedAt).toLocaleString(), t('settings.inspectionSummary', value.lastInspection)] : null} />
-        <MaintenanceSummary title={t('settings.lastRebuild')} value={value.lastRebuild ? [new Date(value.lastRebuild.completedAt).toLocaleString(), t('settings.rebuildSummary', value.lastRebuild)] : null} />
-        <MaintenanceSummary title={t('settings.lastDaily')} value={value.lastDaily ? [new Date(value.lastDaily.completedAt).toLocaleString(), t('settings.dailySummary', value.lastDaily)] : null} />
-      </div>
     </div>
   )
-}
-
-function MaintenanceSummary({ title, value }: { title: string; value: [string, string] | null }) {
-  const { t } = useTranslation()
-  return <div className="rounded-xl border border-line p-4"><h3 className="font-semibold">{title}</h3>{value ? <><p className="mt-2 text-sm">{value[0]}</p><p className="mt-1 text-sm text-muted">{value[1]}</p></> : <p className="mt-2 text-sm text-muted">{t('settings.notRun')}</p>}</div>
 }

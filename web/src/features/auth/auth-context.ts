@@ -1,11 +1,13 @@
 import { createContext, useContext } from 'react'
 
-import type { AdminSession } from '../../lib/api-types'
+import type { AdminSession, SetupStatus } from '../../lib/api-types'
 
 export type AuthContextValue = {
   session: AdminSession | null
+  setupStatus: SetupStatus | null
   isLoading: boolean
   refresh: () => Promise<AdminSession | null>
+  refreshSetup: () => Promise<SetupStatus>
   logout: () => Promise<void>
 }
 

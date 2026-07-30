@@ -138,7 +138,7 @@ func (s *Service) Import(ctx context.Context, reader io.Reader, originalName, al
 		Extension: metadata.Extension, MIMEType: metadata.MIMEType, Width: metadata.Width, Height: metadata.Height,
 		SourceSize: written, StoredSize: written, SourceSHA256: digest, StoredSHA256: digest,
 		ProcessingSummary: string(summary), Visibility: options.Visibility, UploadedVia: "import",
-		UploadedByAPITokenID: options.UploadedByAPITokenID, CreatedAt: now.UTC(),
+		UploadedByAPITokenID: options.UploadedByAPITokenID, CreatedAt: now.UTC(), UpdatedAt: now.UTC(),
 	}
 	alias := importedAlias(aliasID.String(), normalizedAlias, value.ID, now)
 	if _, err := s.storage.CommitTemporary(sourcePath, value.StorageKey); err != nil {
@@ -168,7 +168,7 @@ func (s *Service) Import(ctx context.Context, reader io.Reader, originalName, al
 	databaseCommitted = true
 	s.index.Add(value.ID, delivery.Target{
 		StorageKey: value.StorageKey, MIMEType: value.MIMEType, ETag: fmt.Sprintf("\"%x\"", value.StoredSHA256),
-		Size: value.StoredSize, LastModified: value.CreatedAt, Visibility: string(value.Visibility), OriginalName: value.OriginalName,
+		Size: value.StoredSize, LastModified: value.UpdatedAt, Visibility: string(value.Visibility), OriginalName: value.OriginalName,
 	})
 	s.index.AddAlias(alias.Path, value.ID)
 	return Result{Image: value, Alias: alias}, nil
