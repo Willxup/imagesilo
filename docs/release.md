@@ -15,7 +15,7 @@
 
 ## 多架构 OCI manifest
 
-推送符合语义版本格式的 Git tag，或手动运行 `Release image` 并输入同类标签，例如 `v1.0.0-rc.1`。工作流在两个原生 runner 分别构建和 smoke，推送平台标签，最后创建同一版本的 OCI manifest；不会自动覆盖 `latest`。
+推送符合语义版本格式的 Git tag，例如 `v1.0.0-rc.1`。`Release image` 只能由该 tag push 自动触发，不接受手动运行；标签必须指向不含 `[skip ci]` 的提交。工作流在两个原生 runner 分别构建和 smoke，推送平台标签，最后创建同一版本的 OCI manifest；不会自动覆盖 `latest`。
 
 发布后再次确认：
 

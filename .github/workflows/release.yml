@@ -3,12 +3,6 @@ name: Release image
 on:
   push:
     tags: ['v*']
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: Immutable release tag, for example v1.0.0-rc.1
-        required: true
-        type: string
 
 permissions:
   contents: read
@@ -66,10 +60,8 @@ jobs:
       - name: Resolve immutable image tag
         id: image
         shell: bash
-        env:
-          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          release_tag="${REQUESTED_TAG:-${GITHUB_REF_NAME}}"
+          release_tag="${GITHUB_REF_NAME}"
           if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
             echo "Invalid release tag: $release_tag" >&2
             exit 1
@@ -117,10 +109,8 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Create and verify multi-platform manifest
         shell: bash
-        env:
-          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          release_tag="${REQUESTED_TAG:-${GITHUB_REF_NAME}}"
+          release_tag="${GITHUB_REF_NAME}"
           owner="${GITHUB_REPOSITORY_OWNER,,}"
           target="ghcr.io/${owner}/imagesilo:${release_tag}"
           if docker buildx imagetools inspect "$target" >/dev/null 2>&1; then
