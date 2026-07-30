@@ -36,3 +36,11 @@
 `my-geelinx` 原生 amd64 候选从提交 `b866eeb` 构建：专用 BuildKit 固定到 CPU 0、1 CPU quota、1 GiB 内存和 1 GiB memory+swap 上限，完成后删除。随后容器以 0.5 CPU、256 MiB、128 PID、处理并发 1 连续运行 600 秒，完成 118 轮串行字节校验；cgroup 当前 `14,135,296` 字节、峰值 `35,938,304` 字节、结束匿名内存 `8,814,592` 字节，goroutine `10 → 8`、FD `10 → 10`，最终 SIGTERM 退出码为 0。所有证据保留在 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`，占用约 2.0 MiB；builder、容器和临时候选镜像均已移除。
 
 空库运行基线继续记录在 `docs/performance-baseline.md`。镜像磁盘大小不等于运行内存，阶段 7 仍以实际 RSS、Go heap、cgroup peak、goroutine 和文件描述符为资源事实来源。
+
+## 发布证据
+
+`v0.1.0-rc.1` 的 tag push 自动触发 [Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284)，质量门、原生 amd64/arm64 构建、完整容器 smoke、平台镜像推送和 manifest 校验全部成功。工作流已移除手动触发入口，只接受 `v*` tag push。
+
+公开 OCI manifest 为 `sha256:573233d00455ab6e8dad9d875ad0ede7f770436ce24bb05f6d21bc02fac053cc`；amd64 子 manifest 为 `sha256:ee410a57912c125234e5547520a1f5b38a253649cfeec88aec34d53903838ad8`，arm64 子 manifest 为 `sha256:a5437e2348e74a9aaa53e0ac7f685c379153d9183362651e1a88a077f9f9452d`。独立匿名 GHCR token 请求返回 HTTP 200，证明无需仓库或包权限即可拉取。
+
+本次唯一非阻断注记是固定版本 `docker/login-action` 仍声明 Node.js 20，GitHub Runner 已自动强制使用 Node.js 24；不影响镜像内容或运行时资源边界，后续依赖维护时升级其已审计 commit pin。

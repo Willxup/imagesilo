@@ -4,7 +4,7 @@
 
 ## 结论
 
-项目可以开始开发。产品范围、数据事实来源、热路径约束、失败补偿顺序、阶段门和最终验收标准已经闭环，不存在 Go、React、SQLite 或本地文件存储层面的不可实现项。
+项目已完成阶段 0—7 的开发、双架构验证和首个公开发布候选。阶段 8 仅等待用户提供旧系统数据副本、目标生产服务器与反向代理窗口，以执行生产迁移和回滚演练。
 
 仓库开始时为空，远程仓库为 `git@github.com:Willxup/imagesilo.git`，因此 Go module 使用 `github.com/Willxup/imagesilo`。
 
@@ -43,7 +43,8 @@
 - `govulncheck` 实际调用链为 0；`golang.org/x/image` 已从存在 WebP 解码漏洞的 0.38.0 升级至 0.43.0。React Router 公告仅影响未启用的 unstable RSC API，作为可达性例外记录并在每次发布前复查。
 - [Verify run 30479364047](https://github.com/Willxup/imagesilo/actions/runs/30479364047) 在提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 上通过 quality、原生 amd64/arm64 增强容器 smoke 和每架构并发 1、16 请求 benchmark。结束匿名内存为 amd64 86,945,792 B、arm64 101,023,744 B；约 91.4 MB 文件页缓存与 16 个输出总量吻合。
 - `my-geelinx` 已在 1 CPU/1 GiB 的专用 builder 中完成原生 amd64 构建，并在 0.5 CPU/256 MiB、并发 1 下连续运行 600 秒、完成 118 轮串行校验：cgroup 峰值 35,938,304 B，goroutine 10→8，FD 10→10，优雅停止通过；所有证据位于 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`。
-- 阶段 7 当前只剩外部 GHCR 多架构 OCI manifest 发布与 `imagetools inspect`。本地预发布标签 `v0.1.0-rc.1` 尚未推送；得到明确外部发布授权前不关闭阶段门，也不开始阶段 8。
+- Git 标签 `v0.1.0-rc.1` 的 push 自动触发 [Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284)，在提交 `976a4a495e415de042ecb6d9758222b4ba5daf0d` 上通过质量门、原生 amd64/arm64 构建与完整容器 smoke，并成功创建多架构 OCI manifest。
+- 公开镜像 `ghcr.io/willxup/imagesilo:v0.1.0-rc.1` 的 manifest digest 为 `sha256:573233d00455ab6e8dad9d875ad0ede7f770436ce24bb05f6d21bc02fac053cc`；匿名 registry 请求返回 HTTP 200，`imagetools inspect` 同时确认 `linux/amd64` 与 `linux/arm64`。[GitHub Pre-release](https://github.com/Willxup/imagesilo/releases/tag/v0.1.0-rc.1) 已发布。
 - 资源基线见 `performance-baseline.md`。
 
 阶段 1 已完成。GitHub Actions [Verify run 30447890938](https://github.com/Willxup/imagesilo/actions/runs/30447890938) 在提交 `2211fc7e7b7ae34ad9fa36ecbe8b78fe09a22268` 上通过：`quality`、原生 `ubuntu-24.04` amd64 容器闭环和原生 `ubuntu-24.04-arm` arm64 容器闭环全部成功。
@@ -57,6 +58,8 @@
 阶段 5 已完成。GitHub Actions [Verify run 30471726635](https://github.com/Willxup/imagesilo/actions/runs/30471726635) 在提交 `4fdb303604c19ffc8889110e21c2189c3fca3130` 上通过：`quality`（含 Vitest 与单 worker 桌面/手机 Playwright）、原生 amd64/arm64 Delivery Index 基准、容器闭环和默认并发 1 的 16 请求图片基准全部成功。
 
 阶段 6 已完成。GitHub Actions [Verify run 30474967233](https://github.com/Willxup/imagesilo/actions/runs/30474967233) 在提交 `9c0238957241e1e4f540821323bd298b291ed46d` 上通过：`quality`、原生 amd64/arm64 清单导入与历史 URL 校验、重复别名零残留、缺失正式文件重启容错、容器闭环和默认并发 1 的 16 请求图片基准全部成功。
+
+阶段 7 已完成。GitHub Actions [Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284) 由 `v0.1.0-rc.1` tag push 自动触发并全部成功；公开 GHCR 多架构镜像和 [GitHub Pre-release](https://github.com/Willxup/imagesilo/releases/tag/v0.1.0-rc.1) 均已验证。
 
 `.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 

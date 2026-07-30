@@ -52,4 +52,12 @@ bash scripts/remote-release-acceptance.sh
 - SIGTERM 正常退出，测试容器、builder 和临时候选镜像已删除。
 - 源代码、构建元数据、失败前置检查和最终验收结果保留在 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`，总计约 2.0 MiB。
 
-Git 标签 `v0.1.0-rc.1` 当前仅存在于本地；GHCR 外部包发布必须在得到明确授权后执行，不得用其他分发方式绕过。
+### v0.1.0-rc.1 发布记录
+
+- 标签提交：`976a4a495e415de042ecb6d9758222b4ba5daf0d`。
+- 自动流程：[Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284)，事件为 tag `push`，质量门、原生 amd64/arm64 构建、完整容器 smoke 和 manifest 校验全部成功。
+- GitHub：[ImageSilo v0.1.0-rc.1 Pre-release](https://github.com/Willxup/imagesilo/releases/tag/v0.1.0-rc.1)。
+- GHCR：`ghcr.io/willxup/imagesilo:v0.1.0-rc.1`，匿名 registry 请求返回 HTTP 200。
+- OCI manifest：`sha256:573233d00455ab6e8dad9d875ad0ede7f770436ce24bb05f6d21bc02fac053cc`。
+- amd64：`sha256:ee410a57912c125234e5547520a1f5b38a253649cfeec88aec34d53903838ad8`。
+- arm64：`sha256:a5437e2348e74a9aaa53e0ac7f685c379153d9183362651e1a88a077f9f9452d`。
