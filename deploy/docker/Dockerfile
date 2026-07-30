@@ -73,7 +73,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/* \
     && groupadd --gid 10001 imagesilo \
     && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /nonexistent --shell /usr/sbin/nologin imagesilo \
-    && install -d -o 10001 -g 10001 -m 0750 /data/db /data/images /data/cache/thumbnails /data/tmp
+    && install -d -o 10001 -g 10001 -m 0750 /data/db /data/images /data/migrations /data/cache/thumbnails /data/tmp
 
 COPY --from=vips-runtime /opt/vips/lib /opt/vips/lib
 COPY --from=go-build /out/imagesilo /usr/local/bin/imagesilo
