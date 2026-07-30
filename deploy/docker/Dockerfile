@@ -12,6 +12,7 @@ COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 COPY api/ /src/api/
+COPY assets/ /src/assets/
 RUN npm run generate:api && npm run build
 
 FROM ${GO_IMAGE} AS vips-build

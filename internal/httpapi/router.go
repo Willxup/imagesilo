@@ -116,6 +116,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	}
 	if dependencies.UI != nil {
 		router.Handle("/assets/*", dependencies.UI.Assets())
+		router.Handle("/brand/*", dependencies.UI.Assets())
 		router.Get("/admin", dependencies.UI.ServeIndex)
 		router.Get("/admin/*", dependencies.UI.ServeIndex)
 	}

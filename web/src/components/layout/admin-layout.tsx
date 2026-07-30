@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../features/auth/auth-context'
+import { BrandLogo } from '../brand-logo'
 
 export function AdminLayout() {
   const { t, i18n } = useTranslation()
@@ -32,8 +33,8 @@ export function AdminLayout() {
     <div className="min-h-screen bg-canvas text-ink">
       <header className="border-b border-line bg-panel">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-5 py-4">
-          <div>
-            <p className="text-lg font-semibold">ImageSilo</p>
+          <div className="min-w-0">
+            <BrandLogo imageClassName="h-9 w-auto" />
             <p className="text-xs text-muted">{session?.email}</p>
           </div>
           <nav className="flex max-w-full flex-wrap items-center gap-2" aria-label={t('nav.primary')}>

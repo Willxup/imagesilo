@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
+import { BrandLogo } from '../../components/brand-logo'
 import { apiRequest } from '../../lib/api-client'
 import type { AdminSession } from '../../lib/api-types'
 import { useAuth } from './auth-context'
@@ -43,8 +44,8 @@ export function LoginPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-canvas px-6 text-ink">
       <form className="w-full max-w-md rounded-3xl border border-line bg-panel p-8 shadow-xl shadow-black/5" onSubmit={submit}>
-        <p className="text-sm font-semibold tracking-[0.2em] text-accent">IMAGESILO</p>
-        <h1 className="mt-3 text-3xl font-semibold">{t('auth.signIn')}</h1>
+        <BrandLogo imageClassName="h-12 w-auto" />
+        <h1 className="mt-6 text-3xl font-semibold">{t('auth.signIn')}</h1>
         <label className="mt-8 block text-sm font-medium" htmlFor="email">{t('auth.email')}</label>
         <input id="email" type="email" autoComplete="username" required className="field" {...register('email')} />
         <label className="mt-5 block text-sm font-medium" htmlFor="password">{t('auth.password')}</label>

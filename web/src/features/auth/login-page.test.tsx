@@ -19,6 +19,7 @@ describe('LoginPage', () => {
         </AuthProvider>
       </QueryClientProvider>,
     )
+    expect(screen.getByRole('img', { name: 'ImageSilo' })).toHaveAttribute('src', '/brand/imagesilo-logo.png')
     expect(await screen.findByLabelText('管理员邮箱')).toBeInTheDocument()
     expect(screen.getByLabelText('密码')).toBeInTheDocument()
   })

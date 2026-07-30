@@ -34,6 +34,12 @@ body {
   min-width: 320px;
 }
 
+:root[data-theme="dark"] .brand-logo-surface {
+  border-radius: 0.65rem;
+  background: #ffffff;
+  padding: 0.2rem 0.4rem;
+}
+
 @layer components {
   .field {
     @apply mt-2 w-full rounded-xl border border-line bg-canvas px-4 py-3 text-ink outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20;

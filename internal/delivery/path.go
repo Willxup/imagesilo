@@ -57,7 +57,7 @@ func IsReservedAliasPath(canonical string) bool {
 	if err != nil {
 		return true
 	}
-	for _, prefix := range []string{"/api/v1", "/admin", "/assets"} {
+	for _, prefix := range []string{"/api/v1", "/admin", "/assets", "/brand"} {
 		if decoded == prefix || strings.HasPrefix(decoded, prefix+"/") {
 			return true
 		}

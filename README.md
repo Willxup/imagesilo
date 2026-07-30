@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="./assets/brand/imagesilo-logo-card.png" alt="ImageSilo" width="560" />
+</p>
+
+<p align="center">
   <a href="./README.md"><strong>English</strong></a> ｜ <a href="./README.zh.md">简体中文</a>
 </p>
 

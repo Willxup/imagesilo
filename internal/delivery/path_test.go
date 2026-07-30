@@ -43,7 +43,7 @@ func TestNormalizeAliasPath(t *testing.T) {
 
 func TestNormalizeAliasPathRejectsReservedRoutes(t *testing.T) {
 	for _, input := range []string{
-		"/api/v1", "/api/v1/images", "/admin", "/admin/settings", "/assets", "/assets/app.js",
+		"/api/v1", "/api/v1/images", "/admin", "/admin/settings", "/assets", "/assets/app.js", "/brand", "/brand/imagesilo-logo.png",
 		"/healthz", "/readyz", "/image/019c1234-5678-7abc-8def-0123456789ab",
 		"/image/019C1234-5678-7ABC-8DEF-0123456789AB", "/image/019c123456787abc8def0123456789ab",
 	} {

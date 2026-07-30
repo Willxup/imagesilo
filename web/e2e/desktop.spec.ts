@@ -4,6 +4,10 @@ import { login, readClipboard, tinyWebP, uploadTinyImage } from './helpers'
 
 test('desktop administrator completes upload, management, alias, settings, theme, and language flows', async ({ page, request }) => {
   await login(page)
+  const brandLogo = page.getByRole('img', { name: 'ImageSilo' })
+  await expect(brandLogo).toBeVisible()
+  await expect.poll(() => brandLogo.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+  expect((await request.get('/brand/favicon-64.png')).status()).toBe(200)
   await expect(page.getByText('最多同时处理 1 个文件；每批最多选择 20 个文件。')).toBeVisible()
 
   const imageName = 'desktop-e2e.webp'
