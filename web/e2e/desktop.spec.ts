@@ -10,7 +10,7 @@ test('desktop administrator completes upload, management, alias, settings, theme
   expect((await request.get('/brand/favicon-64.png')).status()).toBe(200)
   const imageName = 'desktop-e2e.webp'
   await uploadTinyImage(page, imageName)
-  await page.getByRole('button', { name: '复制直链' }).click()
+  await page.getByRole('button', { name: '复制直链', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain('/image/')
 
   await page.getByRole('link', { name: '图片管理' }).click()
@@ -58,7 +58,7 @@ test('desktop administrator completes upload, management, alias, settings, theme
   expect((await request.get(tokenImage.standardUrl, { headers: { Authorization: `Bearer ${plaintextToken}` } })).status()).toBe(200)
 
   await page.getByRole('link', { name: '图片管理' }).click()
-  await page.getByLabel('搜索', { exact: true }).fill(tokenImageName)
+  await page.getByRole('textbox', { name: '搜索', exact: true }).fill(tokenImageName)
   await page.getByLabel('可见性').click()
   await page.getByRole('option', { name: '私密' }).click()
   await page.getByLabel('上传来源').click()

@@ -17,8 +17,17 @@ const formatIcons = {
 } satisfies Record<LinkFormat, IconName>
 const storageKey = 'imagesilo_link_format'
 
+function browserStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 function initialFormat(): LinkFormat {
-  const value = localStorage.getItem(storageKey)
+  const value = browserStorage()?.getItem(storageKey)
   return formats.includes(value as LinkFormat) ? value as LinkFormat : 'direct'
 }
 
@@ -29,7 +38,9 @@ export function CopyLinkControl({ image, compact = false, onCopied }: { image: I
   const [copying, setCopying] = useState(false)
   const links = imageLinks(image)
 
-  useEffect(() => localStorage.setItem(storageKey, format), [format])
+  useEffect(() => {
+    browserStorage()?.setItem(storageKey, format)
+  }, [format])
 
   async function copy() {
     setCopying(true)

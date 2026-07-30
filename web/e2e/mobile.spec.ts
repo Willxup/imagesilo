@@ -13,7 +13,7 @@ test('mobile administrator can login, upload, manage, and copy a link', async ({
   await expect(card).toBeVisible()
   await card.getByRole('button', { name: '改为私密' }).click()
   await expect(card.getByText('私密', { exact: true })).toBeVisible()
-  await card.getByRole('button', { name: '复制直链' }).click()
+  await card.getByRole('button', { name: '复制直链', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain('/image/')
   await card.getByRole('button', { name: '改为公开' }).click()
   await expect(card.getByText('公开', { exact: true })).toBeVisible()
