@@ -47,10 +47,7 @@ type Dependencies struct {
 
 func NewRouter(dependencies Dependencies) http.Handler {
 	if dependencies.DeliveryGate == nil {
-		dependencies.DeliveryGate = delivery.NewGate(64)
-	}
-	if dependencies.DeliveryConcurrency < 1 {
-		dependencies.DeliveryConcurrency = 64
+		dependencies.DeliveryGate = delivery.NewGate(dependencies.DeliveryConcurrency)
 	}
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)

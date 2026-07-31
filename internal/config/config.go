@@ -13,11 +13,11 @@ const (
 	defaultListenAddress     = "127.0.0.1:8080"
 	defaultDataDirectory     = "/data"
 	defaultProcessingWorkers = 1
-	defaultDeliveryWorkers   = 64
+	defaultDeliveryWorkers   = 0
 	defaultShutdownTimeout   = 10 * time.Second
 	minimumProcessingWorkers = 1
 	maximumProcessingWorkers = 64
-	minimumDeliveryWorkers   = 1
+	minimumDeliveryWorkers   = 0
 	maximumDeliveryWorkers   = 4096
 )
 
@@ -95,7 +95,7 @@ func (c Config) Validate() error {
 		return fmt.Errorf("IMAGESILO_PROCESSING_CONCURRENCY must be between %d and %d", minimumProcessingWorkers, maximumProcessingWorkers)
 	}
 	if c.DeliveryConcurrency < minimumDeliveryWorkers || c.DeliveryConcurrency > maximumDeliveryWorkers {
-		return fmt.Errorf("IMAGESILO_DELIVERY_CONCURRENCY must be between %d and %d", minimumDeliveryWorkers, maximumDeliveryWorkers)
+		return fmt.Errorf("IMAGESILO_DELIVERY_CONCURRENCY must be 0 (unlimited) or between 1 and %d", maximumDeliveryWorkers)
 	}
 	if c.ShutdownTimeout <= 0 || c.ShutdownTimeout > time.Minute {
 		return fmt.Errorf("IMAGESILO_SHUTDOWN_TIMEOUT must be greater than zero and at most 1m")

@@ -72,7 +72,7 @@ docker run --detach \
 | 保留路径迁移 | `/data/migrations` 中的只读图片目录树 |
 | 缓存 | `/data/cache` 中的本地缩略图 |
 | 图片处理 | libvips，默认并发 `1` |
-| 图片读取 | 文件流式交付与 ETag 复验，默认并发 `64` |
+| 图片读取 | 文件流式交付与 ETag 复验，默认不限制（`0`），可选配置上限 |
 | 平台 | `linux/amd64`、`linux/arm64` |
 | 生产存储 | Docker named volume 或本地 bind mount |
 

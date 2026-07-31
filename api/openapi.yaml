@@ -1051,7 +1051,10 @@ components:
       required: [processingConcurrency, deliveryConcurrency, maxBatchCount, maxUploadBytes, maxTotalPixels, supportedFormats, vipsVersion]
       properties:
         processingConcurrency: { type: integer, minimum: 1 }
-        deliveryConcurrency: { type: integer, minimum: 1 }
+        deliveryConcurrency:
+          type: integer
+          minimum: 0
+          description: Zero means image delivery concurrency is unlimited.
         maxBatchCount: { type: integer, minimum: 1 }
         maxUploadBytes: { type: integer, format: int64, minimum: 1 }
         maxTotalPixels: { type: integer, format: int64, minimum: 1 }

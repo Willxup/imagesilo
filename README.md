@@ -72,7 +72,7 @@ To preserve an existing image URL tree without creating one alias at a time, mou
 | Path-preserving migrations | Read-only image tree in `/data/migrations` |
 | Cache | Local thumbnails in `/data/cache` |
 | Processing | libvips, concurrency `1` by default |
-| Delivery | File streaming with ETag revalidation, concurrency `64` by default |
+| Delivery | File streaming with ETag revalidation; unlimited by default (`0`), optionally capped |
 | Platforms | `linux/amd64`, `linux/arm64` |
 | Production storage | Docker named volume or local bind mount |
 

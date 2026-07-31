@@ -674,6 +674,7 @@ export interface components {
         };
         SystemInfo: {
             processingConcurrency: number;
+            /** @description Zero means image delivery concurrency is unlimited. */
             deliveryConcurrency: number;
             maxBatchCount: number;
             /** Format: int64 */

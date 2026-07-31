@@ -18,3 +18,18 @@ func TestGateRejectsExcessDeliveryAndReleasesCapacity(t *testing.T) {
 	}
 	releaseAgain()
 }
+
+func TestGateZeroAllowsUnlimitedDelivery(t *testing.T) {
+	gate := NewGate(0)
+	releases := make([]func(), 128)
+	for index := range releases {
+		release, ok := gate.TryAcquire()
+		if !ok {
+			t.Fatalf("TryAcquire() rejected unlimited request %d", index)
+		}
+		releases[index] = release
+	}
+	for _, release := range releases {
+		release()
+	}
+}

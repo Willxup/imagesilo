@@ -15,7 +15,7 @@ docker run --detach \
   --restart unless-stopped \
   --publish 127.0.0.1:8080:8080 \
   --env IMAGESILO_PROCESSING_CONCURRENCY=1 \
-	--env IMAGESILO_DELIVERY_CONCURRENCY=64 \
+	--env IMAGESILO_DELIVERY_CONCURRENCY=0 \
 	--env IMAGESILO_TRUST_PROXY_HEADERS=true \
   --volume imagesilo-data:/data \
   "$IMAGESILO_IMAGE"
@@ -29,7 +29,7 @@ docker logs -f imagesilo
 
 推荐拓扑是 Nginx Proxy Manager → `127.0.0.1:8080`。ImageSilo 默认信任 Nginx 的客户端地址头，并按单个有效 `X-Real-IP`、`X-Forwarded-For` 最右侧有效地址、TCP 对端地址的顺序用于登录 IP 限速。因此后端端口不得绕过 NPM 直接暴露公网；确需直连部署时显式设置 `IMAGESILO_TRUST_PROXY_HEADERS=false`。NPM 可以长期缓存带哈希的前端静态资源，但不要给可见性和内容都可能变化的图片 URL 设置长 TTL；公开图片由 `ETag`/`304` 复验，私密图片使用 `private, no-store`。
 
-`IMAGESILO_DELIVERY_CONCURRENCY` 默认 `64`，同时覆盖标准 URL、历史别名、迁移目录和缩略图；满载时立即返回 `503` 与 `Retry-After`。图片正文不进入 Go 全图缓存，读取依靠内存元数据索引、文件流、ETag 和操作系统页缓存，保持轻量。
+`IMAGESILO_DELIVERY_CONCURRENCY` 默认 `0`，表示不限制同时读取数量，由 Nginx、操作系统和文件系统负责连接与页缓存调度。配置为 `1`—`4096` 时，应用会对标准 URL、历史别名、迁移目录和缩略图统一限流；满载时立即返回 `503` 与 `Retry-After`。图片正文不进入 Go 全图缓存，读取依靠内存元数据索引、文件流、ETag 和操作系统页缓存，保持轻量。
 
 ## bind mount
 
