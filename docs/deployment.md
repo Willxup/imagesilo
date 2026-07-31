@@ -4,7 +4,7 @@ ImageSilo 的生产边界始终是一个容器、一个 Go 进程、一个本地
 
 ## 首次部署
 
-固定使用完整版本标签，不要在生产环境跟随可变的 `latest`。示例中的标签仅作占位：
+每次成功发布都会同时更新完整版本标签和可变的 `latest`。生产环境仍建议固定使用完整版本标签或 digest；`latest` 更适合希望自动跟随最新发布的测试环境。示例中的标签仅作占位：
 
 ```bash
 export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v1.0.0-rc.1

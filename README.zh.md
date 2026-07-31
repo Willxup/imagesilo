@@ -23,7 +23,7 @@
 
 ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 元数据和本地文件存储。它提供安全上传、稳定公开 URL、历史别名、具名 API Token、图片处理和响应式 React 管理界面，不依赖 Redis、外部数据库或后台任务服务。
 
-> 当前版本为 `v0.1.0-rc.1`。生产部署应固定不可变版本标签或 digest；ImageSilo 不会自动发布 `latest`。
+> 当前版本为 `v0.1.0-rc.3`。每次发布成功后也会更新可变的 `latest` 标签；生产部署仍建议固定不可变版本标签或 digest。
 
 ## 功能特性
 
@@ -41,7 +41,7 @@ ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 
 Docker 是唯一支持的生产运行方式。以下命令使用 named volume 启动一个本地体验实例：
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.1
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.3
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -123,4 +123,4 @@ IMAGESILO_COOKIE_SECURE=false \
 
 ## 项目状态
 
-阶段 0—7 已完成，包括原生 amd64/arm64 验证和公开的 `v0.1.0-rc.1` 发布候选。生产迁移仍是独立的环境相关步骤；当前证据与剩余工作见[开发状态](./docs/development-status.md)。
+阶段 0—7 已完成，包括原生 amd64/arm64 验证和公开的 `v0.1.0-rc.3` 发布候选。生产迁移仍是独立的环境相关步骤；当前证据与剩余工作见[开发状态](./docs/development-status.md)。

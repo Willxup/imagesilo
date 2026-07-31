@@ -15,12 +15,13 @@
 
 ## 多架构 OCI manifest
 
-推送符合语义版本格式的 Git tag，例如 `v1.0.0-rc.1`。`Release image` 只能由该 tag push 自动触发，不接受手动运行；标签提交必须属于 `origin/main`。工作流以 fail-closed 方式查询 GHCR，在两个原生 runner 分别构建和 smoke，验证镜像中的提交 revision，再使用两个平台 digest 创建版本 OCI manifest；不会自动覆盖 `latest`。同一 tag 的同一提交重跑时会核对 content tag、平台 digest 和最终 manifest，内容完全一致则幂等通过，任何不一致都拒绝覆盖。
+推送符合语义版本格式的 Git tag，例如 `v1.0.0-rc.1`。`Release image` 只能由该 tag push 自动触发，不接受手动运行；标签提交必须属于 `origin/main`，所有 release 全局串行。工作流以 fail-closed 方式查询 GHCR，在两个原生 runner 分别构建和 smoke，验证镜像中的提交 revision，再使用两个平台 digest 创建版本 OCI manifest。版本 manifest 验证成功后，同一组 digest 会更新可变的 `latest`；旧版本任务重跑时若检测到更晚提交的 release tag，则不会回滚 `latest`。同一 tag 的同一提交重跑时会核对 content tag、平台 digest 和版本 manifest，内容完全一致则幂等通过，任何不一致都拒绝覆盖。
 
 发布后再次确认：
 
 ```bash
 docker buildx imagetools inspect ghcr.io/willxup/imagesilo:v1.0.0-rc.1
+docker buildx imagetools inspect ghcr.io/willxup/imagesilo:latest
 ```
 
 输出必须同时包含 `linux/amd64` 和 `linux/arm64`。

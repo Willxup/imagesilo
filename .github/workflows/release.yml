@@ -5,7 +5,7 @@ on:
     tags: ['v*']
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-image
   cancel-in-progress: false
 
 permissions:
@@ -217,47 +217,84 @@ jobs:
     env:
       IMAGE_REPOSITORY: ${{ needs.preflight.outputs.repository }}
       RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_COMMIT: ${{ needs.preflight.outputs.release_commit }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
       - name: Log in to GHCR
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create or verify digest-pinned multi-platform manifest
+      - name: Create or verify version and latest manifests
         shell: bash
         run: |
           set -euo pipefail
           target="${IMAGE_REPOSITORY}:${RELEASE_TAG}"
+          latest="${IMAGE_REPOSITORY}:latest"
           read -r amd64_state amd64_digest < <(bash scripts/registry-image-state.sh "${target}-amd64")
           read -r arm64_state arm64_digest < <(bash scripts/registry-image-state.sh "${target}-arm64")
           if test "$amd64_state" != present || test "$arm64_state" != present; then
             echo "Platform images are missing" >&2
             exit 1
           fi
-          read -r target_state target_digest < <(bash scripts/registry-image-state.sh "$target")
+          expected="$(printf '%s\n%s\n' "$amd64_digest" "$arm64_digest" | sort)"
+          verify_manifest() {
+            local reference="$1"
+            local raw actual count state digest
+            raw="$(docker buildx imagetools inspect --raw "$reference")"
+            actual="$(jq --raw-output '.manifests[] | select(.platform.os == "linux" and (.platform.architecture == "amd64" or .platform.architecture == "arm64")) | .digest' <<<"$raw" | sort)"
+            count="$(jq '.manifests | length' <<<"$raw")"
+            if test "$count" != 2 || test "$actual" != "$expected"; then
+              echo "Manifest does not match published platform digests: $reference" >&2
+              exit 1
+            fi
+            read -r state digest < <(bash scripts/registry-image-state.sh "$reference")
+            test "$state" = present
+            printf '%s\n' "$digest"
+          }
+
+          read -r target_state _ < <(bash scripts/registry-image-state.sh "$target")
           if test "$target_state" = absent; then
             docker buildx imagetools create \
               --tag "$target" \
               "${IMAGE_REPOSITORY}@${amd64_digest}" \
               "${IMAGE_REPOSITORY}@${arm64_digest}"
           fi
-          raw="$(docker buildx imagetools inspect --raw "$target")"
-          expected="$(printf '%s\n%s\n' "$amd64_digest" "$arm64_digest" | sort)"
-          actual="$(jq --raw-output '.manifests[] | select(.platform.os == "linux" and (.platform.architecture == "amd64" or .platform.architecture == "arm64")) | .digest' <<<"$raw" | sort)"
-          count="$(jq '.manifests | length' <<<"$raw")"
-          if test "$count" != 2 || test "$actual" != "$expected"; then
-            echo "Existing or published manifest does not match platform digests" >&2
-            exit 1
+          final_digest="$(verify_manifest "$target")"
+
+          newer_tag=""
+          while IFS= read -r candidate_tag; do
+            candidate_commit="$(git rev-parse "${candidate_tag}^{commit}")"
+            if test "$candidate_commit" != "$RELEASE_COMMIT" && git merge-base --is-ancestor "$RELEASE_COMMIT" "$candidate_commit"; then
+              newer_tag="$candidate_tag"
+              break
+            fi
+          done < <(git tag --list 'v*')
+
+          latest_digest=""
+          if test -z "$newer_tag"; then
+            docker buildx imagetools create \
+              --tag "$latest" \
+              "${IMAGE_REPOSITORY}@${amd64_digest}" \
+              "${IMAGE_REPOSITORY}@${arm64_digest}"
+            latest_digest="$(verify_manifest "$latest")"
+          else
+            echo "A newer release tag exists; leaving latest unchanged: $newer_tag"
           fi
-          read -r final_state final_digest < <(bash scripts/registry-image-state.sh "$target")
-          test "$final_state" = present
+
           docker buildx imagetools inspect "$target" | tee manifest-inspect.txt
           {
             echo "### Published ImageSilo image"
-            echo "\`$target@$final_digest\`"
+            echo "- Version: \`$target@$final_digest\`"
+            if test -n "$latest_digest"; then
+              echo "- Latest: \`$latest@$latest_digest\`"
+            else
+              echo "- Latest: unchanged because newer tag \`$newer_tag\` exists"
+            fi
             echo '```text'
             cat manifest-inspect.txt
             echo '```'

@@ -23,7 +23,7 @@
 
 ImageSilo is a Docker-first image host built as one Go process with SQLite and local file storage. It provides authenticated uploads, stable public URLs, historical aliases, scoped API tokens, image processing, and a responsive React administration interface without Redis, an external database, or a background job service.
 
-> The current release is `v0.1.0-rc.1`. Production deployments should pin an immutable version tag or digest; ImageSilo does not publish `latest` automatically.
+> The current release is `v0.1.0-rc.3`. Every successful release also updates the mutable `latest` tag. Production deployments should still pin an immutable version tag or digest.
 
 ## Features
 
@@ -41,7 +41,7 @@ ImageSilo is a Docker-first image host built as one Go process with SQLite and l
 Docker is the supported production runtime. The following starts a local evaluation instance with a named volume:
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.1
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0-rc.3
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -123,4 +123,4 @@ Use `/healthz` for liveness and `/readyz` for SQLite readiness. Run `make e2e` f
 
 ## Project Status
 
-Stages 0–7 are complete, including native amd64/arm64 verification and the public `v0.1.0-rc.1` release candidate. Production migration remains a separate, environment-specific step. See [development status](./docs/development-status.md) for the current evidence and remaining work.
+Stages 0–7 are complete, including native amd64/arm64 verification and the public `v0.1.0-rc.3` release candidate. Production migration remains a separate, environment-specific step. See [development status](./docs/development-status.md) for the current evidence and remaining work.
