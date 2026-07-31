@@ -32,7 +32,8 @@ type aliasResponse struct {
 }
 
 type aliasListResponse struct {
-	Items []aliasResponse `json:"items"`
+	Items      []aliasResponse `json:"items"`
+	NextCursor string          `json:"nextCursor,omitempty"`
 }
 
 func newAliasHandler(service *imagealias.Service, authenticator *authenticator) *aliasHandler {
@@ -61,13 +62,17 @@ func (h *aliasHandler) list(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit, _ := strconv.Atoi(r.URL.Query().Get("limit"))
-	values, err := h.service.List(r.Context(), limit)
+	page, err := h.service.ListPage(r.Context(), limit, r.URL.Query().Get("cursor"))
 	if err != nil {
+		if errors.Is(err, imagealias.ErrInvalidCursor) {
+			writeError(w, r, http.StatusBadRequest, "invalid_cursor", "Alias cursor is invalid.")
+			return
+		}
 		writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to list aliases.")
 		return
 	}
-	response := aliasListResponse{Items: make([]aliasResponse, 0, len(values))}
-	for _, value := range values {
+	response := aliasListResponse{Items: make([]aliasResponse, 0, len(page.Items)), NextCursor: page.NextCursor}
+	for _, value := range page.Items {
 		response.Items = append(response.Items, toAliasResponse(value))
 	}
 	writeJSON(w, http.StatusOK, response)

@@ -21,6 +21,15 @@ import (
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 )
 
+type importReadTracker struct {
+	read bool
+}
+
+func (r *importReadTracker) Read([]byte) (int, error) {
+	r.read = true
+	return 0, errors.New("reader must not be consumed")
+}
+
 func TestImportCommitsImageAliasAndOriginalBytesTogether(t *testing.T) {
 	directory, db, service, index := prepareImportTest(t)
 	defer db.Close()
@@ -60,6 +69,24 @@ func TestImportCommitsImageAliasAndOriginalBytesTogether(t *testing.T) {
 	if countRows(t, db, "images") != beforeImages || countRows(t, db, "image_aliases") != beforeAliases ||
 		countFiles(t, filepath.Join(directory, "images")) != beforeFiles {
 		t.Fatal("alias conflict left an image row, alias row, or formal file")
+	}
+}
+
+func TestBusyImportRejectsBeforeReadingRequestBytes(t *testing.T) {
+	_, db, service, _ := prepareImportTest(t)
+	defer db.Close()
+	release, ok := service.gate.TryAcquire()
+	if !ok {
+		t.Fatal("failed to occupy processing gate")
+	}
+	defer release()
+	reader := &importReadTracker{}
+	_, err := service.Import(context.Background(), reader, "busy.webp", "/legacy/busy.webp", Options{
+		Visibility: images.VisibilityPublic,
+		Limits:     processor.Limits{MaxBytes: 1 << 20, MaxTotalPixels: 100},
+	}, time.Now())
+	if !errors.Is(err, images.ErrProcessingBusy) || reader.read {
+		t.Fatalf("Import() error = %v, reader consumed = %v", err, reader.read)
 	}
 }
 

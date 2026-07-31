@@ -46,6 +46,7 @@
   "setup": {
     "title": "Set up ImageSilo",
     "description": "Create the administrator account and save the initial image policy. No configuration-file or database editing is required.",
+    "bootstrapToken": "Bootstrap token from the startup logs",
     "displayName": "Display name",
     "confirmPassword": "Confirm password",
     "passwordMismatch": "The passwords do not match.",

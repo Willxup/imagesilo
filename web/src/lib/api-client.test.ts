@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { apiRequest } from './api-client'
+import { ApiError, apiRequest, subscribeUnauthorized } from './api-client'
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -26,5 +26,19 @@ describe('apiRequest', () => {
 
     const headers = new Headers(fetchMock.mock.calls[0][1]?.headers)
     expect(headers.has('X-CSRF-Token')).toBe(false)
+  })
+
+  it('notifies the auth boundary for global 401 responses', async () => {
+    const unauthorized = vi.fn()
+    const unsubscribe = subscribeUnauthorized(unauthorized)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code: 'invalid_session', message: 'Expired', requestId: 'test' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    await expect(apiRequest('/api/v1/images')).rejects.toBeInstanceOf(ApiError)
+    expect(unauthorized).toHaveBeenCalledOnce()
+    unsubscribe()
   })
 })

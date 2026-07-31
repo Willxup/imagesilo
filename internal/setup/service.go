@@ -2,8 +2,13 @@ package setup
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/subtle"
 	"database/sql"
+	"encoding/base64"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Willxup/imagesilo/internal/auth"
@@ -12,6 +17,7 @@ import (
 )
 
 type Request struct {
+	BootstrapToken        string
 	DisplayName           string
 	Email                 string
 	Password              string
@@ -26,11 +32,29 @@ type Request struct {
 }
 
 type Service struct {
-	db *sql.DB
+	db                 *sql.DB
+	initializeMu       sync.Mutex
+	bootstrapTokenHash [32]byte
+	bootstrapTokenSet  bool
+	hashPassword       func(string) (string, error)
 }
 
-func NewService(db *sql.DB) *Service {
-	return &Service{db: db}
+func NewService(ctx context.Context, db *sql.DB) (*Service, string, error) {
+	service := &Service{db: db, hashPassword: auth.HashPassword}
+	initialized, err := service.Initialized(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+	if initialized {
+		return service, "", nil
+	}
+	token, hash, err := newBootstrapToken()
+	if err != nil {
+		return nil, "", err
+	}
+	service.bootstrapTokenHash = hash
+	service.bootstrapTokenSet = true
+	return service, token, nil
 }
 
 func (s *Service) Initialized(ctx context.Context) (bool, error) {
@@ -42,6 +66,21 @@ func (s *Service) Initialized(ctx context.Context) (bool, error) {
 }
 
 func (s *Service) Initialize(ctx context.Context, request Request, now time.Time) (auth.Admin, error) {
+	s.initializeMu.Lock()
+	defer s.initializeMu.Unlock()
+
+	var count int
+	if err := s.db.QueryRowContext(ctx, "SELECT COUNT(*) FROM admin").Scan(&count); err != nil {
+		return auth.Admin{}, fmt.Errorf("check initial setup: %w", err)
+	}
+	if count > 0 {
+		return auth.Admin{}, ErrAlreadyInitialized
+	}
+	providedHash := sha256.Sum256([]byte(request.BootstrapToken))
+	if !s.bootstrapTokenSet || subtle.ConstantTimeCompare(providedHash[:], s.bootstrapTokenHash[:]) != 1 {
+		return auth.Admin{}, ErrInvalidBootstrapToken
+	}
+
 	displayName, err := auth.NormalizeDisplayName(request.DisplayName)
 	if err != nil {
 		return auth.Admin{}, err
@@ -50,7 +89,7 @@ func (s *Service) Initialize(ctx context.Context, request Request, now time.Time
 	if err != nil {
 		return auth.Admin{}, err
 	}
-	passwordHash, err := auth.HashPassword(request.Password)
+	passwordHash, err := s.hashPassword(request.Password)
 	if err != nil {
 		return auth.Admin{}, err
 	}
@@ -74,7 +113,7 @@ func (s *Service) Initialize(ctx context.Context, request Request, now time.Time
 		return auth.Admin{}, fmt.Errorf("begin initial setup: %w", err)
 	}
 	defer tx.Rollback()
-	var count int
+	count = 0
 	if err := tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM admin").Scan(&count); err != nil {
 		return auth.Admin{}, fmt.Errorf("check initial setup: %w", err)
 	}
@@ -101,7 +140,18 @@ func (s *Service) Initialize(ctx context.Context, request Request, now time.Time
 	if err := tx.Commit(); err != nil {
 		return auth.Admin{}, fmt.Errorf("commit initial setup: %w", err)
 	}
+	s.bootstrapTokenHash = [32]byte{}
+	s.bootstrapTokenSet = false
 	return admin, nil
+}
+
+func newBootstrapToken() (string, [32]byte, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return "", [32]byte{}, fmt.Errorf("generate bootstrap token: %w", err)
+	}
+	token := "isb_" + base64.RawURLEncoding.EncodeToString(raw)
+	return token, sha256.Sum256([]byte(token)), nil
 }
 
 func boolInt(value bool) int {

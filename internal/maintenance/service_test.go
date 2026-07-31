@@ -111,6 +111,35 @@ func TestDailyRetriesCleanupFailureOnNextRun(t *testing.T) {
 	}
 }
 
+func TestSizeMismatchIsReportedUnavailableAndNeverCleanedAsOrphan(t *testing.T) {
+	directory, service, db := prepareMaintenanceTest(t)
+	defer db.Close()
+	value := maintenanceImage("019c1234-5678-7abc-8def-0123456789a2", "size-mismatch")
+	if err := images.NewRepository(db).Create(context.Background(), value); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(directory, "images", value.StorageKey)
+	if err := os.WriteFile(path, []byte("wrong-size"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	inspection, err := service.Inspect(context.Background(), time.Now())
+	if err != nil || inspection.MissingImageCount != 1 || inspection.OrphanImageCount != 0 {
+		t.Fatalf("Inspect() = %+v, %v", inspection, err)
+	}
+	rebuild, err := service.Rebuild(context.Background(), time.Now())
+	if err != nil || rebuild.Images != 0 || rebuild.MissingImageCount != 1 {
+		t.Fatalf("Rebuild() = %+v, %v", rebuild, err)
+	}
+	daily, err := service.Daily(context.Background(), time.Now().Add(48*time.Hour), 24*time.Hour)
+	if err != nil || daily.RemovedOrphanImages != 0 || daily.Inspection.MissingImageCount != 1 {
+		t.Fatalf("Daily() = %+v, %v", daily, err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("size-mismatched referenced image was removed: %v", err)
+	}
+}
+
 func prepareMaintenanceTest(t *testing.T) (string, *Service, *sql.DB) {
 	t.Helper()
 	directory := t.TempDir()

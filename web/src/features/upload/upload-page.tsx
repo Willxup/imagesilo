@@ -9,7 +9,7 @@ import { ComponentCard } from '../../components/ui/component-card'
 import { CopyLinkControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
 import { Select } from '../../components/ui/select'
-import { uploadForm, apiRequest } from '../../lib/api-client'
+import { ApiError, apiRequest, uploadForm } from '../../lib/api-client'
 import { formatBytes } from '../../lib/image-links'
 import type { Image, SystemInfo, Visibility } from '../../lib/api-types'
 
@@ -22,6 +22,7 @@ type UploadItem = {
   progress: number
   result?: Image
   controller?: AbortController
+  error?: string
 }
 
 export function UploadPage() {
@@ -35,7 +36,7 @@ export function UploadPage() {
   const [dragActive, setDragActive] = useState(false)
 
   function addFiles(files: File[]) {
-    const supported = files.filter((file) => ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type))
+    const supported = files.filter(isSupportedImageFile)
     const maxBatchCount = systemQuery.data?.maxBatchCount ?? 20
     if (items.length + supported.length > maxBatchCount) {
       setError(t('upload.tooMany', { count: maxBatchCount }))
@@ -43,9 +44,15 @@ export function UploadPage() {
     }
     if (supported.length !== files.length) setError(t('upload.unsupported'))
     else setError('')
-    setItems((current) => [...current, ...supported.map((file) => ({
-      id: crypto.randomUUID(), file, status: 'queued' as UploadStatus, progress: 0,
-    }))])
+    setItems((current) => [
+      ...current,
+      ...supported.map((file) => ({
+        id: crypto.randomUUID(),
+        file,
+        status: 'queued' as UploadStatus,
+        progress: 0,
+      })),
+    ])
   }
 
   function chooseFiles(files: FileList | null) {
@@ -69,18 +76,19 @@ export function UploadPage() {
 
   async function uploadOne(source: UploadItem) {
     const controller = new AbortController()
-    updateItem(source.id, { status: 'uploading', progress: 0, result: undefined, controller })
+    updateItem(source.id, { status: 'uploading', progress: 0, result: undefined, controller, error: undefined })
     const body = new FormData()
     body.append('file', source.file)
     if (visibility !== 'default') body.append('visibility', visibility)
     try {
       const image = await uploadForm<Image>('/api/v1/images', body, (progress) => updateItem(source.id, { progress }), controller.signal)
-      updateItem(source.id, { status: 'complete', progress: 100, result: image, controller: undefined })
+      updateItem(source.id, { status: 'complete', progress: 100, result: image, controller: undefined, error: undefined })
       return true
     } catch (uploadError) {
       updateItem(source.id, {
         status: uploadError instanceof DOMException && uploadError.name === 'AbortError' ? 'canceled' : 'failed',
         controller: undefined,
+        error: uploadError instanceof ApiError ? uploadError.message : uploadError instanceof Error ? uploadError.message : t('toast.uploadFailed'),
       })
       return false
     }
@@ -122,7 +130,7 @@ export function UploadPage() {
   }
 
   function updateItem(id: string, patch: Partial<UploadItem>) {
-    setItems((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item))
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
   return (
@@ -133,8 +141,16 @@ export function UploadPage() {
           <p className="page-description">{t('upload.description')}</p>
         </div>
         <div className="runtime-chips" aria-hidden="true">
-          <span className="runtime-chip"><Icon name="zap" /><span>{t('upload.concurrency')}</span><strong>{systemQuery.data?.processingConcurrency ?? 1}</strong></span>
-          <span className="runtime-chip"><Icon name="images" /><span>{t('upload.batch')}</span><strong>{systemQuery.data?.maxBatchCount ?? 20}</strong></span>
+          <span className="runtime-chip">
+            <Icon name="zap" />
+            <span>{t('upload.concurrency')}</span>
+            <strong>{systemQuery.data?.processingConcurrency ?? 1}</strong>
+          </span>
+          <span className="runtime-chip">
+            <Icon name="images" />
+            <span>{t('upload.batch')}</span>
+            <strong>{systemQuery.data?.maxBatchCount ?? 20}</strong>
+          </span>
         </div>
       </div>
       <form onSubmit={(event) => void submit(event)}>
@@ -142,8 +158,15 @@ export function UploadPage() {
           <label
             className={`upload-dropzone ${dragActive ? 'is-dragging' : ''}`}
             htmlFor="upload-files"
-            onDragEnter={(event) => { event.preventDefault(); setDragActive(true) }}
-            onDragOver={(event) => { event.preventDefault(); event.dataTransfer.dropEffect = 'copy'; setDragActive(true) }}
+            onDragEnter={(event) => {
+              event.preventDefault()
+              setDragActive(true)
+            }}
+            onDragOver={(event) => {
+              event.preventDefault()
+              event.dataTransfer.dropEffect = 'copy'
+              setDragActive(true)
+            }}
             onDragLeave={(event) => {
               if (event.relatedTarget instanceof Node && event.currentTarget.contains(event.relatedTarget)) return
               setDragActive(false)
@@ -151,10 +174,15 @@ export function UploadPage() {
             onDrop={drop}
           >
             <div className="upload-dropzone-content">
-              <div className="upload-icon"><Icon name="cloudUpload" className="h-8 w-8" /></div>
+              <div className="upload-icon">
+                <Icon name="cloudUpload" className="h-8 w-8" />
+              </div>
               <h2 className="text-xl font-semibold tracking-tight">{t('upload.dropOrPaste')}</h2>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">{t('upload.dropHelp')}</p>
-              <span className="upload-dropzone-action"><Icon name="image" />{t('upload.chooseFiles')}</span>
+              <span className="upload-dropzone-action">
+                <Icon name="image" />
+                {t('upload.chooseFiles')}
+              </span>
             </div>
           </label>
           <input
@@ -172,16 +200,31 @@ export function UploadPage() {
           <div className="upload-controls">
             <label className="block min-w-0 flex-1 font-medium" htmlFor="upload-visibility">
               <span className="text-sm text-muted-foreground">{t('upload.visibility')}</span>
-              <Select className="mt-1.5 max-w-sm" id="upload-visibility" ariaLabel={t('upload.visibility')} value={visibility} onValueChange={(value) => setVisibility(value as Visibility | 'default')} options={[
-                { value: 'default', label: t('upload.visibilityDefault') }, { value: 'public', label: t('visibility.public') }, { value: 'private', label: t('visibility.private') },
-              ]} />
+              <Select
+                className="mt-1.5 max-w-sm"
+                id="upload-visibility"
+                ariaLabel={t('upload.visibility')}
+                value={visibility}
+                onValueChange={(value) => setVisibility(value as Visibility | 'default')}
+                options={[
+                  { value: 'default', label: t('upload.visibilityDefault') },
+                  { value: 'public', label: t('visibility.public') },
+                  { value: 'private', label: t('visibility.private') },
+                ]}
+              />
             </label>
             <div className="flex flex-wrap gap-3">
               <Button className="standard-action-button" type="submit" disabled={items.length === 0 || uploading}>
                 <Icon name="upload" />
                 {uploading ? t('common.working') : t('upload.uploadCount', { count: items.filter((item) => item.status !== 'complete').length })}
               </Button>
-              <Button className="standard-action-button" variant="outline" type="button" disabled={uploading || items.length === 0} onClick={() => setItems([])}>
+              <Button
+                className="standard-action-button"
+                variant="outline"
+                type="button"
+                disabled={uploading || items.length === 0}
+                onClick={() => setItems([])}
+              >
                 <Icon name="x" />
                 {t('common.clear')}
               </Button>
@@ -192,43 +235,64 @@ export function UploadPage() {
       {error ? <p className="mt-5 rounded-xl bg-danger-soft px-4 py-3 text-danger">{error}</p> : null}
       {items.length === 0 ? (
         <div className="empty-state">
-          <div><span className="empty-state-icon"><Icon name="image" /></span><p>{t('upload.empty')}</p></div>
+          <div>
+            <span className="empty-state-icon">
+              <Icon name="image" />
+            </span>
+            <p>{t('upload.empty')}</p>
+          </div>
         </div>
       ) : null}
       <div className="mt-6 grid gap-3">
-        {items.map((item) => <UploadRow item={item} key={item.id} uploading={uploading} onCancel={() => item.controller?.abort()} onRetry={() => void retry(item)} />)}
+        {items.map((item) => (
+          <UploadRow item={item} key={item.id} uploading={uploading} onCancel={() => item.controller?.abort()} onRetry={() => void retry(item)} />
+        ))}
       </div>
     </section>
   )
 }
 
-function UploadRow({ item, uploading, onCancel, onRetry }: {
-  item: UploadItem
-  uploading: boolean
-  onCancel: () => void
-  onRetry: () => void
-}) {
+function UploadRow({ item, uploading, onCancel, onRetry }: { item: UploadItem; uploading: boolean; onCancel: () => void; onRetry: () => void }) {
   const { t } = useTranslation()
   return (
     <article>
       <Card size="sm" className="p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex min-w-0 items-center gap-3">
-          <span className="nav-icon-wrap text-cyan"><Icon name={item.status === 'complete' ? 'check' : 'image'} /></span>
-          <div className="min-w-0">
-          <p className="truncate font-medium">{item.file.name}</p>
-          <p className="mt-1 text-sm text-muted-foreground">{formatBytes(item.file.size)} · {t(`upload.status.${item.status}`)}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="nav-icon-wrap text-cyan">
+              <Icon name={item.status === 'complete' ? 'check' : 'image'} />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate font-medium">{item.file.name}</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {formatBytes(item.file.size)} · {t(`upload.status.${item.status}`)}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            {item.status === 'uploading' ? (
+              <Button size="sm" variant="outline" type="button" onClick={onCancel}>
+                <Icon name="x" />
+                {t('common.cancel')}
+              </Button>
+            ) : null}
+            {item.status === 'failed' || item.status === 'canceled' ? (
+              <Button size="sm" variant="outline" type="button" disabled={uploading} onClick={onRetry}>
+                <Icon name="refresh" />
+                {t('common.retry')}
+              </Button>
+            ) : null}
           </div>
         </div>
-        <div className="flex gap-2">
-          {item.status === 'uploading' ? <Button size="sm" variant="outline" type="button" onClick={onCancel}><Icon name="x" />{t('common.cancel')}</Button> : null}
-          {(item.status === 'failed' || item.status === 'canceled') ? <Button size="sm" variant="outline" type="button" disabled={uploading} onClick={onRetry}><Icon name="refresh" />{t('common.retry')}</Button> : null}
+        <div className="mt-3 h-2 overflow-hidden rounded-full bg-canvas" aria-label={t('upload.progress', { percent: item.progress })}>
+          <div className="h-full bg-primary transition-all" style={{ width: `${item.progress}%` }} />
         </div>
-      </div>
-      <div className="mt-3 h-2 overflow-hidden rounded-full bg-canvas" aria-label={t('upload.progress', { percent: item.progress })}>
-        <div className="h-full bg-primary transition-all" style={{ width: `${item.progress}%` }} />
-      </div>
-      {item.result ? <UploadResult image={item.result} /> : null}
+        {item.result ? <UploadResult image={item.result} /> : null}
+        {item.error ? (
+          <p className="mt-3 text-sm text-danger" role="alert">
+            {item.error}
+          </p>
+        ) : null}
       </Card>
     </article>
   )
@@ -238,13 +302,17 @@ function UploadResult({ image }: { image: Image }) {
   const { t } = useTranslation()
   return (
     <div className="mt-4">
-      <p className="text-sm text-muted-foreground">{t('upload.result', {
-        format: image.extension,
-        before: formatBytes(image.sourceSize),
-        after: formatBytes(image.storedSize),
-        percent: savingsPercent(image),
-      })}</p>
-      <div className="mt-3"><CopyLinkControl image={image} /></div>
+      <p className="text-sm text-muted-foreground">
+        {t('upload.result', {
+          format: image.extension,
+          before: formatBytes(image.sourceSize),
+          after: formatBytes(image.storedSize),
+          percent: savingsPercent(image),
+        })}
+      </p>
+      <div className="mt-3">
+        <CopyLinkControl image={image} />
+      </div>
     </div>
   )
 }
@@ -252,4 +320,9 @@ function UploadResult({ image }: { image: Image }) {
 function savingsPercent(image: Image) {
   if (image.sourceSize === 0) return '0.0'
   return (((image.sourceSize - image.storedSize) / image.sourceSize) * 100).toFixed(1)
+}
+
+function isSupportedImageFile(file: File) {
+  if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) return true
+  return file.type === '' && /\.(?:jpe?g|png|webp|gif)$/i.test(file.name)
 }

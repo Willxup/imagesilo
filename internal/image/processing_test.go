@@ -45,6 +45,15 @@ type testingT struct{}
 func (testingT) Helper()                           {}
 func (testingT) Fatalf(format string, args ...any) { panic("unexpected fixture failure") }
 
+type readTracker struct {
+	read bool
+}
+
+func (r *readTracker) Read([]byte) (int, error) {
+	r.read = true
+	return 0, errors.New("reader must not be consumed")
+}
+
 func TestCompressionRejectsNonSmallerOutputAndKeepsUniqueUploads(t *testing.T) {
 	service, filesystem, _, closeDB := newProcessingTestService(t, &fakeEngine{transform: copyTransform})
 	defer closeDB()
@@ -173,6 +182,137 @@ func TestConvertToWebPReplacesStoredContentAndKeepsImageIdentity(t *testing.T) {
 	}
 }
 
+func TestConvertToWebPRemovesStaleThumbnailWhenReplacementIsUnavailable(t *testing.T) {
+	thumbnailUnavailable := false
+	engine := &fakeEngine{
+		transform: func(_, outputPath string, _ processor.Plan) error {
+			return os.WriteFile(outputPath, onePixelWebP(t), 0o600)
+		},
+		thumbnail: func(_, outputPath string) error {
+			if thumbnailUnavailable {
+				return processor.ErrUnavailable
+			}
+			return os.WriteFile(outputPath, onePixelJPEG(t), 0o600)
+		},
+	}
+	service, filesystem, _, closeDB := newProcessingTestService(t, engine)
+	defer closeDB()
+	value, err := service.Upload(context.Background(), bytes.NewReader(onePixelJPEG(t)), "stale.jpg", processingUploadOptions(processor.Options{}), time.Now())
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	thumbnailUnavailable = true
+	result, err := service.ConvertToWebP(context.Background(), value.ID, processor.Options{ConversionWebPQuality: 82})
+	if err != nil || !result.ThumbnailUpdated || result.CleanupPending {
+		t.Fatalf("ConvertToWebP() = %+v, %v", result, err)
+	}
+	if thumbnail, err := filesystem.OpenThumbnail(value.ID); err == nil {
+		thumbnail.Close()
+		t.Fatal("conversion left the old thumbnail available")
+	}
+}
+
+func TestConvertToWebPSerializesWithVisibilityChange(t *testing.T) {
+	transformStarted := make(chan struct{})
+	releaseTransform := make(chan struct{})
+	engine := &fakeEngine{transform: func(_, outputPath string, _ processor.Plan) error {
+		if err := os.WriteFile(outputPath, onePixelWebP(t), 0o600); err != nil {
+			return err
+		}
+		close(transformStarted)
+		<-releaseTransform
+		return nil
+	}}
+	service, _, _, closeDB := newProcessingTestService(t, engine)
+	defer closeDB()
+	value, err := service.Upload(context.Background(), bytes.NewReader(onePixelJPEG(t)), "visibility.jpg", processingUploadOptions(processor.Options{}), time.Now())
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	visibilityAttempted := make(chan struct{})
+	service.beforeMutationLock = func(operation, _ string) {
+		if operation == "visibility" {
+			close(visibilityAttempted)
+		}
+	}
+	conversionDone := make(chan error, 1)
+	go func() {
+		_, conversionErr := service.ConvertToWebP(context.Background(), value.ID, processor.Options{ConversionWebPQuality: 82})
+		conversionDone <- conversionErr
+	}()
+	<-transformStarted
+	visibilityDone := make(chan error, 1)
+	go func() {
+		_, visibilityErr := service.ChangeVisibility(context.Background(), value.ID, VisibilityPrivate)
+		visibilityDone <- visibilityErr
+	}()
+	<-visibilityAttempted
+	close(releaseTransform)
+	if err := <-conversionDone; err != nil {
+		t.Fatalf("ConvertToWebP() error = %v", err)
+	}
+	if err := <-visibilityDone; err != nil {
+		t.Fatalf("ChangeVisibility() error = %v", err)
+	}
+	stored, err := service.Get(context.Background(), value.ID)
+	if err != nil || stored.Visibility != VisibilityPrivate {
+		t.Fatalf("stored image = %+v, %v", stored, err)
+	}
+	target, ok := service.index.Get(value.ID)
+	if !ok || target.Visibility != string(VisibilityPrivate) {
+		t.Fatalf("delivery target = %+v, found=%v", target, ok)
+	}
+}
+
+func TestConvertToWebPSerializesWithDeleteWithoutGhostIndex(t *testing.T) {
+	engine := &fakeEngine{transform: func(_, outputPath string, _ processor.Plan) error {
+		return os.WriteFile(outputPath, onePixelWebP(t), 0o600)
+	}}
+	service, _, _, closeDB := newProcessingTestService(t, engine)
+	defer closeDB()
+	value, err := service.Upload(context.Background(), bytes.NewReader(onePixelJPEG(t)), "delete.jpg", processingUploadOptions(processor.Options{}), time.Now())
+	if err != nil {
+		t.Fatalf("Upload() error = %v", err)
+	}
+	contentUpdated := make(chan struct{})
+	releaseConversion := make(chan struct{})
+	deleteAttempted := make(chan struct{})
+	service.afterContentUpdate = func(string) {
+		close(contentUpdated)
+		<-releaseConversion
+	}
+	service.beforeMutationLock = func(operation, _ string) {
+		if operation == "delete" {
+			close(deleteAttempted)
+		}
+	}
+	conversionDone := make(chan error, 1)
+	go func() {
+		_, conversionErr := service.ConvertToWebP(context.Background(), value.ID, processor.Options{ConversionWebPQuality: 82})
+		conversionDone <- conversionErr
+	}()
+	<-contentUpdated
+	deleteDone := make(chan error, 1)
+	go func() {
+		_, deleteErr := service.Delete(context.Background(), value.ID)
+		deleteDone <- deleteErr
+	}()
+	<-deleteAttempted
+	close(releaseConversion)
+	if err := <-conversionDone; err != nil {
+		t.Fatalf("ConvertToWebP() error = %v", err)
+	}
+	if err := <-deleteDone; err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := service.Get(context.Background(), value.ID); !errors.Is(err, ErrImageNotFound) {
+		t.Fatalf("Get() after delete error = %v", err)
+	}
+	if target, ok := service.index.Get(value.ID); ok {
+		t.Fatalf("deleted image left ghost delivery target: %+v", target)
+	}
+}
+
 func TestFullProcessingGateAndInvalidImageLeaveNoTemporaryFiles(t *testing.T) {
 	dataDirectory := prepareUploadTestData(t)
 	db, err := database.Open(filepath.Join(dataDirectory, "db", "imagesilo.db"))
@@ -190,8 +330,12 @@ func TestFullProcessingGateAndInvalidImageLeaveNoTemporaryFiles(t *testing.T) {
 		t.Fatal("failed to occupy processing gate")
 	}
 	service := NewServiceWithProcessor(NewRepository(db), filesystem, delivery.NewIndex(), &fakeEngine{transform: copyTransform}, gate)
-	if _, err := service.Upload(context.Background(), bytes.NewReader(testJPEG(t)), "busy.jpg", processingUploadOptions(processor.Options{}), time.Now()); !errors.Is(err, ErrProcessingBusy) {
+	reader := &readTracker{}
+	if _, err := service.Upload(context.Background(), reader, "busy.jpg", processingUploadOptions(processor.Options{}), time.Now()); !errors.Is(err, ErrProcessingBusy) {
 		t.Fatalf("busy Upload() error = %v, want ErrProcessingBusy", err)
+	}
+	if reader.read {
+		t.Fatal("busy Upload() consumed request bytes before admission")
 	}
 	release()
 	if _, err := service.Upload(context.Background(), bytes.NewReader([]byte("not an image")), "bad.jpg", processingUploadOptions(processor.Options{}), time.Now()); !errors.Is(err, ErrUnsupportedFormat) {

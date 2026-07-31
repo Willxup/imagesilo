@@ -41,9 +41,21 @@ func (r *Repository) Create(ctx context.Context, value Alias) error {
 }
 
 func (r *Repository) List(ctx context.Context, limit int) ([]Alias, error) {
-	rows, err := r.db.QueryContext(ctx, `
+	return r.ListPage(ctx, limit, 0, "")
+}
+
+func (r *Repository) ListPage(ctx context.Context, limit int, beforeUnix int64, beforeID string) ([]Alias, error) {
+	query := `
 		SELECT id, alias_path, image_id, source, created_at
-		FROM image_aliases ORDER BY created_at DESC, id DESC LIMIT ?`, limit)
+		FROM image_aliases`
+	arguments := []any{}
+	if beforeID != "" {
+		query += ` WHERE created_at < ? OR (created_at = ? AND id < ?)`
+		arguments = append(arguments, beforeUnix, beforeUnix, beforeID)
+	}
+	query += ` ORDER BY created_at DESC, id DESC LIMIT ?`
+	arguments = append(arguments, limit)
+	rows, err := r.db.QueryContext(ctx, query, arguments...)
 	if err != nil {
 		return nil, fmt.Errorf("list image aliases: %w", err)
 	}

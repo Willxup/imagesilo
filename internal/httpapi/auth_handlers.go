@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strconv"
 	"strings"
 	"time"
@@ -19,11 +20,12 @@ const (
 )
 
 type authHandler struct {
-	service        *auth.Service
-	authenticator  *authenticator
-	cookieSecure   bool
-	accountLimiter *loginLimiter
-	addressLimiter *loginLimiter
+	service           *auth.Service
+	authenticator     *authenticator
+	cookieSecure      bool
+	accountLimiter    *loginLimiter
+	addressLimiter    *loginLimiter
+	trustProxyHeaders bool
 }
 
 type loginRequest struct {
@@ -49,11 +51,12 @@ type updateProfileRequest struct {
 	Email       string `json:"email"`
 }
 
-func newAuthHandler(service *auth.Service, authenticator *authenticator, cookieSecure bool) *authHandler {
+func newAuthHandler(service *auth.Service, authenticator *authenticator, cookieSecure, trustProxyHeaders bool) *authHandler {
 	return &authHandler{
 		service: service, authenticator: authenticator, cookieSecure: cookieSecure,
-		accountLimiter: newLoginLimiter(5, 5*time.Minute),
-		addressLimiter: newLoginLimiter(20, 5*time.Minute),
+		accountLimiter:    newLoginLimiter(5, 5*time.Minute),
+		addressLimiter:    newLoginLimiter(20, 5*time.Minute),
+		trustProxyHeaders: trustProxyHeaders,
 	}
 }
 
@@ -64,13 +67,13 @@ func (h *authHandler) login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	request.Email = strings.TrimSpace(request.Email)
-	if request.Email == "" || len(request.Email) > 254 || request.Password == "" || len(request.Password) > 1024 {
+	if request.Email == "" || len(request.Email) > 254 || request.Password == "" || len(request.Password) > auth.MaximumPasswordBytes {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "Email or password has an invalid length.")
 		return
 	}
 	now := time.Now()
 	accountKey := "account:" + strings.ToLower(strings.TrimSpace(request.Email))
-	addressKey := "address:" + remoteAddress(r)
+	addressKey := "address:" + remoteAddress(r, h.trustProxyHeaders)
 	if allowed, retry := h.addressLimiter.Allow(addressKey, now); !allowed {
 		writeRateLimited(w, r, retry)
 		return
@@ -137,7 +140,7 @@ func (h *authHandler) changePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "Invalid password change request.")
 		return
 	}
-	if len(request.CurrentPassword) > 1024 || len(request.NewPassword) > 1024 {
+	if len(request.CurrentPassword) > auth.MaximumPasswordBytes || len(request.NewPassword) > auth.MaximumPasswordBytes {
 		writeError(w, r, http.StatusBadRequest, "invalid_request", "Password has an invalid length.")
 		return
 	}
@@ -151,6 +154,8 @@ func (h *authHandler) changePassword(w http.ResponseWriter, r *http.Request) {
 			writeError(w, r, http.StatusUnauthorized, "invalid_credentials", "Current password is incorrect.")
 		case errors.Is(err, auth.ErrPasswordTooShort):
 			writeError(w, r, http.StatusBadRequest, "password_too_short", err.Error())
+		case errors.Is(err, auth.ErrPasswordTooLong):
+			writeError(w, r, http.StatusBadRequest, "invalid_request", err.Error())
 		default:
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to change password.")
 		}
@@ -232,10 +237,33 @@ func toSessionResponse(identity auth.SessionIdentity, csrfToken string) sessionR
 	return sessionResponse{AdminID: identity.AdminID, DisplayName: identity.DisplayName, Email: identity.Email, CSRFToken: csrfToken, ExpiresAt: identity.ExpiresAt}
 }
 
-func remoteAddress(r *http.Request) string {
+func remoteAddress(r *http.Request, trustProxyHeaders bool) string {
+	if trustProxyHeaders {
+		realIPValues := r.Header.Values("X-Real-IP")
+		if len(realIPValues) == 1 && !strings.Contains(realIPValues[0], ",") {
+			if address, err := netip.ParseAddr(strings.TrimSpace(realIPValues[0])); err == nil {
+				return address.Unmap().String()
+			}
+		}
+		forwardedValues := r.Header.Values("X-Forwarded-For")
+		for valueIndex := len(forwardedValues) - 1; valueIndex >= 0; valueIndex-- {
+			parts := strings.Split(forwardedValues[valueIndex], ",")
+			for partIndex := len(parts) - 1; partIndex >= 0; partIndex-- {
+				if address, err := netip.ParseAddr(strings.TrimSpace(parts[partIndex])); err == nil {
+					return address.Unmap().String()
+				}
+			}
+		}
+	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err == nil {
+		if address, parseErr := netip.ParseAddr(host); parseErr == nil {
+			return address.Unmap().String()
+		}
 		return host
+	}
+	if address, parseErr := netip.ParseAddr(r.RemoteAddr); parseErr == nil {
+		return address.Unmap().String()
 	}
 	return r.RemoteAddr
 }

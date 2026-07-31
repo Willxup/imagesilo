@@ -20,6 +20,7 @@ type setupStatusResponse struct {
 }
 
 type setupRequest struct {
+	BootstrapToken        string            `json:"bootstrapToken"`
 	DisplayName           string            `json:"displayName"`
 	Email                 string            `json:"email"`
 	Password              string            `json:"password"`
@@ -53,7 +54,8 @@ func (h *setupHandler) initialize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_, err := h.service.Initialize(r.Context(), setup.Request{
-		DisplayName: request.DisplayName, Email: request.Email, Password: request.Password,
+		BootstrapToken: request.BootstrapToken,
+		DisplayName:    request.DisplayName, Email: request.Email, Password: request.Password,
 		DefaultVisibility: request.DefaultVisibility, CompressionEnabled: request.CompressionEnabled,
 		JPEGQuality: request.JPEGQuality, WebPQuality: request.WebPQuality, PNGCompressionLevel: request.PNGCompressionLevel,
 		ConversionEnabled: request.ConversionEnabled, ConversionWebPQuality: request.ConversionWebPQuality,
@@ -63,7 +65,9 @@ func (h *setupHandler) initialize(w http.ResponseWriter, r *http.Request) {
 		switch {
 		case errors.Is(err, setup.ErrAlreadyInitialized):
 			writeError(w, r, http.StatusConflict, "already_initialized", err.Error())
-		case errors.Is(err, setup.ErrInvalidSettings), errors.Is(err, auth.ErrInvalidDisplayName), errors.Is(err, auth.ErrInvalidEmail), errors.Is(err, auth.ErrPasswordTooShort):
+		case errors.Is(err, setup.ErrInvalidBootstrapToken):
+			writeError(w, r, http.StatusForbidden, "invalid_bootstrap_token", err.Error())
+		case errors.Is(err, setup.ErrInvalidSettings), errors.Is(err, auth.ErrInvalidDisplayName), errors.Is(err, auth.ErrInvalidEmail), errors.Is(err, auth.ErrPasswordTooShort), errors.Is(err, auth.ErrPasswordTooLong):
 			writeError(w, r, http.StatusBadRequest, "invalid_setup", err.Error())
 		default:
 			writeError(w, r, http.StatusInternalServerError, "internal_error", "Unable to initialize ImageSilo.")

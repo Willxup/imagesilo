@@ -35,6 +35,7 @@ export function SetupPage() {
     setPending(true)
     setError('')
     const request: SetupRequest = {
+      bootstrapToken: String(form.get('bootstrapToken') ?? ''),
       displayName: String(form.get('displayName') ?? ''),
       email: String(form.get('email') ?? ''),
       password: String(form.get('password') ?? ''),
@@ -49,7 +50,9 @@ export function SetupPage() {
     }
     try {
       await apiRequest<AdminSession>('/api/v1/setup', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(request),
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(request),
       })
       await Promise.all([refresh(), refreshSetup()])
       navigate('/admin/upload', { replace: true })
@@ -63,29 +66,67 @@ export function SetupPage() {
   return (
     <main className="setup-page">
       <section className="setup-card">
-        <div className="setup-brand"><BrandLogo imageClassName="h-10 w-auto" /></div>
+        <div className="setup-brand">
+          <BrandLogo imageClassName="h-10 w-auto" />
+        </div>
         <div className="setup-heading">
-          <span className="setup-icon"><Icon name="wand" /></span>
-          <div><h1>{t('setup.title')}</h1><p>{t('setup.description')}</p></div>
+          <span className="setup-icon">
+            <Icon name="wand" />
+          </span>
+          <div>
+            <h1>{t('setup.title')}</h1>
+            <p>{t('setup.description')}</p>
+          </div>
         </div>
         <form className="setup-form" onSubmit={submit}>
+          <label className="field-group">
+            {t('setup.bootstrapToken')}
+            <Input name="bootstrapToken" autoComplete="off" spellCheck={false} maxLength={47} pattern="isb_[A-Za-z0-9_-]{43}" required />
+          </label>
           <div className="grid gap-4 sm:grid-cols-2">
-            <label className="field-group">{t('setup.displayName')}<Input name="displayName" autoComplete="name" maxLength={80} required defaultValue="ImageSilo" /></label>
-            <label className="field-group">{t('auth.email')}<Input name="email" type="email" autoComplete="username" required /></label>
-            <label className="field-group">{t('auth.password')}<Input name="password" type="password" autoComplete="new-password" minLength={12} required /></label>
-            <label className="field-group">{t('setup.confirmPassword')}<Input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} required /></label>
+            <label className="field-group">
+              {t('setup.displayName')}
+              <Input name="displayName" autoComplete="name" maxLength={80} required defaultValue="ImageSilo" />
+            </label>
+            <label className="field-group">
+              {t('auth.email')}
+              <Input name="email" type="email" autoComplete="username" maxLength={254} required />
+            </label>
+            <label className="field-group">
+              {t('auth.password')}
+              <Input name="password" type="password" autoComplete="new-password" minLength={12} maxLength={1024} required />
+            </label>
+            <label className="field-group">
+              {t('setup.confirmPassword')}
+              <Input name="confirmPassword" type="password" autoComplete="new-password" minLength={12} maxLength={1024} required />
+            </label>
           </div>
           <div className="setup-options">
-            <label className="field-group">{t('settings.defaultVisibility')}
-              <Select ariaLabel={t('settings.defaultVisibility')} value={visibility} onValueChange={(value) => setVisibility(value as Visibility)} options={[
-                { value: 'public', label: t('visibility.public') }, { value: 'private', label: t('visibility.private') },
-              ]} />
+            <label className="field-group">
+              {t('settings.defaultVisibility')}
+              <Select
+                ariaLabel={t('settings.defaultVisibility')}
+                value={visibility}
+                onValueChange={(value) => setVisibility(value as Visibility)}
+                options={[
+                  { value: 'public', label: t('visibility.public') },
+                  { value: 'private', label: t('visibility.private') },
+                ]}
+              />
             </label>
-            <label className="setup-check"><Checkbox checked={compressionEnabled} onChange={(event) => setCompressionEnabled(event.target.checked)} />
-              <span><strong>{t('settings.compressionEnabled')}</strong><small>{t('setup.compressionHelp')}</small></span>
+            <label className="setup-check">
+              <Checkbox checked={compressionEnabled} onChange={(event) => setCompressionEnabled(event.target.checked)} />
+              <span>
+                <strong>{t('settings.compressionEnabled')}</strong>
+                <small>{t('setup.compressionHelp')}</small>
+              </span>
             </label>
-            <label className="setup-check"><Checkbox checked={conversionEnabled} onChange={(event) => setConversionEnabled(event.target.checked)} />
-              <span><strong>{t('settings.conversionEnabled')}</strong><small>{t('setup.conversionHelp')}</small></span>
+            <label className="setup-check">
+              <Checkbox checked={conversionEnabled} onChange={(event) => setConversionEnabled(event.target.checked)} />
+              <span>
+                <strong>{t('settings.conversionEnabled')}</strong>
+                <small>{t('setup.conversionHelp')}</small>
+              </span>
             </label>
           </div>
           {error ? <p className="setup-error">{error}</p> : null}

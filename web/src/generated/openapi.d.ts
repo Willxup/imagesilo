@@ -504,6 +504,7 @@ export interface components {
             initialized: boolean;
         };
         SetupRequest: {
+            bootstrapToken: string;
             displayName: string;
             /** Format: email */
             email: string;
@@ -673,6 +674,7 @@ export interface components {
         };
         SystemInfo: {
             processingConcurrency: number;
+            deliveryConcurrency: number;
             maxBatchCount: number;
             /** Format: int64 */
             maxUploadBytes: number;
@@ -759,6 +761,7 @@ export interface components {
         };
         ImageAliasList: {
             items: components["schemas"]["ImageAlias"][];
+            nextCursor?: string;
         };
         ImportResult: {
             /** Format: uuid */
@@ -887,7 +890,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description 数据库、存储和索引就绪 */
+            /** @description SQLite 连接就绪 */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -942,6 +945,7 @@ export interface operations {
                 };
             };
             400: components["responses"]["BadRequest"];
+            403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
         };
     };
@@ -1342,6 +1346,7 @@ export interface operations {
             };
             401: components["responses"]["Unauthorized"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     deliverImage: {
@@ -1380,6 +1385,7 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];
+            503: components["responses"]["ServiceUnavailable"];
         };
     };
     listApiTokens: {
@@ -1674,6 +1680,7 @@ export interface operations {
         parameters: {
             query?: {
                 limit?: number;
+                cursor?: string;
             };
             header?: never;
             path?: never;

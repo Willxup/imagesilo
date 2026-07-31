@@ -22,6 +22,7 @@ type PersistentStats struct {
 type ImageFileRecord struct {
 	ID         string
 	StorageKey string
+	StoredSize int64
 }
 
 func NewRepository(db *sql.DB) *Repository {
@@ -49,7 +50,7 @@ func (r *Repository) Stats(ctx context.Context, now time.Time) (PersistentStats,
 }
 
 func (r *Repository) ImageFiles(ctx context.Context) ([]ImageFileRecord, error) {
-	rows, err := r.db.QueryContext(ctx, "SELECT id, storage_key FROM images ORDER BY id")
+	rows, err := r.db.QueryContext(ctx, "SELECT id, storage_key, stored_size FROM images ORDER BY id")
 	if err != nil {
 		return nil, fmt.Errorf("list image file records: %w", err)
 	}
@@ -57,7 +58,7 @@ func (r *Repository) ImageFiles(ctx context.Context) ([]ImageFileRecord, error) 
 	result := make([]ImageFileRecord, 0)
 	for rows.Next() {
 		var value ImageFileRecord
-		if err := rows.Scan(&value.ID, &value.StorageKey); err != nil {
+		if err := rows.Scan(&value.ID, &value.StorageKey, &value.StoredSize); err != nil {
 			return nil, fmt.Errorf("scan image file record: %w", err)
 		}
 		result = append(result, value)

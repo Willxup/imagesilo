@@ -3,6 +3,7 @@ package httpapi
 import (
 	"encoding/hex"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -44,37 +45,97 @@ func (h *importHandler) create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, currentSettings.MaxUploadBytes+multipartOverheadBytes)
-	if err := r.ParseMultipartForm(256 << 10); err != nil {
-		var maxBytesError *http.MaxBytesError
-		if errors.As(err, &maxBytesError) {
-			writeError(w, r, http.StatusRequestEntityTooLarge, "file_too_large", "Image exceeds the maximum upload size.")
-			return
-		}
+	lease, ok := h.service.TryAcquireProcessing()
+	if !ok {
+		w.Header().Set("Retry-After", "1")
+		writeError(w, r, http.StatusServiceUnavailable, "processing_busy", "Image processor is at capacity. Retry shortly.")
+		return
+	}
+	defer lease.Release()
+	multipartReader, err := r.MultipartReader()
+	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "A multipart image import is required.")
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
-	files := r.MultipartForm.File["file"]
-	aliases := r.MultipartForm.Value["alias"]
-	visibilities := r.MultipartForm.Value["visibility"]
-	if len(files) != 1 || len(aliases) != 1 || len(visibilities) > 1 {
+	var staged *importer.StagedImport
+	defer func() { h.service.Discard(staged) }()
+	var originalName, aliasPath, visibilityValue string
+	aliasSeen := false
+	visibilitySeen := false
+	for {
+		part, partErr := multipartReader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if partErr != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(partErr, &maxBytesError) {
+				writeError(w, r, http.StatusRequestEntityTooLarge, "file_too_large", "Image exceeds the maximum upload size.")
+			} else {
+				writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to read multipart import.")
+			}
+			return
+		}
+		switch part.FormName() {
+		case "file":
+			if staged != nil || part.FileName() == "" {
+				part.Close()
+				writeError(w, r, http.StatusBadRequest, "single_import_required", "Exactly one image file and one alias path are required.")
+				return
+			}
+			originalName = part.FileName()
+			staged, err = h.service.Stage(part, currentSettings.MaxUploadBytes)
+			part.Close()
+			if err != nil {
+				h.writeServiceError(w, r, err)
+				return
+			}
+		case "alias":
+			if aliasSeen || part.FileName() != "" {
+				part.Close()
+				writeError(w, r, http.StatusBadRequest, "single_import_required", "Exactly one image file and one alias path are required.")
+				return
+			}
+			value, readErr := io.ReadAll(io.LimitReader(part, 2049))
+			part.Close()
+			if readErr != nil || len(value) > 2048 {
+				writeError(w, r, http.StatusBadRequest, "invalid_alias", "Alias path is too long.")
+				return
+			}
+			aliasSeen = true
+			aliasPath = string(value)
+		case "visibility":
+			if visibilitySeen || part.FileName() != "" {
+				part.Close()
+				writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be supplied once as public or private.")
+				return
+			}
+			value, readErr := io.ReadAll(io.LimitReader(part, 65))
+			part.Close()
+			if readErr != nil || len(value) > 64 {
+				writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
+				return
+			}
+			visibilitySeen = true
+			visibilityValue = strings.TrimSpace(string(value))
+		default:
+			part.Close()
+			writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Multipart import contains an unsupported field.")
+			return
+		}
+	}
+	if staged == nil || !aliasSeen {
 		writeError(w, r, http.StatusBadRequest, "single_import_required", "Exactly one image file and one alias path are required.")
 		return
 	}
 	visibility := currentSettings.DefaultVisibility
-	if len(visibilities) == 1 && strings.TrimSpace(visibilities[0]) != "" {
-		visibility = images.Visibility(strings.TrimSpace(visibilities[0]))
+	if visibilityValue != "" {
+		visibility = images.Visibility(visibilityValue)
 		if visibility != images.VisibilityPublic && visibility != images.VisibilityPrivate {
 			writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
 			return
 		}
 	}
-	file, err := files[0].Open()
-	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to open imported image.")
-		return
-	}
-	defer file.Close()
 	options := importer.Options{
 		Visibility: visibility,
 		Limits:     processor.Limits{MaxBytes: currentSettings.MaxUploadBytes, MaxTotalPixels: currentSettings.MaxTotalPixels},
@@ -83,7 +144,7 @@ func (h *importHandler) create(w http.ResponseWriter, r *http.Request) {
 		tokenID := principal.APIToken.TokenID
 		options.UploadedByAPITokenID = &tokenID
 	}
-	result, err := h.service.Import(r.Context(), file, files[0].Filename, aliases[0], options, time.Now())
+	result, err := h.service.ImportStaged(r.Context(), staged, originalName, aliasPath, options, time.Now(), lease)
 	if err != nil {
 		h.writeServiceError(w, r, err)
 		return

@@ -36,13 +36,22 @@ type Dependencies struct {
 	Setup                 *setup.Service
 	Maintenance           *maintenance.Service
 	DeliveryIndex         *delivery.Index
+	DeliveryGate          *delivery.Gate
 	Storage               *storage.Filesystem
 	CookieSecure          bool
+	TrustProxyHeaders     bool
 	ProcessingConcurrency int
+	DeliveryConcurrency   int
 	UI                    *webui.UI
 }
 
 func NewRouter(dependencies Dependencies) http.Handler {
+	if dependencies.DeliveryGate == nil {
+		dependencies.DeliveryGate = delivery.NewGate(64)
+	}
+	if dependencies.DeliveryConcurrency < 1 {
+		dependencies.DeliveryConcurrency = 64
+	}
 	router := chi.NewRouter()
 	router.Use(middleware.RequestID)
 	router.Use(middleware.Recoverer)
@@ -63,7 +72,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 
 	var authHandler *authHandler
 	if dependencies.Auth != nil {
-		authHandler = newAuthHandler(dependencies.Auth, authenticator, dependencies.CookieSecure)
+		authHandler = newAuthHandler(dependencies.Auth, authenticator, dependencies.CookieSecure, dependencies.TrustProxyHeaders)
 		router.Post("/api/v1/auth/login", authHandler.login)
 		router.Get("/api/v1/auth/session", authHandler.current)
 		router.Post("/api/v1/auth/logout", authHandler.logout)
@@ -89,7 +98,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Delete("/api/v1/aliases/{aliasID}", aliasHandler.delete)
 	}
 	if dependencies.Images != nil && dependencies.Auth != nil && dependencies.Settings != nil && dependencies.Storage != nil {
-		imageHandler := newImageHandler(dependencies.Images, dependencies.Aliases, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger)
+		imageHandler := newImageHandler(dependencies.Images, dependencies.Aliases, dependencies.Settings, dependencies.Storage, authenticator, dependencies.Logger, dependencies.DeliveryGate)
 		router.Get("/api/v1/images", imageHandler.list)
 		router.Post("/api/v1/images", imageHandler.upload)
 		router.Post("/api/v1/images/batch-delete", imageHandler.batchDelete)
@@ -109,7 +118,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Get("/api/v1/settings", settingsHandler.get)
 		router.Patch("/api/v1/settings/default-visibility", settingsHandler.updateDefaultVisibility)
 		router.Patch("/api/v1/settings/processing", settingsHandler.updateProcessing)
-		systemHandler := newSystemHandler(dependencies.Settings, authenticator, dependencies.ProcessingConcurrency)
+		systemHandler := newSystemHandler(dependencies.Settings, authenticator, dependencies.ProcessingConcurrency, dependencies.DeliveryConcurrency)
 		router.Get("/api/v1/system", systemHandler.get)
 	}
 	if dependencies.Maintenance != nil && dependencies.Auth != nil {
@@ -120,7 +129,7 @@ func NewRouter(dependencies Dependencies) http.Handler {
 	}
 	var imageDelivery *deliveryHandler
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {
-		imageDelivery = newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator)
+		imageDelivery = newDeliveryHandler(dependencies.DeliveryIndex, dependencies.Storage, authenticator, dependencies.DeliveryGate)
 		router.Get("/image/{imageID}", imageDelivery.serve)
 		router.Head("/image/{imageID}", imageDelivery.serve)
 	}

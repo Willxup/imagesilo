@@ -10,20 +10,25 @@ import (
 )
 
 const (
-	defaultListenAddress     = ":8080"
+	defaultListenAddress     = "127.0.0.1:8080"
 	defaultDataDirectory     = "/data"
 	defaultProcessingWorkers = 1
+	defaultDeliveryWorkers   = 64
 	defaultShutdownTimeout   = 10 * time.Second
 	minimumProcessingWorkers = 1
 	maximumProcessingWorkers = 64
+	minimumDeliveryWorkers   = 1
+	maximumDeliveryWorkers   = 4096
 )
 
 type Config struct {
 	ListenAddress         string
 	DataDirectory         string
 	ProcessingConcurrency int
+	DeliveryConcurrency   int
 	ShutdownTimeout       time.Duration
 	CookieSecure          bool
+	TrustProxyHeaders     bool
 }
 
 func Load() (Config, error) {
@@ -31,8 +36,10 @@ func Load() (Config, error) {
 		ListenAddress:         envOrDefault("IMAGESILO_LISTEN_ADDRESS", defaultListenAddress),
 		DataDirectory:         envOrDefault("IMAGESILO_DATA_DIR", defaultDataDirectory),
 		ProcessingConcurrency: defaultProcessingWorkers,
+		DeliveryConcurrency:   defaultDeliveryWorkers,
 		ShutdownTimeout:       defaultShutdownTimeout,
 		CookieSecure:          true,
+		TrustProxyHeaders:     true,
 	}
 
 	if raw := os.Getenv("IMAGESILO_PROCESSING_CONCURRENCY"); raw != "" {
@@ -49,12 +56,26 @@ func Load() (Config, error) {
 		}
 		cfg.ShutdownTimeout = value
 	}
+	if raw := os.Getenv("IMAGESILO_DELIVERY_CONCURRENCY"); raw != "" {
+		value, err := strconv.Atoi(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("IMAGESILO_DELIVERY_CONCURRENCY must be an integer: %w", err)
+		}
+		cfg.DeliveryConcurrency = value
+	}
 	if raw := os.Getenv("IMAGESILO_COOKIE_SECURE"); raw != "" {
 		value, err := strconv.ParseBool(raw)
 		if err != nil {
 			return Config{}, fmt.Errorf("IMAGESILO_COOKIE_SECURE must be true or false: %w", err)
 		}
 		cfg.CookieSecure = value
+	}
+	if raw := os.Getenv("IMAGESILO_TRUST_PROXY_HEADERS"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("IMAGESILO_TRUST_PROXY_HEADERS must be true or false: %w", err)
+		}
+		cfg.TrustProxyHeaders = value
 	}
 
 	if err := cfg.Validate(); err != nil {
@@ -72,6 +93,9 @@ func (c Config) Validate() error {
 	}
 	if c.ProcessingConcurrency < minimumProcessingWorkers || c.ProcessingConcurrency > maximumProcessingWorkers {
 		return fmt.Errorf("IMAGESILO_PROCESSING_CONCURRENCY must be between %d and %d", minimumProcessingWorkers, maximumProcessingWorkers)
+	}
+	if c.DeliveryConcurrency < minimumDeliveryWorkers || c.DeliveryConcurrency > maximumDeliveryWorkers {
+		return fmt.Errorf("IMAGESILO_DELIVERY_CONCURRENCY must be between %d and %d", minimumDeliveryWorkers, maximumDeliveryWorkers)
 	}
 	if c.ShutdownTimeout <= 0 || c.ShutdownTimeout > time.Minute {
 		return fmt.Errorf("IMAGESILO_SHUTDOWN_TIMEOUT must be greater than zero and at most 1m")

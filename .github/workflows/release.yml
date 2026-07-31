@@ -4,11 +4,49 @@ on:
   push:
     tags: ['v*']
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
 jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      release_tag: ${{ steps.release.outputs.release_tag }}
+      release_commit: ${{ steps.release.outputs.release_commit }}
+      repository: ${{ steps.release.outputs.repository }}
+    steps:
+      - name: Check out complete source history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - name: Validate tag and main ancestry
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_tag="${GITHUB_REF_NAME}"
+          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]] || test "${#release_tag}" -gt 80; then
+            echo "Invalid release tag: $release_tag" >&2
+            exit 1
+          fi
+          git fetch --no-tags origin '+refs/heads/main:refs/remotes/origin/main'
+          release_commit="$(git rev-parse "${GITHUB_REF}^{commit}")"
+          if ! git merge-base --is-ancestor "$release_commit" refs/remotes/origin/main; then
+            echo "Release commit is not contained in origin/main: $release_commit" >&2
+            exit 1
+          fi
+          owner="${GITHUB_REPOSITORY_OWNER,,}"
+          echo "release_tag=$release_tag" >> "$GITHUB_OUTPUT"
+          echo "release_commit=$release_commit" >> "$GITHUB_OUTPUT"
+          echo "repository=ghcr.io/${owner}/imagesilo" >> "$GITHUB_OUTPUT"
+
   quality:
+    needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -27,11 +65,15 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install frontend dependencies
         run: npm --prefix web ci
+      - name: Verify locked dependencies
+        run: |
+          go mod verify
+          npm --prefix web audit --omit=dev --audit-level=critical
       - name: Run release quality gate
         run: make check e2e
 
   platform-image:
-    needs: quality
+    needs: [preflight, quality]
     permissions:
       contents: read
       packages: write
@@ -41,14 +83,20 @@ jobs:
         include:
           - runner: ubuntu-24.04
             platform: linux/amd64
+            architecture: amd64
             suffix: amd64
             port: 18100
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
+            architecture: arm64
             suffix: arm64
             port: 18101
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
+    env:
+      IMAGE_REPOSITORY: ${{ needs.preflight.outputs.repository }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
+      RELEASE_COMMIT: ${{ needs.preflight.outputs.release_commit }}
     steps:
       - name: Check out source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -57,76 +105,159 @@ jobs:
         with:
           go-version-file: .go-version
           cache: true
-      - name: Resolve immutable image tag
+      - name: Resolve immutable image references
         id: image
         shell: bash
         run: |
-          release_tag="${GITHUB_REF_NAME}"
-          if [[ ! "$release_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
-            echo "Invalid release tag: $release_tag" >&2
-            exit 1
-          fi
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          echo "target=ghcr.io/${owner}/imagesilo:${release_tag}" >> "$GITHUB_OUTPUT"
-          echo "platform_target=ghcr.io/${owner}/imagesilo:${release_tag}-${{ matrix.suffix }}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          platform_target="${IMAGE_REPOSITORY}:${RELEASE_TAG}-${{ matrix.suffix }}"
+          content_target="${IMAGE_REPOSITORY}:${RELEASE_TAG}-${{ matrix.suffix }}-sha-${RELEASE_COMMIT:0:16}"
+          echo "platform_target=$platform_target" >> "$GITHUB_OUTPUT"
+          echo "content_target=$content_target" >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Refuse an existing immutable platform tag
+      - name: Resolve fail-closed registry state
+        id: state
+        shell: bash
         run: |
-          if docker buildx imagetools inspect "${{ steps.image.outputs.platform_target }}" >/dev/null 2>&1; then
-            echo "Image tag already exists: ${{ steps.image.outputs.platform_target }}" >&2
-            exit 1
-          fi
+          set -euo pipefail
+          read -r platform_state platform_digest < <(bash scripts/registry-image-state.sh "${{ steps.image.outputs.platform_target }}")
+          read -r content_state content_digest < <(bash scripts/registry-image-state.sh "${{ steps.image.outputs.content_target }}")
+          case "${platform_state}:${content_state}" in
+            absent:absent)
+              mode=build
+              ;;
+            absent:present)
+              mode=repair
+              ;;
+            present:present)
+              if test "$platform_digest" != "$content_digest"; then
+                echo "Existing platform and content tags disagree" >&2
+                exit 1
+              fi
+              mode=reuse
+              ;;
+            present:absent)
+              echo "Existing platform tag cannot be proven to contain this commit" >&2
+              exit 1
+              ;;
+            *)
+              echo "Unexpected registry state" >&2
+              exit 1
+              ;;
+          esac
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "content_digest=${content_digest:-}" >> "$GITHUB_OUTPUT"
       - name: Build native image
-        run: docker build --platform "${{ matrix.platform }}" --file deploy/docker/Dockerfile --tag "${{ steps.image.outputs.platform_target }}" .
+        if: steps.state.outputs.mode == 'build'
+        run: |
+          docker build \
+            --platform "${{ matrix.platform }}" \
+            --build-arg "BUILD_REVISION=${RELEASE_COMMIT}" \
+            --build-arg "BUILD_SOURCE=https://github.com/${GITHUB_REPOSITORY}" \
+            --file deploy/docker/Dockerfile \
+            --tag "${{ steps.image.outputs.content_target }}" \
+            .
       - name: Run native container smoke
+        if: steps.state.outputs.mode == 'build'
         env:
-          IMAGE: ${{ steps.image.outputs.platform_target }}
+          IMAGE: ${{ steps.image.outputs.content_target }}
           PLATFORM: ${{ matrix.platform }}
           PORT: ${{ matrix.port }}
           SMOKE_SUFFIX: release-${{ matrix.suffix }}
         run: bash scripts/container-smoke.sh
-      - name: Push immutable platform image
-        run: docker push "${{ steps.image.outputs.platform_target }}"
+      - name: Publish new immutable platform content
+        if: steps.state.outputs.mode == 'build'
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker push "${{ steps.image.outputs.content_target }}"
+          read -r state _ < <(bash scripts/registry-image-state.sh "${{ steps.image.outputs.platform_target }}")
+          if test "$state" != absent; then
+            echo "Platform tag appeared while publishing; refusing to overwrite it" >&2
+            exit 1
+          fi
+          docker tag "${{ steps.image.outputs.content_target }}" "${{ steps.image.outputs.platform_target }}"
+          docker push "${{ steps.image.outputs.platform_target }}"
+      - name: Restore platform tag from same-commit content
+        if: steps.state.outputs.mode == 'repair'
+        run: |
+          docker buildx imagetools create \
+            --tag "${{ steps.image.outputs.platform_target }}" \
+            "${IMAGE_REPOSITORY}@${{ steps.state.outputs.content_digest }}"
+      - name: Verify immutable platform digest and revision
+        id: digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          read -r platform_state platform_digest < <(bash scripts/registry-image-state.sh "${{ steps.image.outputs.platform_target }}")
+          read -r content_state content_digest < <(bash scripts/registry-image-state.sh "${{ steps.image.outputs.content_target }}")
+          if test "$platform_state" != present || test "$content_state" != present || test "$platform_digest" != "$content_digest"; then
+            echo "Published platform state is incomplete or inconsistent" >&2
+            exit 1
+          fi
+          docker pull "${IMAGE_REPOSITORY}@${platform_digest}" >/dev/null
+          revision="$(docker image inspect --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}' "${IMAGE_REPOSITORY}@${platform_digest}")"
+          architecture="$(docker image inspect --format '{{ .Architecture }}' "${IMAGE_REPOSITORY}@${platform_digest}")"
+          test "$revision" = "$RELEASE_COMMIT"
+          test "$architecture" = "${{ matrix.architecture }}"
+          echo "digest=$platform_digest" >> "$GITHUB_OUTPUT"
 
   manifest:
-    needs: platform-image
+    needs: [preflight, platform-image]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: read
       packages: write
+    env:
+      IMAGE_REPOSITORY: ${{ needs.preflight.outputs.repository }}
+      RELEASE_TAG: ${{ needs.preflight.outputs.release_tag }}
     steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Log in to GHCR
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Create and verify multi-platform manifest
+      - name: Create or verify digest-pinned multi-platform manifest
         shell: bash
         run: |
-          release_tag="${GITHUB_REF_NAME}"
-          owner="${GITHUB_REPOSITORY_OWNER,,}"
-          target="ghcr.io/${owner}/imagesilo:${release_tag}"
-          if docker buildx imagetools inspect "$target" >/dev/null 2>&1; then
-            echo "Image tag already exists: $target" >&2
+          set -euo pipefail
+          target="${IMAGE_REPOSITORY}:${RELEASE_TAG}"
+          read -r amd64_state amd64_digest < <(bash scripts/registry-image-state.sh "${target}-amd64")
+          read -r arm64_state arm64_digest < <(bash scripts/registry-image-state.sh "${target}-arm64")
+          if test "$amd64_state" != present || test "$arm64_state" != present; then
+            echo "Platform images are missing" >&2
             exit 1
           fi
-          docker buildx imagetools create \
-            --tag "$target" \
-            "${target}-amd64" \
-            "${target}-arm64"
+          read -r target_state target_digest < <(bash scripts/registry-image-state.sh "$target")
+          if test "$target_state" = absent; then
+            docker buildx imagetools create \
+              --tag "$target" \
+              "${IMAGE_REPOSITORY}@${amd64_digest}" \
+              "${IMAGE_REPOSITORY}@${arm64_digest}"
+          fi
           raw="$(docker buildx imagetools inspect --raw "$target")"
-          jq -e '[.manifests[].platform | select(.os == "linux") | .architecture] | sort == ["amd64", "arm64"]' <<<"$raw"
+          expected="$(printf '%s\n%s\n' "$amd64_digest" "$arm64_digest" | sort)"
+          actual="$(jq --raw-output '.manifests[] | select(.platform.os == "linux" and (.platform.architecture == "amd64" or .platform.architecture == "arm64")) | .digest' <<<"$raw" | sort)"
+          count="$(jq '.manifests | length' <<<"$raw")"
+          if test "$count" != 2 || test "$actual" != "$expected"; then
+            echo "Existing or published manifest does not match platform digests" >&2
+            exit 1
+          fi
+          read -r final_state final_digest < <(bash scripts/registry-image-state.sh "$target")
+          test "$final_state" = present
           docker buildx imagetools inspect "$target" | tee manifest-inspect.txt
           {
             echo "### Published ImageSilo image"
-            echo "\`$target\`"
+            echo "\`$target@$final_digest\`"
             echo '```text'
             cat manifest-inspect.txt
             echo '```'

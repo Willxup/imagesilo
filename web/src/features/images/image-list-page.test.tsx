@@ -61,6 +61,12 @@ describe('ImageListPage', () => {
     await waitFor(() => {
       expect(vi.mocked(apiRequest).mock.calls.some(([path]) => String(path).includes('q=legacy%2Fsample'))).toBe(true)
     })
+    fireEvent.click(screen.getByRole('button', { name: '重置' }))
+    await waitFor(() => expect(screen.getByLabelText('搜索')).toHaveValue(''))
+    await waitFor(() => {
+      const lastPath = String(vi.mocked(apiRequest).mock.calls.at(-1)?.[0])
+      expect(new URL(lastPath, 'http://imagesilo.test').searchParams.has('q')).toBe(false)
+    })
   })
 
   it('animates and highlights advanced filters and submits the shared date picker value', async () => {
@@ -83,7 +89,11 @@ describe('ImageListPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '今天' }))
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
     await waitFor(() => {
-      expect(vi.mocked(apiRequest).mock.calls.some(([path]) => String(path).includes('createdFrom='))).toBe(true)
+      const matching = vi.mocked(apiRequest).mock.calls.find(([path]) => String(path).includes('createdFrom='))
+      expect(matching).toBeDefined()
+      const today = new Date()
+      const expected = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+      expect(new URL(String(matching?.[0]), 'http://imagesilo.test').searchParams.get('createdFrom')).toBe(expected)
     })
   })
 })

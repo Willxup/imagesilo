@@ -37,5 +37,5 @@ GitHub Actions [Verify run 30467177771](https://github.com/Willxup/imagesilo/act
 复现命令：
 
 ```bash
-go run ./tests/performance/delivery_index_benchmark.go
+go run ./tests/performance/delivery_index_benchmark
 ```

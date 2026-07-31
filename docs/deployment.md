@@ -10,19 +10,26 @@ ImageSilo 的生产边界始终是一个容器、一个 Go 进程、一个本地
 export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v1.0.0-rc.1
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
-printf '%s\n' "$IMAGESILO_ADMIN_PASSWORD" | docker run --rm --interactive \
-  --volume imagesilo-data:/data \
-  "$IMAGESILO_IMAGE" admin create --email admin@example.com --password-stdin
 docker run --detach \
   --name imagesilo \
   --restart unless-stopped \
   --publish 127.0.0.1:8080:8080 \
   --env IMAGESILO_PROCESSING_CONCURRENCY=1 \
+	--env IMAGESILO_DELIVERY_CONCURRENCY=64 \
+	--env IMAGESILO_TRUST_PROXY_HEADERS=true \
   --volume imagesilo-data:/data \
   "$IMAGESILO_IMAGE"
+
+docker logs -f imagesilo
 ```
 
+仅在尚无管理员时，启动日志会输出一次 `bootstrap_token`。打开 `/admin/setup` 填入该 token 后设置管理员账号和初始策略；token 只保存于当前进程内存，初始化成功后立即清除，未初始化重启则重新生成。无人值守部署可改用 `imagesilo admin create --password-stdin`，创建管理员后 Web 初始化会自动关闭。
+
 确认 `/healthz`、`/readyz`、管理员登录和一张微型测试图片后，再把反向代理指向 `127.0.0.1:8080`。TLS、请求体上限和公网限速应由现有反向代理承担；ImageSilo 自身仍保持单进程。
+
+推荐拓扑是 Nginx Proxy Manager → `127.0.0.1:8080`。ImageSilo 默认信任 Nginx 的客户端地址头，并按单个有效 `X-Real-IP`、`X-Forwarded-For` 最右侧有效地址、TCP 对端地址的顺序用于登录 IP 限速。因此后端端口不得绕过 NPM 直接暴露公网；确需直连部署时显式设置 `IMAGESILO_TRUST_PROXY_HEADERS=false`。NPM 可以长期缓存带哈希的前端静态资源，但不要给可见性和内容都可能变化的图片 URL 设置长 TTL；公开图片由 `ETag`/`304` 复验，私密图片使用 `private, no-store`。
+
+`IMAGESILO_DELIVERY_CONCURRENCY` 默认 `64`，同时覆盖标准 URL、历史别名、迁移目录和缩略图；满载时立即返回 `503` 与 `Retry-After`。图片正文不进入 Go 全图缓存，读取依靠内存元数据索引、文件流、ETag 和操作系统页缓存，保持轻量。
 
 ## bind mount
 

@@ -134,9 +134,11 @@ func (s *Service) Rebuild(ctx context.Context, now time.Time) (RebuildResult, er
 	}
 	value := RebuildResult{
 		CompletedAt: now.UTC(), Images: len(result.Delivery.LoadedIDs), Aliases: result.Delivery.LoadedAliasCount,
-		Sessions: result.Sessions, Tokens: result.Tokens, MissingImageCount: len(result.Delivery.MissingIDs),
-		MissingImageIDs: appendLimited(nil, result.Delivery.MissingIDs...),
+		Sessions: result.Sessions, Tokens: result.Tokens,
 	}
+	unavailableIDs := append(append([]string(nil), result.Delivery.MissingIDs...), result.Delivery.InvalidSizeIDs...)
+	value.MissingImageCount = len(unavailableIDs)
+	value.MissingImageIDs = appendLimited(nil, unavailableIDs...)
 	s.mu.Lock()
 	s.lastRebuild = &value
 	s.missingImageCount = value.MissingImageCount
@@ -270,6 +272,7 @@ func (s *Service) Daily(ctx context.Context, now time.Time, safetyAge time.Durat
 
 type scanState struct {
 	storageKeys    map[string]string
+	expectedSizes  map[string]int64
 	imageIDs       map[string]struct{}
 	imageFiles     []storage.FileEntry
 	thumbnailFiles []storage.FileEntry
@@ -295,10 +298,12 @@ func (s *Service) scan(ctx context.Context, now time.Time) (InspectionResult, sc
 	}
 	state := scanState{
 		storageKeys: make(map[string]string, len(records)), imageIDs: make(map[string]struct{}, len(records)),
-		imageFiles: imageFiles, thumbnailFiles: thumbnailFiles, temporaryFiles: temporaryFiles,
+		expectedSizes: make(map[string]int64, len(records)),
+		imageFiles:    imageFiles, thumbnailFiles: thumbnailFiles, temporaryFiles: temporaryFiles,
 	}
 	for _, record := range records {
 		state.storageKeys[record.StorageKey] = record.ID
+		state.expectedSizes[record.StorageKey] = record.StoredSize
 		state.imageIDs[record.ID] = struct{}{}
 	}
 	present := make(map[string]struct{}, len(imageFiles))
@@ -307,10 +312,11 @@ func (s *Service) scan(ctx context.Context, now time.Time) (InspectionResult, sc
 		ThumbnailFiles: len(thumbnailFiles), TemporaryFiles: len(temporaryFiles), MissingImageIDs: []string{},
 	}
 	for _, entry := range imageFiles {
-		if entry.Regular {
+		_, referenced := state.storageKeys[entry.Key]
+		if entry.Regular && referenced && entry.Size == state.expectedSizes[entry.Key] {
 			present[entry.Key] = struct{}{}
 		}
-		if _, exists := state.storageKeys[entry.Key]; !exists || !entry.Regular {
+		if !referenced || !entry.Regular {
 			result.OrphanImageCount++
 		}
 	}

@@ -21,13 +21,17 @@ func TestInitializeIsAtomicAndOneTime(t *testing.T) {
 	if err := migrations.Apply(context.Background(), db); err != nil {
 		t.Fatalf("migrations.Apply() error = %v", err)
 	}
-	service := NewService(db)
+	service, bootstrapToken, err := NewService(context.Background(), db)
+	if err != nil || bootstrapToken == "" {
+		t.Fatalf("NewService() = token %q, %v", bootstrapToken, err)
+	}
 	initialized, err := service.Initialized(context.Background())
 	if err != nil || initialized {
 		t.Fatalf("Initialized() = %v, %v", initialized, err)
 	}
 	request := Request{
-		DisplayName: "Will", Email: "ADMIN@example.com", Password: "a secure setup password",
+		BootstrapToken: bootstrapToken,
+		DisplayName:    "Will", Email: "ADMIN@example.com", Password: "a secure setup password",
 		DefaultVisibility: images.VisibilityPrivate, JPEGQuality: 85, WebPQuality: 82,
 		PNGCompressionLevel: 6, ConversionWebPQuality: 80,
 	}
@@ -41,5 +45,56 @@ func TestInitializeIsAtomicAndOneTime(t *testing.T) {
 	var visibility string
 	if err := db.QueryRow("SELECT default_visibility FROM app_settings WHERE singleton = 1").Scan(&visibility); err != nil || visibility != "private" {
 		t.Fatalf("default visibility = %q, %v", visibility, err)
+	}
+}
+
+func TestInitializeRejectsBootstrapTokenBeforePasswordHash(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatalf("migrations.Apply() error = %v", err)
+	}
+	service, _, err := NewService(context.Background(), db)
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	hashCalled := false
+	service.hashPassword = func(string) (string, error) {
+		hashCalled = true
+		return "", errors.New("password hash must not run")
+	}
+	_, err = service.Initialize(context.Background(), Request{BootstrapToken: "wrong"}, time.Now())
+	if !errors.Is(err, ErrInvalidBootstrapToken) || hashCalled {
+		t.Fatalf("Initialize() = %v, hashCalled = %v", err, hashCalled)
+	}
+}
+
+func TestInitializedSetupSkipsPasswordHash(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatalf("migrations.Apply() error = %v", err)
+	}
+	if _, err := db.Exec(`INSERT INTO admin(id, display_name, email, password_hash, created_at, updated_at) VALUES ('admin', 'Admin', 'admin@example.com', 'hash', 1, 1)`); err != nil {
+		t.Fatalf("insert administrator: %v", err)
+	}
+	service, bootstrapToken, err := NewService(context.Background(), db)
+	if err != nil || bootstrapToken != "" {
+		t.Fatalf("NewService() = token %q, %v", bootstrapToken, err)
+	}
+	hashCalled := false
+	service.hashPassword = func(string) (string, error) {
+		hashCalled = true
+		return "", errors.New("password hash must not run")
+	}
+	_, err = service.Initialize(context.Background(), Request{}, time.Now())
+	if !errors.Is(err, ErrAlreadyInitialized) || hashCalled {
+		t.Fatalf("Initialize() = %v, hashCalled = %v", err, hashCalled)
 	}
 }

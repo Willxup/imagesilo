@@ -56,7 +56,7 @@ docker run --detach \
   "$IMAGESILO_IMAGE"
 ```
 
-Open `http://127.0.0.1:8080/admin/setup` on the first launch. The one-time setup page creates the administrator account and saves the initial visibility and processing policy. The `imagesilo admin create` command remains available for scripted deployments.
+On the first launch, run `docker logs -f imagesilo` and copy the `bootstrap_token` printed by ImageSilo. Open `http://127.0.0.1:8080/admin/setup`, enter that token, and create the administrator account. The token exists only in memory, is replaced after an uninitialized restart, and is erased after setup succeeds. The `imagesilo admin create` command remains available for scripted deployments.
 
 For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECURE=true`, and back up the complete `/data` directory while writes are stopped. See the [deployment guide](./docs/deployment.md) before exposing the service.
 
@@ -72,6 +72,7 @@ To preserve an existing image URL tree without creating one alias at a time, mou
 | Path-preserving migrations | Read-only image tree in `/data/migrations` |
 | Cache | Local thumbnails in `/data/cache` |
 | Processing | libvips, concurrency `1` by default |
+| Delivery | File streaming with ETag revalidation, concurrency `64` by default |
 | Platforms | `linux/amd64`, `linux/arm64` |
 | Production storage | Docker named volume or local bind mount |
 
@@ -118,6 +119,7 @@ Use `/healthz` for liveness and `/readyz` for SQLite readiness. Run `make e2e` f
 | Security and lightweight resource evidence | [Security audit](./docs/security-audit.md) · [Performance baseline](./docs/performance-baseline.md) |
 | Release images and acceptance checks | [Release guide](./docs/release.md) |
 | HTTP API contract | [OpenAPI](./api/openapi.yaml) |
+| Bundled third-party licenses | [Third-party notices](./THIRD_PARTY_NOTICES.md) |
 
 ## Project Status
 

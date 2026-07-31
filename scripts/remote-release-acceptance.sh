@@ -10,7 +10,28 @@ cpu_limit="${CPU_LIMIT:-0.5}"
 memory_limit="${MEMORY_LIMIT:-256m}"
 pids_limit="${PIDS_LIMIT:-128}"
 suffix="${ACCEPTANCE_SUFFIX:-$(date -u +%Y%m%d%H%M%S)}"
+if [[ ! "$suffix" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]; then
+  printf 'ACCEPTANCE_SUFFIX must contain only 1-64 safe name characters\n' >&2
+  exit 1
+fi
 container="imagesilo-acceptance-${suffix}"
+password="ImageSilo-${suffix}-Acceptance-Password!"
+
+work_dir="$(realpath -m -- "$work_dir")"
+case "$work_dir" in
+  /var/tmp/imagesilo-?*) ;;
+  *) printf 'WORK_DIR must be a dedicated /var/tmp/imagesilo-* directory\n' >&2; exit 1 ;;
+esac
+mkdir -p "$work_dir"
+work_dir="$(realpath -- "$work_dir")"
+case "$work_dir" in
+  /var/tmp/imagesilo-?*) ;;
+  *) printf 'canonical WORK_DIR escaped /var/tmp/imagesilo-*\n' >&2; exit 1 ;;
+esac
+if find "$work_dir" -mindepth 1 -print -quit | grep -q .; then
+  printf 'WORK_DIR must be an empty dedicated directory: %s\n' "$work_dir" >&2
+  exit 1
+fi
 data_dir="${work_dir}/data"
 results_dir="${work_dir}/results"
 fixture_dir="${work_dir}/fixtures"
@@ -21,12 +42,6 @@ overview_after="${results_dir}/overview-after.json"
 container_log="${results_dir}/container.log"
 result_file="${results_dir}/acceptance.json"
 fixture_file="${fixture_dir}/tiny.webp"
-password="ImageSilo-${suffix}-Acceptance-Password!"
-
-case "$work_dir" in
-  /var/tmp/*) ;;
-  *) printf 'WORK_DIR must be below /var/tmp\n' >&2; exit 1 ;;
-esac
 case "$duration_seconds:$request_interval" in
   *[!0-9:]*|0:*|*:0) printf 'DURATION_SECONDS and REQUEST_INTERVAL must be positive integers\n' >&2; exit 1 ;;
 esac
@@ -63,10 +78,6 @@ wait_ready() {
 }
 
 mkdir -p "$data_dir" "$results_dir" "$fixture_dir"
-if find "$data_dir" -mindepth 1 -print -quit | grep -q .; then
-  printf 'WORK_DIR data directory must be empty: %s\n' "$data_dir" >&2
-  exit 1
-fi
 printf '%s' 'UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD+JaQAA3AAAAAA' | base64 --decode >"$fixture_file"
 
 docker run --rm \
@@ -76,7 +87,7 @@ docker run --rm \
   --user 0:0 \
   --entrypoint sh \
   --volume "${data_dir}:/data" \
-  "$image" -c 'mkdir -p /data/db /data/images /data/cache/thumbnails /data/tmp && chown -R 10001:10001 /data'
+  "$image" -c 'chown 10001:10001 /data && install -d -o 10001 -g 10001 -m 0750 /data/db /data/images /data/migrations /data/cache /data/cache/thumbnails /data/tmp'
 
 printf '%s\n' "$password" | docker run --rm --interactive \
   --cpus "$cpu_limit" \

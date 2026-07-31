@@ -56,7 +56,7 @@ func TestPhaseThreeFormatMatrixSystemLimitsAndThumbnails(t *testing.T) {
 	if err := json.Unmarshal(systemResult.Body.Bytes(), &system); err != nil {
 		t.Fatalf("decode system response: %v", err)
 	}
-	if system.ProcessingConcurrency != 2 || system.MaxTotalPixels != 16_000_000 || len(system.SupportedFormats) != 4 ||
+	if system.ProcessingConcurrency != 2 || system.DeliveryConcurrency != 64 || system.MaxTotalPixels != 16_000_000 || len(system.SupportedFormats) != 4 ||
 		(system.VIPSVersion != "disabled" && system.VIPSVersion != "8.18.4") {
 		t.Fatalf("system response = %+v", system)
 	}

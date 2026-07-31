@@ -189,7 +189,7 @@ func insertRebuilderImage(t *testing.T, db *sql.DB, id string, now time.Time) {
 			id, original_name, storage_key, extension, mime_type, width, height,
 			source_size, stored_size, source_sha256, stored_sha256, processing_summary,
 			visibility, uploaded_via, uploaded_by_api_token_id, created_at
-		) VALUES (?, 'test.jpg', ?, '.jpg', 'image/jpeg', 1, 1, 1, 1, ?, ?, '{}', 'public', 'admin', NULL, ?)`,
+		) VALUES (?, 'test.jpg', ?, '.jpg', 'image/jpeg', 1, 1, 5, 5, ?, ?, '{}', 'public', 'admin', NULL, ?)`,
 		id, id, hash, hash, now.Unix(),
 	); err != nil {
 		t.Fatalf("insert image: %v", err)

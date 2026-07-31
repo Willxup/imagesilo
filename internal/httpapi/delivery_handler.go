@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"errors"
+	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -17,20 +19,30 @@ type deliveryHandler struct {
 	index         *delivery.Index
 	storage       *storage.Filesystem
 	authenticator *authenticator
+	gate          *delivery.Gate
 }
 
-func newDeliveryHandler(index *delivery.Index, filesystem *storage.Filesystem, authenticator *authenticator) *deliveryHandler {
-	return &deliveryHandler{index: index, storage: filesystem, authenticator: authenticator}
+func newDeliveryHandler(index *delivery.Index, filesystem *storage.Filesystem, authenticator *authenticator, gate *delivery.Gate) *deliveryHandler {
+	return &deliveryHandler{index: index, storage: filesystem, authenticator: authenticator, gate: gate}
 }
 
 func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
+	release, ok := acquireDeliverySlot(w, r, h.gate)
+	if !ok {
+		return
+	}
+	defer release()
+	h.serveUnlocked(w, r)
+}
+
+func (h *deliveryHandler) serveUnlocked(w http.ResponseWriter, r *http.Request) {
 	if h.rejectURLToken(w, r) {
 		return
 	}
 	rawID := chi.URLParam(r, "imageID")
 	id, err := uuid.Parse(rawID)
 	if err != nil || id.String() != rawID {
-		h.serveAlias(w, r)
+		h.serveAliasUnlocked(w, r)
 		return
 	}
 	target, ok := h.index.Get(rawID)
@@ -42,6 +54,15 @@ func (h *deliveryHandler) serve(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *deliveryHandler) serveAlias(w http.ResponseWriter, r *http.Request) {
+	release, ok := acquireDeliverySlot(w, r, h.gate)
+	if !ok {
+		return
+	}
+	defer release()
+	h.serveAliasUnlocked(w, r)
+}
+
+func (h *deliveryHandler) serveAliasUnlocked(w http.ResponseWriter, r *http.Request) {
 	if h.rejectURLToken(w, r) {
 		return
 	}
@@ -59,6 +80,16 @@ func (h *deliveryHandler) serveAlias(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	http.NotFound(w, r)
+}
+
+func acquireDeliverySlot(w http.ResponseWriter, r *http.Request, gate *delivery.Gate) (func(), bool) {
+	release, ok := gate.TryAcquire()
+	if !ok {
+		w.Header().Set("Retry-After", "1")
+		writeError(w, r, http.StatusServiceUnavailable, "delivery_busy", "Image delivery is at capacity. Retry shortly.")
+		return nil, false
+	}
+	return release, true
 }
 
 func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request, canonicalPath string) bool {
@@ -80,6 +111,9 @@ func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		return false
 	}
+	if !migrationContentMatches(file, mimeType) {
+		return false
+	}
 
 	w.Header().Set("Content-Type", mimeType)
 	w.Header().Set("Cache-Control", "public, no-cache")
@@ -88,6 +122,18 @@ func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request,
 	}
 	http.ServeContent(w, r, path.Base(relativePath), info.ModTime(), file)
 	return true
+}
+
+func migrationContentMatches(file io.ReadSeeker, expectedMIME string) bool {
+	var header [512]byte
+	read, err := file.Read(header[:])
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return false
+	}
+	return read > 0 && http.DetectContentType(header[:read]) == expectedMIME
 }
 
 var migrationMIMETypes = map[string]string{

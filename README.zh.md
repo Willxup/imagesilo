@@ -56,7 +56,7 @@ docker run --detach \
   "$IMAGESILO_IMAGE"
 ```
 
-首次启动后打开 `http://127.0.0.1:8080/admin/setup`，在一次性初始化页面中创建管理员账号，并保存默认可见性与图片处理策略。自动化部署仍可使用 `imagesilo admin create` 命令。
+首次启动后执行 `docker logs -f imagesilo`，复制 ImageSilo 日志中的 `bootstrap_token`。打开 `http://127.0.0.1:8080/admin/setup`，填写该 token 后创建管理员账号。token 只保存在内存中；未初始化时重启会重新生成，初始化成功后立即清除。自动化部署仍可使用 `imagesilo admin create` 命令。
 
 生产环境应在反向代理终止 HTTPS、保持 `IMAGESILO_COOKIE_SECURE=true`，并在停止写入时完整备份 `/data`。对外开放前请先阅读[部署指南](./docs/deployment.md)。
 
@@ -72,6 +72,7 @@ docker run --detach \
 | 保留路径迁移 | `/data/migrations` 中的只读图片目录树 |
 | 缓存 | `/data/cache` 中的本地缩略图 |
 | 图片处理 | libvips，默认并发 `1` |
+| 图片读取 | 文件流式交付与 ETag 复验，默认并发 `64` |
 | 平台 | `linux/amd64`、`linux/arm64` |
 | 生产存储 | Docker named volume 或本地 bind mount |
 
@@ -118,6 +119,7 @@ IMAGESILO_COOKIE_SECURE=false \
 | 安全与轻量资源证据 | [安全审计](./docs/security-audit.md) · [性能基线](./docs/performance-baseline.md) |
 | 发布镜像与验收 | [发布指南](./docs/release.md) |
 | HTTP API 契约 | [OpenAPI](./api/openapi.yaml) |
+| 随附的第三方许可证 | [第三方声明](./THIRD_PARTY_NOTICES.md) |
 
 ## 项目状态
 

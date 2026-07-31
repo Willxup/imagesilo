@@ -58,6 +58,23 @@ func TestBuildRejectsReservedAliasStoredOutsideService(t *testing.T) {
 	}
 }
 
+func TestBuildExcludesStoredFileWithUnexpectedSize(t *testing.T) {
+	dataDirectory, db := prepareLoaderTest(t)
+	defer db.Close()
+	const imageID = "019c1234-5678-7abc-8def-0123456789ab"
+	insertDeliveryTestImage(t, db, imageID)
+	if err := os.WriteFile(filepath.Join(dataDirectory, "images", imageID), []byte("truncated"), 0o640); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	snapshot, result, err := Build(context.Background(), db, storage.NewFilesystem(dataDirectory))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(result.InvalidSizeIDs) != 1 || result.InvalidSizeIDs[0] != imageID || len(snapshot.Targets) != 0 {
+		t.Fatalf("Build() result = %+v, targets = %+v", result, snapshot.Targets)
+	}
+}
+
 func prepareLoaderTest(t *testing.T) (string, *sql.DB) {
 	t.Helper()
 	directory := t.TempDir()
@@ -85,7 +102,7 @@ func insertDeliveryTestImage(t *testing.T, db *sql.DB, id string) {
 			id, original_name, storage_key, extension, mime_type, width, height,
 			source_size, stored_size, source_sha256, stored_sha256, processing_summary,
 			visibility, uploaded_via, uploaded_by_api_token_id, created_at
-		) VALUES (?, 'test.jpg', ?, '.jpg', 'image/jpeg', 1, 1, 1, 1, ?, ?, '{}', 'public', 'admin', NULL, ?)`,
+		) VALUES (?, 'test.jpg', ?, '.jpg', 'image/jpeg', 1, 1, 5, 5, ?, ?, '{}', 'public', 'admin', NULL, ?)`,
 		id, id, hash, hash, time.Now().Unix(),
 	); err != nil {
 		t.Fatalf("insert image: %v", err)

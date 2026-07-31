@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 	"unicode"
 
@@ -27,12 +28,27 @@ const (
 )
 
 type Service struct {
-	repository *Repository
-	storage    *storage.Filesystem
-	index      *delivery.Index
-	processor  processor.Engine
-	gate       *processor.Gate
-	barrier    *indexbarrier.Barrier
+	repository         *Repository
+	storage            *storage.Filesystem
+	index              *delivery.Index
+	processor          processor.Engine
+	gate               *processor.Gate
+	barrier            *indexbarrier.Barrier
+	mutations          keyedLocker
+	beforeMutationLock func(operation, imageID string)
+	afterContentUpdate func(imageID string)
+}
+
+type ProcessingLease struct {
+	service *Service
+	release func()
+	active  atomic.Bool
+}
+
+type StagedUpload struct {
+	path   string
+	size   int64
+	digest [32]byte
 }
 
 func NewService(repository *Repository, filesystem *storage.Filesystem, index *delivery.Index) *Service {
@@ -62,52 +78,104 @@ func NewServiceWithProcessorAndBarrier(
 }
 
 func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName string, options UploadOptions, now time.Time) (Image, error) {
-	if options.Visibility != VisibilityPublic && options.Visibility != VisibilityPrivate {
-		return Image{}, fmt.Errorf("invalid image visibility")
-	}
-	if options.UploadedVia != "admin" && options.UploadedVia != "api_token" && options.UploadedVia != "import" {
-		return Image{}, fmt.Errorf("invalid upload source")
-	}
-	if options.Limits.MaxBytes <= 0 {
-		options.Limits.MaxBytes = maxUploadBytes
-	}
-	if options.Limits.MaxTotalPixels <= 0 {
-		options.Limits.MaxTotalPixels = maxTotalPixels
-	}
-
-	temporary, err := s.storage.CreateTemporary()
+	options, err := normalizeUploadOptions(options)
 	if err != nil {
 		return Image{}, err
 	}
-	sourcePath := temporary.Name()
-	defer s.storage.RemoveTemporary(sourcePath)
+	lease, ok := s.TryAcquireProcessing()
+	if !ok {
+		return Image{}, ErrProcessingBusy
+	}
+	defer lease.Release()
+	staged, err := s.StageUpload(reader, options.Limits.MaxBytes)
+	if err != nil {
+		return Image{}, err
+	}
+	defer s.DiscardStagedUpload(staged)
+	return s.CommitStagedUpload(ctx, staged, originalName, options, now, lease)
+}
 
+func (s *Service) TryAcquireProcessing() (*ProcessingLease, bool) {
+	release, ok := s.gate.TryAcquire()
+	if !ok {
+		return nil, false
+	}
+	lease := &ProcessingLease{service: s, release: release}
+	lease.active.Store(true)
+	return lease, true
+}
+
+func (l *ProcessingLease) Release() {
+	if l != nil && l.active.Swap(false) {
+		l.release()
+	}
+}
+
+func (s *Service) StageUpload(reader io.Reader, maxBytes int64) (*StagedUpload, error) {
+	if maxBytes <= 0 {
+		maxBytes = maxUploadBytes
+	}
+	temporary, err := s.storage.CreateTemporary()
+	if err != nil {
+		return nil, err
+	}
+	sourcePath := temporary.Name()
 	sourceHasher := sha256.New()
-	limited := io.LimitReader(reader, options.Limits.MaxBytes+1)
+	limited := io.LimitReader(reader, maxBytes+1)
 	buffer := make([]byte, 64*1024)
 	written, copyErr := io.CopyBuffer(io.MultiWriter(temporary, sourceHasher), limited, buffer)
 	closeErr := temporary.Close()
 	if copyErr != nil {
-		return Image{}, fmt.Errorf("stream upload: %w", copyErr)
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, fmt.Errorf("stream upload: %w", copyErr)
 	}
 	if closeErr != nil {
-		return Image{}, fmt.Errorf("close upload temporary file: %w", closeErr)
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, fmt.Errorf("close upload temporary file: %w", closeErr)
 	}
 	if written == 0 {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, ErrInvalidImage
+	}
+	if written > maxBytes {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, ErrFileTooLarge
+	}
+	staged := &StagedUpload{path: sourcePath, size: written}
+	copy(staged.digest[:], sourceHasher.Sum(nil))
+	return staged, nil
+}
+
+func (s *Service) DiscardStagedUpload(staged *StagedUpload) {
+	if staged != nil && staged.path != "" {
+		_ = s.storage.RemoveTemporary(staged.path)
+	}
+}
+
+func (s *Service) CommitStagedUpload(
+	ctx context.Context,
+	staged *StagedUpload,
+	originalName string,
+	options UploadOptions,
+	now time.Time,
+	lease *ProcessingLease,
+) (Image, error) {
+	options, err := normalizeUploadOptions(options)
+	if err != nil {
+		return Image{}, err
+	}
+	if staged == nil || staged.path == "" || staged.size <= 0 || staged.size > options.Limits.MaxBytes {
 		return Image{}, ErrInvalidImage
 	}
-	if written > options.Limits.MaxBytes {
-		return Image{}, ErrFileTooLarge
-	}
-	var sourceDigest [32]byte
-	copy(sourceDigest[:], sourceHasher.Sum(nil))
-
-	release, ok := s.gate.TryAcquire()
-	if !ok {
+	if lease == nil || lease.service != s || !lease.active.Load() {
 		return Image{}, ErrProcessingBusy
 	}
+	sourcePath := staged.path
+	written := staged.size
+	sourceDigest := staged.digest
+
 	metadata, selectedPath, thumbnailPath, summary, err := func() (processor.Metadata, string, string, string, error) {
-		defer release()
+		defer lease.Release()
 		defer processor.TrimMemory()
 		return s.prepareImage(ctx, sourcePath, written, options)
 	}()
@@ -190,6 +258,22 @@ func (s *Service) Upload(ctx context.Context, reader io.Reader, originalName str
 		OriginalName: value.OriginalName,
 	})
 	return value, nil
+}
+
+func normalizeUploadOptions(options UploadOptions) (UploadOptions, error) {
+	if options.Visibility != VisibilityPublic && options.Visibility != VisibilityPrivate {
+		return UploadOptions{}, fmt.Errorf("invalid image visibility")
+	}
+	if options.UploadedVia != "admin" && options.UploadedVia != "api_token" && options.UploadedVia != "import" {
+		return UploadOptions{}, fmt.Errorf("invalid upload source")
+	}
+	if options.Limits.MaxBytes <= 0 {
+		options.Limits.MaxBytes = maxUploadBytes
+	}
+	if options.Limits.MaxTotalPixels <= 0 {
+		options.Limits.MaxTotalPixels = maxTotalPixels
+	}
+	return options, nil
 }
 
 type processingSummary struct {
@@ -392,6 +476,12 @@ func (s *Service) Delete(ctx context.Context, id string) (DeleteResult, error) {
 	if err != nil || parsed.String() != id {
 		return DeleteResult{}, ErrImageNotFound
 	}
+	if s.beforeMutationLock != nil {
+		s.beforeMutationLock("delete", id)
+	}
+	unlock := s.mutations.Lock(id)
+	defer unlock()
+
 	releaseChange := s.barrier.BeginChange()
 	deleted, err := s.repository.Delete(ctx, id)
 	if err != nil {
@@ -418,6 +508,12 @@ func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Vi
 	if visibility != VisibilityPublic && visibility != VisibilityPrivate {
 		return false, fmt.Errorf("invalid image visibility")
 	}
+	if s.beforeMutationLock != nil {
+		s.beforeMutationLock("visibility", id)
+	}
+	unlock := s.mutations.Lock(id)
+	defer unlock()
+
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
 	updated, err := s.repository.UpdateVisibility(ctx, id, visibility)
@@ -433,6 +529,12 @@ func (s *Service) ConvertToWebP(ctx context.Context, id string, options processo
 	if err != nil || parsed.String() != id {
 		return ConversionResult{}, ErrImageNotFound
 	}
+	if s.beforeMutationLock != nil {
+		s.beforeMutationLock("convert", id)
+	}
+	unlock := s.mutations.Lock(id)
+	defer unlock()
+
 	release, ok := s.gate.TryAcquire()
 	if !ok {
 		return ConversionResult{}, ErrProcessingBusy
@@ -548,6 +650,9 @@ func (s *Service) ConvertToWebP(ctx context.Context, id string, options processo
 		return ConversionResult{}, err
 	}
 	databaseCommitted = true
+	if s.afterContentUpdate != nil {
+		s.afterContentUpdate(id)
+	}
 	s.index.Add(value.ID, delivery.Target{
 		StorageKey:   value.StorageKey,
 		MIMEType:     value.MIMEType,
@@ -559,7 +664,7 @@ func (s *Service) ConvertToWebP(ctx context.Context, id string, options processo
 	})
 	releaseChange()
 
-	result := ConversionResult{Image: value, OriginalFileDeleted: true, ThumbnailUpdated: thumbnailPath == ""}
+	result := ConversionResult{Image: value, OriginalFileDeleted: true}
 	if thumbnailPath != "" {
 		if err := s.storage.CommitThumbnailTemporary(thumbnailPath, value.ID); err != nil {
 			result.ThumbnailError = err
@@ -567,6 +672,10 @@ func (s *Service) ConvertToWebP(ctx context.Context, id string, options processo
 			result.ThumbnailUpdated = true
 			thumbnailPath = ""
 		}
+	} else if err := s.storage.RemoveThumbnail(value.ID); err != nil {
+		result.ThumbnailError = err
+	} else {
+		result.ThumbnailUpdated = true
 	}
 	if err := s.storage.Remove(oldStorageKey); err != nil {
 		result.OriginalFileDeleted = false

@@ -58,7 +58,10 @@ func serve() error {
 		Addr:              cfg.ListenAddress,
 		Handler:           application.Handler,
 		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       2 * time.Minute,
+		WriteTimeout:      2 * time.Minute,
 		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    64 << 10,
 	}
 
 	serverErrors := make(chan error, 1)

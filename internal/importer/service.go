@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"sync/atomic"
 	"time"
 
 	imagealias "github.com/Willxup/imagesilo/internal/alias"
@@ -32,11 +33,113 @@ type Service struct {
 	barrier    *indexbarrier.Barrier
 }
 
+type ProcessingLease struct {
+	service *Service
+	release func()
+	active  atomic.Bool
+}
+
+type StagedImport struct {
+	path   string
+	size   int64
+	digest [32]byte
+}
+
 func NewService(repository *Repository, filesystem *storage.Filesystem, index *delivery.Index, engine processor.Engine, gate *processor.Gate, barrier *indexbarrier.Barrier) *Service {
 	return &Service{repository: repository, storage: filesystem, index: index, processor: engine, gate: gate, barrier: barrier}
 }
 
 func (s *Service) Import(ctx context.Context, reader io.Reader, originalName, aliasPath string, options Options, now time.Time) (Result, error) {
+	options, err := normalizeOptions(options)
+	if err != nil {
+		return Result{}, err
+	}
+	lease, ok := s.TryAcquireProcessing()
+	if !ok {
+		return Result{}, images.ErrProcessingBusy
+	}
+	defer lease.Release()
+	staged, err := s.Stage(reader, options.Limits.MaxBytes)
+	if err != nil {
+		return Result{}, err
+	}
+	defer s.Discard(staged)
+	return s.ImportStaged(ctx, staged, originalName, aliasPath, options, now, lease)
+}
+
+func (s *Service) TryAcquireProcessing() (*ProcessingLease, bool) {
+	release, ok := s.gate.TryAcquire()
+	if !ok {
+		return nil, false
+	}
+	lease := &ProcessingLease{service: s, release: release}
+	lease.active.Store(true)
+	return lease, true
+}
+
+func (l *ProcessingLease) Release() {
+	if l != nil && l.active.Swap(false) {
+		l.release()
+	}
+}
+
+func (s *Service) Stage(reader io.Reader, maxBytes int64) (*StagedImport, error) {
+	if maxBytes <= 0 {
+		maxBytes = defaultMaxBytes
+	}
+	temporary, err := s.storage.CreateTemporary()
+	if err != nil {
+		return nil, err
+	}
+	sourcePath := temporary.Name()
+	hasher := sha256.New()
+	written, copyErr := io.CopyBuffer(io.MultiWriter(temporary, hasher), io.LimitReader(reader, maxBytes+1), make([]byte, 64*1024))
+	closeErr := temporary.Close()
+	if copyErr != nil {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, fmt.Errorf("stream imported image: %w", copyErr)
+	}
+	if closeErr != nil {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, fmt.Errorf("close imported image temporary file: %w", closeErr)
+	}
+	if written == 0 {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, images.ErrInvalidImage
+	}
+	if written > maxBytes {
+		_ = s.storage.RemoveTemporary(sourcePath)
+		return nil, images.ErrFileTooLarge
+	}
+	staged := &StagedImport{path: sourcePath, size: written}
+	copy(staged.digest[:], hasher.Sum(nil))
+	return staged, nil
+}
+
+func (s *Service) Discard(staged *StagedImport) {
+	if staged != nil && staged.path != "" {
+		_ = s.storage.RemoveTemporary(staged.path)
+	}
+}
+
+func (s *Service) ImportStaged(
+	ctx context.Context,
+	staged *StagedImport,
+	originalName, aliasPath string,
+	options Options,
+	now time.Time,
+	lease *ProcessingLease,
+) (Result, error) {
+	options, err := normalizeOptions(options)
+	if err != nil {
+		return Result{}, err
+	}
+	if staged == nil || staged.path == "" || staged.size <= 0 || staged.size > options.Limits.MaxBytes {
+		return Result{}, images.ErrInvalidImage
+	}
+	if lease == nil || lease.service != s || !lease.active.Load() {
+		return Result{}, images.ErrProcessingBusy
+	}
 	if options.Visibility != images.VisibilityPublic && options.Visibility != images.VisibilityPrivate {
 		return Result{}, fmt.Errorf("invalid image visibility")
 	}
@@ -51,43 +154,11 @@ func (s *Service) Import(ctx context.Context, reader io.Reader, originalName, al
 	if aliasExists {
 		return Result{}, imagealias.ErrAliasConflict
 	}
-	if options.Limits.MaxBytes <= 0 {
-		options.Limits.MaxBytes = defaultMaxBytes
-	}
-	if options.Limits.MaxTotalPixels <= 0 {
-		options.Limits.MaxTotalPixels = defaultMaxPixels
-	}
-
-	temporary, err := s.storage.CreateTemporary()
-	if err != nil {
-		return Result{}, err
-	}
-	sourcePath := temporary.Name()
-	defer s.storage.RemoveTemporary(sourcePath)
-	hasher := sha256.New()
-	written, copyErr := io.CopyBuffer(io.MultiWriter(temporary, hasher), io.LimitReader(reader, options.Limits.MaxBytes+1), make([]byte, 64*1024))
-	closeErr := temporary.Close()
-	if copyErr != nil {
-		return Result{}, fmt.Errorf("stream imported image: %w", copyErr)
-	}
-	if closeErr != nil {
-		return Result{}, fmt.Errorf("close imported image temporary file: %w", closeErr)
-	}
-	if written == 0 {
-		return Result{}, images.ErrInvalidImage
-	}
-	if written > options.Limits.MaxBytes {
-		return Result{}, images.ErrFileTooLarge
-	}
-	var digest [32]byte
-	copy(digest[:], hasher.Sum(nil))
-
-	release, ok := s.gate.TryAcquire()
-	if !ok {
-		return Result{}, images.ErrProcessingBusy
-	}
+	sourcePath := staged.path
+	written := staged.size
+	digest := staged.digest
 	metadata, thumbnailPath, err := func() (processor.Metadata, string, error) {
-		defer release()
+		defer lease.Release()
 		defer processor.TrimMemory()
 		metadata, err := processor.InspectFile(ctx, sourcePath, options.Limits)
 		if err != nil {
@@ -172,6 +243,19 @@ func (s *Service) Import(ctx context.Context, reader io.Reader, originalName, al
 	})
 	s.index.AddAlias(alias.Path, value.ID)
 	return Result{Image: value, Alias: alias}, nil
+}
+
+func normalizeOptions(options Options) (Options, error) {
+	if options.Visibility != images.VisibilityPublic && options.Visibility != images.VisibilityPrivate {
+		return Options{}, fmt.Errorf("invalid image visibility")
+	}
+	if options.Limits.MaxBytes <= 0 {
+		options.Limits.MaxBytes = defaultMaxBytes
+	}
+	if options.Limits.MaxTotalPixels <= 0 {
+		options.Limits.MaxTotalPixels = defaultMaxPixels
+	}
+	return options, nil
 }
 
 func mapProcessorError(err error) error {

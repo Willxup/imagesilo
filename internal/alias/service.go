@@ -2,6 +2,8 @@ package imagealias
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
@@ -50,10 +52,48 @@ func (s *Service) Create(ctx context.Context, path, imageID, source string, now 
 }
 
 func (s *Service) List(ctx context.Context, limit int) ([]Alias, error) {
+	page, err := s.ListPage(ctx, limit, "")
+	return page.Items, err
+}
+
+type listCursor struct {
+	CreatedAt int64  `json:"createdAt"`
+	ID        string `json:"id"`
+}
+
+func (s *Service) ListPage(ctx context.Context, limit int, rawCursor string) (Page, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	return s.repository.List(ctx, limit)
+	var cursor listCursor
+	if rawCursor != "" {
+		if len(rawCursor) > 512 {
+			return Page{}, ErrInvalidCursor
+		}
+		decoded, err := base64.RawURLEncoding.DecodeString(rawCursor)
+		if err != nil || json.Unmarshal(decoded, &cursor) != nil || cursor.CreatedAt <= 0 {
+			return Page{}, ErrInvalidCursor
+		}
+		parsed, err := uuid.Parse(cursor.ID)
+		if err != nil || parsed.String() != cursor.ID {
+			return Page{}, ErrInvalidCursor
+		}
+	}
+	values, err := s.repository.ListPage(ctx, limit+1, cursor.CreatedAt, cursor.ID)
+	if err != nil {
+		return Page{}, err
+	}
+	page := Page{Items: values}
+	if len(values) > limit {
+		page.Items = values[:limit]
+		last := page.Items[len(page.Items)-1]
+		encoded, err := json.Marshal(listCursor{CreatedAt: last.CreatedAt.Unix(), ID: last.ID})
+		if err != nil {
+			return Page{}, err
+		}
+		page.NextCursor = base64.RawURLEncoding.EncodeToString(encoded)
+	}
+	return page, nil
 }
 
 func (s *Service) ListByImage(ctx context.Context, imageID string) ([]Alias, error) {

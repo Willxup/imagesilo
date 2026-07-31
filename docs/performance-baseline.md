@@ -7,7 +7,7 @@
 
 ## 固定样本
 
-`tests/performance/jpeg_stdout.go` 生成 6000 × 6000、36 MP、JPEG quality 90 的确定性渐变图。上传字节为 2,416,159，源文件和正式文件 SHA-256 均为 `93415bb62272e26a322efb2eaa4c3ad8e72fe391fe82af80e05b17ce9fcdb1dd`。
+`tests/performance/jpeg_stdout` 生成 6000 × 6000、36 MP、JPEG quality 90 的确定性渐变图。上传字节为 2,416,159，源文件和正式文件 SHA-256 均为 `93415bb62272e26a322efb2eaa4c3ad8e72fe391fe82af80e05b17ce9fcdb1dd`。
 
 ## 结果
 

@@ -61,7 +61,8 @@ jobs:
       - name: Benchmark delivery index
         run: |
           output="delivery-index-benchmark-${{ matrix.suffix }}.jsonl"
-          go run ./tests/performance/delivery_index_benchmark.go | tee "$output"
+          go run ./tests/performance/delivery_index_benchmark | tee "$output"
+          jq --exit-status --slurp 'all(.[]; .lookupFailures == 0 and .bytesPerPath < 1024)' "$output" >/dev/null
           {
             echo "### Native ${{ matrix.suffix }} delivery index benchmark"
             echo '```json'
@@ -84,6 +85,11 @@ jobs:
           PORT: ${{ matrix.benchmark_port }}
           BENCH_SUFFIX: ${{ matrix.suffix }}
           CONCURRENCIES: "1"
+          CPU_LIMIT: "1"
+          MEMORY_LIMIT: 768m
+          PIDS_LIMIT: "256"
+          MAX_MEMORY_PEAK_BYTES: "536870912"
+          MAX_P95_MILLISECONDS: "20000"
         run: |
           output="processing-benchmark-${{ matrix.suffix }}.jsonl"
           bash scripts/processing-benchmark.sh | tee "$output"

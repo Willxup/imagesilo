@@ -83,6 +83,33 @@ func TestAliasValidationAndMissingTarget(t *testing.T) {
 	}
 }
 
+func TestAliasListUsesStableCursorPagination(t *testing.T) {
+	db := openAliasTestDatabase(t)
+	defer db.Close()
+	insertAliasTestImage(t, db, aliasTestImageID)
+	service := NewService(NewRepository(db), delivery.NewIndex(), indexbarrier.New())
+	base := time.Unix(1_700_000_000, 0).UTC()
+	created := make([]Alias, 0, 3)
+	for index, path := range []string{"/legacy/old.jpg", "/legacy/middle.jpg", "/legacy/new.jpg"} {
+		value, err := service.Create(context.Background(), path, aliasTestImageID, "test", base.Add(time.Duration(index)*time.Second))
+		if err != nil {
+			t.Fatalf("Create(%s) error = %v", path, err)
+		}
+		created = append(created, value)
+	}
+	first, err := service.ListPage(context.Background(), 2, "")
+	if err != nil || len(first.Items) != 2 || first.Items[0].ID != created[2].ID || first.Items[1].ID != created[1].ID || first.NextCursor == "" {
+		t.Fatalf("first ListPage() = %+v, %v", first, err)
+	}
+	second, err := service.ListPage(context.Background(), 2, first.NextCursor)
+	if err != nil || len(second.Items) != 1 || second.Items[0].ID != created[0].ID || second.NextCursor != "" {
+		t.Fatalf("second ListPage() = %+v, %v", second, err)
+	}
+	if _, err := service.ListPage(context.Background(), 2, "invalid"); !errors.Is(err, ErrInvalidCursor) {
+		t.Fatalf("invalid ListPage() error = %v", err)
+	}
+}
+
 func openAliasTestDatabase(t *testing.T) *sql.DB {
 	t.Helper()
 	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))

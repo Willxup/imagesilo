@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import type { Image } from '../../lib/api-types'
+import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { copyText, imageLinks, type LinkFormat } from '../../lib/image-links'
 import { Button } from './button'
 import { DropdownItem, DropdownMenu } from './dropdown-menu'
@@ -17,18 +18,9 @@ const formatIcons = {
 } satisfies Record<LinkFormat, IconName>
 const storageKey = 'imagesilo_link_format'
 
-function browserStorage(): Storage | null {
-  if (typeof window === 'undefined') return null
-  try {
-    return window.localStorage
-  } catch {
-    return null
-  }
-}
-
 function initialFormat(): LinkFormat {
-  const value = browserStorage()?.getItem(storageKey)
-  return formats.includes(value as LinkFormat) ? value as LinkFormat : 'direct'
+  const value = readLocalStorage(storageKey)
+  return formats.includes(value as LinkFormat) ? (value as LinkFormat) : 'direct'
 }
 
 export function CopyLinkControl({ image, compact = false, onCopied }: { image: Image; compact?: boolean; onCopied?: (format: LinkFormat) => void }) {
@@ -39,7 +31,7 @@ export function CopyLinkControl({ image, compact = false, onCopied }: { image: I
   const links = imageLinks(image)
 
   useEffect(() => {
-    browserStorage()?.setItem(storageKey, format)
+    writeLocalStorage(storageKey, format)
   }, [format])
 
   async function copy() {
@@ -57,7 +49,15 @@ export function CopyLinkControl({ image, compact = false, onCopied }: { image: I
 
   return (
     <div className="copy-link-control" data-compact={compact || undefined} onClick={(event) => event.stopPropagation()}>
-      <Button className="copy-link-main" size={compact ? 'xs' : 'sm'} variant="outline" type="button" disabled={copying} aria-label={t('images.copySelectedFormat', { format: t(`images.linkFormatShort.${format}`) })} onClick={() => void copy()}>
+      <Button
+        className="copy-link-main"
+        size={compact ? 'xs' : 'sm'}
+        variant="outline"
+        type="button"
+        disabled={copying}
+        aria-label={t('images.copySelectedFormat', { format: t(`images.linkFormatShort.${format}`) })}
+        onClick={() => void copy()}
+      >
         <Icon name={copying ? 'loader' : 'copy'} className={copying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
         <span className="image-action-label">{t('common.copy')}</span>
       </Button>
@@ -66,15 +66,29 @@ export function CopyLinkControl({ image, compact = false, onCopied }: { image: I
         onOpenChange={setOpen}
         align="right"
         className="copy-format-menu"
-        trigger={(
-          <button className="copy-link-caret" type="button" title={t(`images.linkFormat.${format}`)} aria-label={`${t('images.chooseLinkFormat')}: ${t(`images.linkFormat.${format}`)}`} aria-expanded={open} onClick={() => setOpen((value) => !value)}>
+        trigger={
+          <button
+            className="copy-link-caret"
+            type="button"
+            title={t(`images.linkFormat.${format}`)}
+            aria-label={`${t('images.chooseLinkFormat')}: ${t(`images.linkFormat.${format}`)}`}
+            aria-expanded={open}
+            onClick={() => setOpen((value) => !value)}
+          >
             <Icon name={formatIcons[format]} className="copy-format-icon" />
             <Icon name="chevronDown" className="copy-format-chevron" />
           </button>
-        )}
+        }
       >
         {formats.map((value) => (
-          <DropdownItem key={value} active={value === format} onClick={() => { setFormat(value); setOpen(false) }}>
+          <DropdownItem
+            key={value}
+            active={value === format}
+            onClick={() => {
+              setFormat(value)
+              setOpen(false)
+            }}
+          >
             <Icon name={formatIcons[value]} />
             <span>{t(`images.linkFormat.${value}`)}</span>
             {value === format ? <Icon name="check" className="ml-auto h-4 w-4 text-brand-500" /> : null}

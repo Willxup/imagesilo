@@ -1,10 +1,10 @@
-# syntax=docker/dockerfile:1.7
-
 ARG NODE_IMAGE=node:26.5.0-bookworm-slim@sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb
 ARG GO_IMAGE=golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651
 ARG RUNTIME_IMAGE=debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 ARG VIPS_VERSION=8.18.4
 ARG VIPS_SHA256=2677bad6c422617fd1172d359c16af34e736965d042c214203a87187d26ff037
+ARG BUILD_REVISION=unknown
+ARG BUILD_SOURCE=https://github.com/Willxup/imagesilo
 
 FROM ${NODE_IMAGE} AS web-build
 WORKDIR /src/web
@@ -67,6 +67,8 @@ RUN rm -rf /opt/vips/bin /opt/vips/include /opt/vips/lib/pkgconfig /opt/vips/sha
     && find /opt/vips/lib -type f -name '*.so.*' -exec strip --strip-unneeded {} +
 
 FROM ${RUNTIME_IMAGE} AS runtime
+ARG BUILD_REVISION
+ARG BUILD_SOURCE
 RUN apt-get update \
     && apt-get install --yes --no-install-recommends \
         libexpat1 libglib2.0-0 libjpeg62-turbo libpng16-16 libwebp7 libwebpdemux2 libwebpmux3 zlib1g \
@@ -77,8 +79,15 @@ RUN apt-get update \
 
 COPY --from=vips-runtime /opt/vips/lib /opt/vips/lib
 COPY --from=go-build /out/imagesilo /usr/local/bin/imagesilo
+COPY THIRD_PARTY_NOTICES.md /usr/share/doc/imagesilo/THIRD_PARTY_NOTICES.md
 
-ENV LD_LIBRARY_PATH=/opt/vips/lib
+LABEL org.opencontainers.image.source="$BUILD_SOURCE" \
+      org.opencontainers.image.revision="$BUILD_REVISION"
+
+ENV LD_LIBRARY_PATH=/opt/vips/lib \
+    IMAGESILO_LISTEN_ADDRESS=:8080 \
+    IMAGESILO_DELIVERY_CONCURRENCY=64 \
+    IMAGESILO_TRUST_PROXY_HEADERS=true
 
 USER 10001:10001
 EXPOSE 8080

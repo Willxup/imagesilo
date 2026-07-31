@@ -8,4 +8,5 @@ var (
 	ErrImageNotFound = errors.New("target image was not found")
 	ErrInvalidSource = errors.New("alias source is invalid")
 	ErrInvalidImage  = errors.New("target image id is invalid")
+	ErrInvalidCursor = errors.New("alias cursor is invalid")
 )

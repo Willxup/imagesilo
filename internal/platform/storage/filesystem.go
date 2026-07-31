@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -93,11 +94,11 @@ func (f *Filesystem) CommitTemporary(temporaryPath, storageKey string) (string, 
 }
 
 func (f *Filesystem) Open(storageKey string) (*os.File, error) {
-	path, err := f.resolveStorageKey(storageKey)
+	_, err := f.resolveStorageKey(storageKey)
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(path)
+	file, err := openRegularInRoot(f.imagesDirectory, storageKey)
 	if err != nil {
 		return nil, fmt.Errorf("open stored image: %w", err)
 	}
@@ -109,11 +110,11 @@ func (f *Filesystem) ImagePath(storageKey string) (string, error) {
 }
 
 func (f *Filesystem) OpenThumbnail(imageID string) (*os.File, error) {
-	path, err := f.resolveThumbnailKey(imageID)
+	_, err := f.resolveThumbnailKey(imageID)
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.Open(path)
+	file, err := openRegularInRoot(f.thumbnailsDirectory, imageID)
 	if err != nil {
 		return nil, fmt.Errorf("open thumbnail: %w", err)
 	}
@@ -121,18 +122,24 @@ func (f *Filesystem) OpenThumbnail(imageID string) (*os.File, error) {
 }
 
 func (f *Filesystem) Exists(storageKey string) (bool, error) {
-	path, err := f.resolveStorageKey(storageKey)
+	_, exists, err := f.StoredSize(storageKey)
+	return exists, err
+}
+
+func (f *Filesystem) StoredSize(storageKey string) (int64, bool, error) {
+	file, err := f.Open(storageKey)
 	if err != nil {
-		return false, err
+		if errors.Is(err, fs.ErrNotExist) {
+			return 0, false, nil
+		}
+		return 0, false, err
 	}
-	info, err := os.Stat(path)
-	if err == nil {
-		return info.Mode().IsRegular(), nil
+	defer file.Close()
+	info, err := file.Stat()
+	if err != nil {
+		return 0, false, fmt.Errorf("stat stored image: %w", err)
 	}
-	if os.IsNotExist(err) {
-		return false, nil
-	}
-	return false, fmt.Errorf("stat stored image: %w", err)
+	return info.Size(), true, nil
 }
 
 func (f *Filesystem) Remove(storageKey string) error {
@@ -233,4 +240,21 @@ func listDirectory(directory string) ([]FileEntry, error) {
 		})
 	}
 	return result, nil
+}
+
+func openRegularInRoot(root, name string) (*os.File, error) {
+	file, err := os.OpenInRoot(root, name)
+	if err != nil {
+		return nil, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, err
+	}
+	if !info.Mode().IsRegular() {
+		file.Close()
+		return nil, fmt.Errorf("path is not a regular file")
+	}
+	return file, nil
 }

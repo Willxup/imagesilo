@@ -21,7 +21,7 @@ paths:
       operationId: getReadiness
       responses:
         '200':
-          description: 数据库、存储和索引就绪
+          description: SQLite 连接就绪
           content:
             application/json:
               schema:
@@ -53,6 +53,8 @@ paths:
               schema: { $ref: '#/components/schemas/AdminSession' }
         '400':
           $ref: '#/components/responses/BadRequest'
+        '403':
+          $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
   /api/v1/auth/login:
@@ -215,7 +217,7 @@ paths:
       operationId: uploadImage
       security:
         - sessionCookie: []
-        - bearerToken: [images:upload]
+        - bearerToken: ['images:upload']
       parameters:
         - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
@@ -251,7 +253,7 @@ paths:
       operationId: batchDeleteImages
       security:
         - sessionCookie: []
-        - bearerToken: [images:delete]
+        - bearerToken: ['images:delete']
       parameters:
         - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
@@ -316,7 +318,7 @@ paths:
       operationId: deleteImage
       security:
         - sessionCookie: []
-        - bearerToken: [images:delete]
+        - bearerToken: ['images:delete']
       parameters:
         - $ref: '#/components/parameters/ImageId'
         - $ref: '#/components/parameters/CSRFTokenForSession'
@@ -398,13 +400,15 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /image/{imageId}:
     get:
       operationId: deliverImage
       security:
         - {}
         - sessionCookie: []
-        - bearerToken: [images:read_private]
+        - bearerToken: ['images:read_private']
       parameters:
         - $ref: '#/components/parameters/ImageId'
       responses:
@@ -430,6 +434,8 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '404':
           $ref: '#/components/responses/NotFound'
+        '503':
+          $ref: '#/components/responses/ServiceUnavailable'
   /api/v1/api-tokens:
     get:
       operationId: listApiTokens
@@ -618,7 +624,7 @@ paths:
       operationId: importImage
       security:
         - sessionCookie: []
-        - bearerToken: [images:upload, aliases:write]
+        - bearerToken: ['images:upload', 'aliases:write']
       parameters:
         - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
@@ -655,12 +661,16 @@ paths:
       operationId: listAliases
       security:
         - sessionCookie: []
-        - bearerToken: [aliases:write]
+        - bearerToken: ['aliases:write']
       parameters:
         - name: limit
           in: query
           required: false
           schema: { type: integer, minimum: 1, maximum: 100, default: 50 }
+        - name: cursor
+          in: query
+          required: false
+          schema: { type: string, maxLength: 512 }
       responses:
         '200':
           description: 历史路径映射列表
@@ -676,7 +686,7 @@ paths:
       operationId: createAlias
       security:
         - sessionCookie: []
-        - bearerToken: [aliases:write]
+        - bearerToken: ['aliases:write']
       parameters:
         - $ref: '#/components/parameters/CSRFTokenForSession'
       requestBody:
@@ -707,7 +717,7 @@ paths:
       operationId: resolveAlias
       security:
         - sessionCookie: []
-        - bearerToken: [aliases:write]
+        - bearerToken: ['aliases:write']
       parameters:
         - name: path
           in: query
@@ -733,7 +743,7 @@ paths:
       operationId: deleteAlias
       security:
         - sessionCookie: []
-        - bearerToken: [aliases:write]
+        - bearerToken: ['aliases:write']
       parameters:
         - $ref: '#/components/parameters/AliasId'
         - $ref: '#/components/parameters/CSRFTokenForSession'
@@ -799,7 +809,7 @@ components:
       enum: [public, private]
     ApiTokenScope:
       type: string
-      enum: [images:upload, images:read_private, images:delete, aliases:write]
+      enum: ['images:upload', 'images:read_private', 'images:delete', 'aliases:write']
     HealthResponse:
       type: object
       required: [status]
@@ -820,8 +830,9 @@ components:
     SetupRequest:
       type: object
       additionalProperties: false
-      required: [displayName, email, password, defaultVisibility, compressionEnabled, jpegQuality, webpQuality, pngCompressionLevel, conversionEnabled, conversionWebpQuality, conversionWebpLossless]
+      required: [bootstrapToken, displayName, email, password, defaultVisibility, compressionEnabled, jpegQuality, webpQuality, pngCompressionLevel, conversionEnabled, conversionWebpQuality, conversionWebpLossless]
       properties:
+        bootstrapToken: { type: string, pattern: '^isb_[A-Za-z0-9_-]{43}$' }
         displayName: { type: string, minLength: 1, maxLength: 80 }
         email: { type: string, format: email, maxLength: 254 }
         password: { type: string, minLength: 12, maxLength: 1024 }
@@ -1037,9 +1048,10 @@ components:
         compressionRejected: { type: boolean }
     SystemInfo:
       type: object
-      required: [processingConcurrency, maxBatchCount, maxUploadBytes, maxTotalPixels, supportedFormats, vipsVersion]
+      required: [processingConcurrency, deliveryConcurrency, maxBatchCount, maxUploadBytes, maxTotalPixels, supportedFormats, vipsVersion]
       properties:
         processingConcurrency: { type: integer, minimum: 1 }
+        deliveryConcurrency: { type: integer, minimum: 1 }
         maxBatchCount: { type: integer, minimum: 1 }
         maxUploadBytes: { type: integer, format: int64, minimum: 1 }
         maxTotalPixels: { type: integer, format: int64, minimum: 1 }
@@ -1150,6 +1162,7 @@ components:
         items:
           type: array
           items: { $ref: '#/components/schemas/ImageAlias' }
+        nextCursor: { type: string }
     ImportResult:
       type: object
       required: [imageId, standardUrl, sha256, alias]

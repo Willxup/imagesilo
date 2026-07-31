@@ -3,6 +3,8 @@ package database
 import (
 	"context"
 	"database/sql"
+	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -46,6 +48,42 @@ func TestOpenAppliesConnectionPragmas(t *testing.T) {
 		}
 		if busyTimeout != 5000 || synchronous != 2 || journalMode != "wal" {
 			t.Fatalf("connection pragmas = busy_timeout:%d synchronous:%d journal_mode:%s", busyTimeout, synchronous, journalMode)
+		}
+	}
+}
+
+func TestOpenRestrictsDatabasePermissions(t *testing.T) {
+	directory := t.TempDir()
+	path := filepath.Join(directory, "imagesilo.db")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(directory, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	db, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer db.Close()
+
+	directoryInfo, err := os.Stat(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if permission := directoryInfo.Mode().Perm(); permission != 0o700 {
+		t.Fatalf("database directory permission = %o, want 700", permission)
+	}
+	for _, candidate := range []string{path, path + "-wal", path + "-shm"} {
+		info, err := os.Stat(candidate)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		if permission := info.Mode().Perm(); permission != 0o600 {
+			t.Fatalf("%s permission = %o, want 600", filepath.Base(candidate), permission)
 		}
 	}
 }

@@ -46,6 +46,7 @@
   "setup": {
     "title": "首次初始化 ImageSilo",
     "description": "创建管理员账号并保存基础图片策略。完成后即可直接进入控制台，无需修改配置文件或数据库。",
+    "bootstrapToken": "启动日志中的 Bootstrap Token",
     "displayName": "显示名称",
     "confirmPassword": "确认密码",
     "passwordMismatch": "两次输入的密码不一致。",

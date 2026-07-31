@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
 import { apiRequest } from '../../lib/api-client'
@@ -11,6 +11,7 @@ import { SettingsPage } from './settings-page'
 vi.mock('../../lib/api-client', () => ({ apiRequest: vi.fn() }))
 
 describe('SettingsPage', () => {
+  afterEach(cleanup)
   beforeEach(() => {
     vi.mocked(apiRequest).mockImplementation(async (path) => {
       if (path === '/api/v1/settings') {
@@ -33,11 +34,22 @@ describe('SettingsPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <AuthContext.Provider value={{
-          session: { adminId: '019c1234-5678-7abc-8def-0123456789ab', displayName: 'ImageSilo', email: 'admin@example.com', csrfToken: 'isc_test', expiresAt: '2026-07-30T00:00:00Z' },
-          setupStatus: { initialized: true }, isLoading: false,
-          refresh: vi.fn(), refreshSetup: vi.fn(), logout: vi.fn(),
-        }}>
+        <AuthContext.Provider
+          value={{
+            session: {
+              adminId: '019c1234-5678-7abc-8def-0123456789ab',
+              displayName: 'ImageSilo',
+              email: 'admin@example.com',
+              csrfToken: 'isc_test',
+              expiresAt: '2026-07-30T00:00:00Z',
+            },
+            setupStatus: { initialized: true },
+            isLoading: false,
+            refresh: vi.fn(),
+            refreshSetup: vi.fn(),
+            logout: vi.fn(),
+          }}
+        >
           <SettingsPage />
         </AuthContext.Provider>
       </QueryClientProvider>,
@@ -49,5 +61,24 @@ describe('SettingsPage', () => {
     fireEvent.click(screen.getByRole('button', { name: '修改密码' }))
     expect(screen.getAllByRole('alert')).toHaveLength(2)
     expect(screen.getAllByText('此项为必填项。')).toHaveLength(2)
+  })
+
+  it('preserves an unsaved processing draft across unrelated settings cache updates', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider
+          value={{ session: null, setupStatus: { initialized: true }, isLoading: false, refresh: vi.fn(), refreshSetup: vi.fn(), logout: vi.fn() }}
+        >
+          <SettingsPage />
+        </AuthContext.Provider>
+      </QueryClientProvider>,
+    )
+    const jpegQuality = await screen.findByLabelText('JPEG 质量')
+    fireEvent.change(jpegQuality, { target: { value: '91' } })
+    await act(async () => {
+      queryClient.setQueryData<AppSettings>(['settings'], (current) => (current ? { ...current, defaultVisibility: 'private', jpegQuality: 70 } : current))
+    })
+    expect(screen.getByLabelText('JPEG 质量')).toHaveValue(91)
   })
 })

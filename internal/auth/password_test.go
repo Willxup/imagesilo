@@ -1,6 +1,10 @@
 package auth
 
-import "testing"
+import (
+	"errors"
+	"strings"
+	"testing"
+)
 
 func TestPasswordRoundTrip(t *testing.T) {
 	parameters := PasswordParameters{Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32}
@@ -22,5 +26,11 @@ func TestPasswordRoundTrip(t *testing.T) {
 	}
 	if valid {
 		t.Fatal("VerifyPassword() accepted the wrong password")
+	}
+}
+
+func TestHashPasswordRejectsOversizedInputBeforeKDF(t *testing.T) {
+	if _, err := HashPassword(strings.Repeat("x", MaximumPasswordBytes+1)); !errors.Is(err, ErrPasswordTooLong) {
+		t.Fatalf("HashPassword() error = %v, want ErrPasswordTooLong", err)
 	}
 }

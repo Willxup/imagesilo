@@ -56,9 +56,23 @@ func InspectFile(ctx context.Context, path string, limits Limits) (Metadata, err
 	if pixels <= 0 || (limits.MaxTotalPixels > 0 && pixels > limits.MaxTotalPixels) {
 		return Metadata{}, ErrTooManyPixels
 	}
+	preflightFrames := 0
+	if format == FormatGIF {
+		maxFrames := int64(0)
+		if limits.MaxTotalPixels > 0 {
+			maxFrames = limits.MaxTotalPixels / pixels
+		}
+		preflightFrames, err = preflightGIFFrames(path, maxFrames)
+		if err != nil {
+			return Metadata{}, err
+		}
+	}
 	frames, err := validateDecode(path, format, configuration.Width, configuration.Height)
 	if err != nil {
 		return Metadata{}, err
+	}
+	if preflightFrames > 0 && frames != preflightFrames {
+		return Metadata{}, ErrInvalidImage
 	}
 	if limits.MaxTotalPixels > 0 && pixels*int64(frames) > limits.MaxTotalPixels {
 		return Metadata{}, ErrTooManyPixels

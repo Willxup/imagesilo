@@ -5,43 +5,47 @@ image="${IMAGE:-imagesilo:smoke}"
 platform="${PLATFORM:-linux/amd64}"
 port="${PORT:-18080}"
 suffix="${SMOKE_SUFFIX:-local}"
+if [[ ! "$suffix" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$ ]]; then
+  printf 'SMOKE_SUFFIX must contain only 1-64 safe name characters\n' >&2
+  exit 1
+fi
 container="imagesilo-smoke-${suffix}"
 restart_container="${container}-restart"
 permission_container="${container}-permission"
 volume="${container}-data"
-cookie_file="${TMPDIR:-/tmp}/${container}.cookies"
-upload_response="${TMPDIR:-/tmp}/${container}-upload.json"
-system_response="${TMPDIR:-/tmp}/${container}-system.json"
-png_response="${TMPDIR:-/tmp}/${container}-png.json"
-gif_response="${TMPDIR:-/tmp}/${container}-gif.json"
-conversion_response="${TMPDIR:-/tmp}/${container}-conversion.json"
-webp_response="${TMPDIR:-/tmp}/${container}-webp.json"
-import_response="${TMPDIR:-/tmp}/${container}-import.json"
-import_conflict_response="${TMPDIR:-/tmp}/${container}-import-conflict.json"
-import_source="${TMPDIR:-/tmp}/${container}-import-source.jpg"
-import_token_response="${TMPDIR:-/tmp}/${container}-import-token.json"
-import_manifest="${TMPDIR:-/tmp}/${container}-import.tsv"
-import_result="${TMPDIR:-/tmp}/${container}-import-result.jsonl"
-overview_response="${TMPDIR:-/tmp}/${container}-overview.json"
-runtime_before_response="${TMPDIR:-/tmp}/${container}-runtime-before.json"
-runtime_after_response="${TMPDIR:-/tmp}/${container}-runtime-after.json"
-converted_webp="${TMPDIR:-/tmp}/${container}-converted.webp"
-delivery_headers="${TMPDIR:-/tmp}/${container}-delivery.headers"
-range_body="${TMPDIR:-/tmp}/${container}-range.bin"
-permission_log="${TMPDIR:-/tmp}/${container}-permission.log"
-permission_directory="${TMPDIR:-/tmp}/${container}-readonly-data"
+temporary_root="$(mktemp -d "${TMPDIR:-/tmp}/imagesilo-smoke.XXXXXX")"
+cookie_file="${temporary_root}/cookies"
+upload_response="${temporary_root}/upload.json"
+system_response="${temporary_root}/system.json"
+png_response="${temporary_root}/png.json"
+gif_response="${temporary_root}/gif.json"
+conversion_response="${temporary_root}/conversion.json"
+webp_response="${temporary_root}/webp.json"
+import_response="${temporary_root}/import.json"
+import_conflict_response="${temporary_root}/import-conflict.json"
+import_source="${temporary_root}/import-source.jpg"
+import_token_response="${temporary_root}/import-token.json"
+import_manifest="${temporary_root}/import.tsv"
+import_result="${temporary_root}/import-result.jsonl"
+overview_response="${temporary_root}/overview.json"
+runtime_before_response="${temporary_root}/runtime-before.json"
+runtime_after_response="${temporary_root}/runtime-after.json"
+converted_webp="${temporary_root}/converted.webp"
+delivery_headers="${temporary_root}/delivery.headers"
+range_body="${temporary_root}/range.bin"
+permission_log="${temporary_root}/permission.log"
+permission_directory="${temporary_root}/readonly-data"
 smoke_email="admin@example.com"
 smoke_password="ImageSilo-${suffix}-Smoke-Password!"
 
-cleanup() {
+cleanup_runtime() {
   docker rm --force "$container" "$restart_container" "$permission_container" >/dev/null 2>&1 || true
   docker volume rm "$volume" >/dev/null 2>&1 || true
-  rm -f "$cookie_file" "$upload_response" "$system_response" "$png_response" "$gif_response" \
-    "$conversion_response" "$webp_response" "$converted_webp" "$delivery_headers" "$range_body"
-  rm -f "$import_response" "$import_conflict_response" "$import_source" "$import_token_response" \
-    "$import_manifest" "$import_result" "$overview_response" "$runtime_before_response" \
-    "$runtime_after_response" "$permission_log"
-  rm -rf "$permission_directory"
+}
+
+cleanup() {
+  cleanup_runtime
+  rm -rf "$temporary_root"
 }
 trap cleanup EXIT INT TERM
 
@@ -77,7 +81,7 @@ wait_healthy() {
   return 1
 }
 
-cleanup
+cleanup_runtime
 docker volume create "$volume" >/dev/null
 printf '%s\n' "$smoke_password" | docker run --rm --interactive \
   --platform "$platform" \
@@ -110,6 +114,9 @@ docker exec "$container" sh -ec '
   test ! -e /opt/vips/lib/pkgconfig
   test ! -e /opt/vips/share
   test -n "$(find /opt/vips/lib -type f -name "libvips.so.*" -print -quit)"
+  test -r /usr/share/doc/imagesilo/THIRD_PARTY_NOTICES.md
+  grep -q TailAdmin /usr/share/doc/imagesilo/THIRD_PARTY_NOTICES.md
+  grep -q Outfit /usr/share/doc/imagesilo/THIRD_PARTY_NOTICES.md
 '
 
 mkdir -p "$permission_directory"
@@ -144,7 +151,7 @@ curl --fail --silent --show-error --cookie "$cookie_file" "${base_url}/api/v1/ov
 goroutines_before="$(jq '.goroutines' "$runtime_before_response")"
 fds_before="$(docker exec "$container" sh -c 'find /proc/1/fd -mindepth 1 -maxdepth 1 | wc -l')"
 
-go run ./tests/performance/jpeg_stdout.go -width 3000 -height 2000 -quality 90 |
+go run ./tests/performance/jpeg_stdout -width 3000 -height 2000 -quality 90 |
   curl --fail --silent --show-error \
     --cookie "$cookie_file" \
     --header "X-CSRF-Token: ${csrf_token}" \
@@ -182,7 +189,7 @@ test "$(curl --silent --show-error --output /dev/null --write-out '%{http_code}'
 curl --fail --silent --show-error --head "${base_url}/image/${image_id}" >"$delivery_headers"
 grep -Eqi "^Content-Length: $(jq '.storedSize' "$upload_response")" "$delivery_headers"
 
-go run ./tests/performance/image_stdout.go -format png -width 800 -height 600 |
+go run ./tests/performance/image_stdout -format png -width 800 -height 600 |
   curl --fail --silent --show-error \
     --cookie "$cookie_file" \
     --header "X-CSRF-Token: ${csrf_token}" \
@@ -191,7 +198,7 @@ go run ./tests/performance/image_stdout.go -format png -width 800 -height 600 |
 test "$(jq --raw-output '.mimeType' "$png_response")" = "image/png"
 test "$(jq --raw-output '.sourceSha256' "$png_response")" = "$(jq --raw-output '.storedSha256' "$png_response")"
 
-go run ./tests/performance/image_stdout.go -format gif -width 320 -height 240 |
+go run ./tests/performance/image_stdout -format gif -width 320 -height 240 |
   curl --fail --silent --show-error \
     --cookie "$cookie_file" \
     --header "X-CSRF-Token: ${csrf_token}" \
@@ -210,7 +217,7 @@ curl --fail --silent --show-error \
   --data '{"compressionEnabled":false,"jpegQuality":85,"webpQuality":82,"pngCompressionLevel":6,"conversionEnabled":true,"conversionWebpQuality":82,"conversionWebpLossless":false}' \
   "${base_url}/api/v1/settings/processing" >/dev/null
 
-go run ./tests/performance/image_stdout.go -format jpeg -width 800 -height 600 -quality 95 |
+go run ./tests/performance/image_stdout -format jpeg -width 800 -height 600 -quality 95 |
   curl --fail --silent --show-error \
     --cookie "$cookie_file" \
     --header "X-CSRF-Token: ${csrf_token}" \
@@ -239,7 +246,7 @@ curl --fail --silent --show-error \
 test "$(jq --raw-output '.mimeType' "$webp_response")" = "image/webp"
 test "$(jq --raw-output '.sourceSha256' "$webp_response")" = "$(jq --raw-output '.storedSha256' "$webp_response")"
 
-go run ./tests/performance/image_stdout.go -format jpeg -width 160 -height 120 -quality 90 >"$import_source"
+go run ./tests/performance/image_stdout -format jpeg -width 160 -height 120 -quality 90 >"$import_source"
 import_source_hash="$(hash_stdin <"$import_source")"
 curl --fail --silent --show-error \
   --cookie "$cookie_file" \

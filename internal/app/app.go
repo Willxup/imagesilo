@@ -36,6 +36,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	filesystem := storage.NewFilesystem(cfg.DataDirectory)
 	barrier := indexbarrier.New()
 	deliveryIndex := delivery.NewIndex()
+	deliveryGate := delivery.NewGate(cfg.DeliveryConcurrency)
 	authRepository := auth.NewRepository(db)
 	sessionIndex := auth.NewSessionIndex()
 	authService, err := auth.NewServiceWithBarrier(authRepository, sessionIndex, barrier)
@@ -62,6 +63,9 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	for _, id := range loadResult.Delivery.MissingIDs {
 		logger.Error("image file is missing and was excluded from delivery index", "image_id", id)
 	}
+	for _, id := range loadResult.Delivery.InvalidSizeIDs {
+		logger.Error("image file size does not match metadata and was excluded from delivery index", "image_id", id)
+	}
 
 	engine := processor.NewEngine()
 	gate := processor.NewGate(cfg.ProcessingConcurrency)
@@ -74,7 +78,14 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	importService := importer.NewService(importer.NewRepository(db), filesystem, deliveryIndex, engine, gate, barrier)
 	aliasService := imagealias.NewService(imagealias.NewRepository(db), deliveryIndex, barrier)
 	settingsService := settings.NewService(settings.NewRepository(db))
-	setupService := setup.NewService(db)
+	setupService, bootstrapToken, err := setup.NewService(ctx, db)
+	if err != nil {
+		cancel()
+		return nil, fmt.Errorf("initialize setup service: %w", err)
+	}
+	if bootstrapToken != "" {
+		logger.Warn("ImageSilo requires initial setup", "bootstrap_token", bootstrapToken)
+	}
 	currentSettings, err := settingsService.Get(ctx)
 	if err != nil {
 		cancel()
@@ -83,7 +94,8 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	maintenanceService := maintenance.NewService(
 		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger,
 	)
-	maintenanceService.RecordStartupMissing(loadResult.Delivery.MissingIDs)
+	unavailableIDs := append(append([]string(nil), loadResult.Delivery.MissingIDs...), loadResult.Delivery.InvalidSizeIDs...)
+	maintenanceService.RecordStartupMissing(unavailableIDs)
 	ui, err := webui.New()
 	if err != nil {
 		cancel()
@@ -103,9 +115,12 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		Setup:                 setupService,
 		Maintenance:           maintenanceService,
 		DeliveryIndex:         deliveryIndex,
+		DeliveryGate:          deliveryGate,
 		Storage:               filesystem,
 		CookieSecure:          cfg.CookieSecure,
+		TrustProxyHeaders:     cfg.TrustProxyHeaders,
 		ProcessingConcurrency: cfg.ProcessingConcurrency,
+		DeliveryConcurrency:   cfg.DeliveryConcurrency,
 		UI:                    ui,
 	})
 	go runMaintenance(applicationContext, logger, authService, tokenService, maintenanceService, currentSettings.MaintenanceHour)

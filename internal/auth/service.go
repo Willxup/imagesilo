@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
@@ -19,10 +20,13 @@ const sessionLifetime = 24 * time.Hour
 const dummyPasswordHash = "$argon2id$v=19$m=19456,t=2,p=1$CaZiBzg+q0Gx30vFL1d3Xg$rt3GDgS5aKjp0hB3w/VcOEuZBdYepyP0FgzG7dhZqTU"
 
 type Service struct {
-	repository *Repository
-	index      *SessionIndex
-	dummyHash  string
-	barrier    *indexbarrier.Barrier
+	repository               *Repository
+	index                    *SessionIndex
+	dummyHash                string
+	barrier                  *indexbarrier.Barrier
+	credentialsMu            sync.Mutex
+	afterLoginPasswordRead   func()
+	beforePasswordChangeLock func()
 }
 
 func NewService(repository *Repository, index *SessionIndex) (*Service, error) {
@@ -45,6 +49,9 @@ func (s *Service) LoadSessions(ctx context.Context, now time.Time) error {
 }
 
 func (s *Service) Login(ctx context.Context, email, password string, now time.Time) (SessionIdentity, string, string, error) {
+	s.credentialsMu.Lock()
+	defer s.credentialsMu.Unlock()
+
 	email = strings.ToLower(strings.TrimSpace(email))
 	admin, err := s.repository.FindAdminByEmail(ctx, email)
 	encoded := s.dummyHash
@@ -52,6 +59,9 @@ func (s *Service) Login(ctx context.Context, email, password string, now time.Ti
 		encoded = admin.PasswordHash
 	} else if err != sql.ErrNoRows {
 		return SessionIdentity{}, "", "", fmt.Errorf("find administrator: %w", err)
+	}
+	if s.afterLoginPasswordRead != nil {
+		s.afterLoginPasswordRead()
 	}
 
 	valid, verifyErr := VerifyPassword(password, encoded)
@@ -164,6 +174,12 @@ func (s *Service) ChangePassword(
 	newPassword string,
 	now time.Time,
 ) error {
+	if s.beforePasswordChangeLock != nil {
+		s.beforePasswordChangeLock()
+	}
+	s.credentialsMu.Lock()
+	defer s.credentialsMu.Unlock()
+
 	admin, err := s.repository.FindAdminByID(ctx, identity.AdminID)
 	if err != nil {
 		return fmt.Errorf("find administrator for password change: %w", err)

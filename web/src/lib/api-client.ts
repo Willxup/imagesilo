@@ -10,6 +10,21 @@ export class ApiError extends Error {
   }
 }
 
+type UnauthorizedListener = () => void
+const unauthorizedListeners = new Set<UnauthorizedListener>()
+
+export function subscribeUnauthorized(listener: UnauthorizedListener) {
+  unauthorizedListeners.add(listener)
+  return () => {
+    unauthorizedListeners.delete(listener)
+  }
+}
+
+function notifyUnauthorized(path: string) {
+  if (path === '/api/v1/auth/login') return
+  for (const listener of unauthorizedListeners) listener()
+}
+
 export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T> {
   const headers = new Headers(init?.headers)
   headers.set('Accept', 'application/json')
@@ -22,6 +37,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     credentials: 'include',
     headers,
   })
+  if (response.status === 401) notifyUnauthorized(path)
   if (response.status === 204) {
     return undefined as T
   }
@@ -36,12 +52,7 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
   return body as T
 }
 
-export function uploadForm<T>(
-  path: string,
-  body: FormData,
-  onProgress: (percent: number) => void,
-  signal: AbortSignal,
-): Promise<T> {
+export function uploadForm<T>(path: string, body: FormData, onProgress: (percent: number) => void, signal: AbortSignal): Promise<T> {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest()
     const abort = () => request.abort()
@@ -70,12 +81,15 @@ export function uploadForm<T>(
         resolve(value as T)
         return
       }
+      if (request.status === 401) notifyUnauthorized(path)
       const error = value as { message?: unknown; code?: unknown } | undefined
-      reject(new ApiError(
-        request.status,
-        typeof error?.message === 'string' ? error.message : `Request failed with status ${request.status}`,
-        typeof error?.code === 'string' ? error.code : undefined,
-      ))
+      reject(
+        new ApiError(
+          request.status,
+          typeof error?.message === 'string' ? error.message : `Request failed with status ${request.status}`,
+          typeof error?.code === 'string' ? error.code : undefined,
+        ),
+      )
     })
     request.addEventListener('error', () => {
       signal.removeEventListener('abort', abort)

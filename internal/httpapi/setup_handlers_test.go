@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
@@ -29,8 +30,12 @@ func TestSetupStatusAndInitializeCreateFirstSession(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth.NewService() error = %v", err)
 	}
+	setupService, bootstrapToken, err := setup.NewService(context.Background(), db)
+	if err != nil {
+		t.Fatalf("setup.NewService() error = %v", err)
+	}
 	router := NewRouter(Dependencies{
-		DB: db, Logger: slog.New(slog.DiscardHandler), Auth: authService, Setup: setup.NewService(db),
+		DB: db, Logger: slog.New(slog.DiscardHandler), Auth: authService, Setup: setupService,
 	})
 
 	statusRequest := httptest.NewRequest(http.MethodGet, "/api/v1/setup/status", nil)
@@ -40,7 +45,7 @@ func TestSetupStatusAndInitializeCreateFirstSession(t *testing.T) {
 		t.Fatalf("initial setup status = %d %s", statusResponse.Code, statusResponse.Body.String())
 	}
 
-	body := `{"displayName":"Will","email":"ADMIN@example.com","password":"a secure setup password","defaultVisibility":"private","compressionEnabled":false,"jpegQuality":85,"webpQuality":82,"pngCompressionLevel":6,"conversionEnabled":false,"conversionWebpQuality":82,"conversionWebpLossless":false}`
+	body := fmt.Sprintf(`{"bootstrapToken":%q,"displayName":"Will","email":"ADMIN@example.com","password":"a secure setup password","defaultVisibility":"private","compressionEnabled":false,"jpegQuality":85,"webpQuality":82,"pngCompressionLevel":6,"conversionEnabled":false,"conversionWebpQuality":82,"conversionWebpLossless":false}`, bootstrapToken)
 	request := httptest.NewRequest(http.MethodPost, "/api/v1/setup", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()

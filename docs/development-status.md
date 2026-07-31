@@ -42,7 +42,7 @@
 - 容器 smoke 已验证固定 UID/GID、exec-form ENTRYPOINT、健康检查、只读 `/data` 权限错误、运行镜像精简内容、goroutine/FD/临时文件边界和两次 SIGTERM 优雅停止；最终镜像不含 Node、Go、编译器、源码、测试素材或 libvips 开发文件。
 - `govulncheck` 实际调用链为 0；`golang.org/x/image` 已从存在 WebP 解码漏洞的 0.38.0 升级至 0.43.0。React Router 公告仅影响未启用的 unstable RSC API，作为可达性例外记录并在每次发布前复查。
 - [Verify run 30479364047](https://github.com/Willxup/imagesilo/actions/runs/30479364047) 在提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 上通过 quality、原生 amd64/arm64 增强容器 smoke 和每架构并发 1、16 请求 benchmark。结束匿名内存为 amd64 86,945,792 B、arm64 101,023,744 B；约 91.4 MB 文件页缓存与 16 个输出总量吻合。
-- `my-geelinx` 已在 1 CPU/1 GiB 的专用 builder 中完成原生 amd64 构建，并在 0.5 CPU/256 MiB、并发 1 下连续运行 600 秒、完成 118 轮串行校验：cgroup 峰值 35,938,304 B，goroutine 10→8，FD 10→10，优雅停止通过；所有证据位于 `/var/tmp/imagesilo-v0.1.0-rc.1-phase7-20260730`。
+- 外部原生 amd64 共享主机已在 1 CPU/1 GiB 的专用 builder 中完成构建，并在 0.5 CPU/256 MiB、并发 1 下连续运行 600 秒、完成 118 轮串行校验：cgroup 峰值 35,938,304 B，goroutine 10→8，FD 10→10，优雅停止通过；所有证据位于专用 `/var/tmp/imagesilo-*` 目录。
 - Git 标签 `v0.1.0-rc.1` 的 push 自动触发 [Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284)，在提交 `976a4a495e415de042ecb6d9758222b4ba5daf0d` 上通过质量门、原生 amd64/arm64 构建与完整容器 smoke，并成功创建多架构 OCI manifest。
 - 公开镜像 `ghcr.io/willxup/imagesilo:v0.1.0-rc.1` 的 manifest digest 为 `sha256:573233d00455ab6e8dad9d875ad0ede7f770436ce24bb05f6d21bc02fac053cc`；匿名 registry 请求返回 HTTP 200，`imagetools inspect` 同时确认 `linux/amd64` 与 `linux/arm64`。[GitHub Pre-release](https://github.com/Willxup/imagesilo/releases/tag/v0.1.0-rc.1) 已发布。
 - 资源基线见 `performance-baseline.md`。

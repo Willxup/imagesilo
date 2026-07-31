@@ -9,3 +9,8 @@ type Alias struct {
 	Source    string
 	CreatedAt time.Time
 }
+
+type Page struct {
+	Items      []Alias
+	NextCursor string
+}

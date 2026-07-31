@@ -12,6 +12,7 @@ import (
 type LoadResult struct {
 	LoadedIDs         []string
 	MissingIDs        []string
+	InvalidSizeIDs    []string
 	LoadedAliasCount  int
 	SkippedAliasCount int
 }
@@ -54,12 +55,16 @@ func Build(ctx context.Context, db *sql.DB, filesystem *storage.Filesystem) (Sna
 		if len(hash) != 32 {
 			return Snapshot{}, LoadResult{}, fmt.Errorf("image %s has invalid stored SHA-256", id)
 		}
-		exists, err := filesystem.Exists(target.StorageKey)
+		storedSize, exists, err := filesystem.StoredSize(target.StorageKey)
 		if err != nil {
 			return Snapshot{}, LoadResult{}, fmt.Errorf("validate image %s storage: %w", id, err)
 		}
 		if !exists {
 			result.MissingIDs = append(result.MissingIDs, id)
+			continue
+		}
+		if storedSize != target.Size {
+			result.InvalidSizeIDs = append(result.InvalidSizeIDs, id)
 			continue
 		}
 		target.ETag = fmt.Sprintf("\"%x\"", hash)
@@ -81,8 +86,11 @@ func Build(ctx context.Context, db *sql.DB, filesystem *storage.Filesystem) (Sna
 	}
 	defer aliasRows.Close()
 	aliases := make(map[string]string)
-	missing := make(map[string]struct{}, len(result.MissingIDs))
+	missing := make(map[string]struct{}, len(result.MissingIDs)+len(result.InvalidSizeIDs))
 	for _, id := range result.MissingIDs {
+		missing[id] = struct{}{}
+	}
+	for _, id := range result.InvalidSizeIDs {
 		missing[id] = struct{}{}
 	}
 	for aliasRows.Next() {

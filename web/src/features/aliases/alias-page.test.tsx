@@ -19,7 +19,11 @@ const alias = {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
-  render(<QueryClientProvider client={queryClient}><AliasPage /></QueryClientProvider>)
+  render(
+    <QueryClientProvider client={queryClient}>
+      <AliasPage />
+    </QueryClientProvider>,
+  )
 }
 
 describe('AliasPage', () => {
@@ -73,5 +77,19 @@ describe('AliasPage', () => {
     fireEvent.change(screen.getAllByLabelText('历史路径')[1], { target: { value: '/missing.webp' } })
     fireEvent.click(screen.getByRole('button', { name: '解析路径' }))
     await waitFor(() => expect(screen.getByText('没有找到该映射。')).toBeInTheDocument())
+  })
+
+  it('loads aliases beyond the first 100-item cursor page', async () => {
+    const secondAlias = { ...alias, id: '019c1234-5678-7abc-8def-0123456789ac', path: '/i/2022/05/second.webp' }
+    vi.mocked(apiRequest).mockImplementation(async (path) =>
+      String(path).includes('cursor=next-page')
+        ? ({ items: [secondAlias] } as ImageAliasList)
+        : ({ items: [alias], nextCursor: 'next-page' } as ImageAliasList),
+    )
+    renderPage()
+    expect(await screen.findByText(alias.path)).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: '加载更多' }))
+    expect(await screen.findByText(secondAlias.path)).toBeInTheDocument()
+    expect(vi.mocked(apiRequest).mock.calls.some(([path]) => String(path).includes('cursor=next-page'))).toBe(true)
   })
 })

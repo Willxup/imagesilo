@@ -11,10 +11,12 @@ type systemHandler struct {
 	settings              *settings.Service
 	authenticator         *authenticator
 	processingConcurrency int
+	deliveryConcurrency   int
 }
 
 type systemResponse struct {
 	ProcessingConcurrency int      `json:"processingConcurrency"`
+	DeliveryConcurrency   int      `json:"deliveryConcurrency"`
 	MaxBatchCount         int      `json:"maxBatchCount"`
 	MaxUploadBytes        int64    `json:"maxUploadBytes"`
 	MaxTotalPixels        int64    `json:"maxTotalPixels"`
@@ -22,8 +24,8 @@ type systemResponse struct {
 	VIPSVersion           string   `json:"vipsVersion"`
 }
 
-func newSystemHandler(service *settings.Service, authenticator *authenticator, processingConcurrency int) *systemHandler {
-	return &systemHandler{settings: service, authenticator: authenticator, processingConcurrency: processingConcurrency}
+func newSystemHandler(service *settings.Service, authenticator *authenticator, processingConcurrency, deliveryConcurrency int) *systemHandler {
+	return &systemHandler{settings: service, authenticator: authenticator, processingConcurrency: processingConcurrency, deliveryConcurrency: deliveryConcurrency}
 }
 
 func (h *systemHandler) get(w http.ResponseWriter, r *http.Request) {
@@ -37,6 +39,7 @@ func (h *systemHandler) get(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, systemResponse{
 		ProcessingConcurrency: h.processingConcurrency,
+		DeliveryConcurrency:   h.deliveryConcurrency,
 		MaxBatchCount:         value.MaxBatchCount,
 		MaxUploadBytes:        value.MaxUploadBytes,
 		MaxTotalPixels:        value.MaxTotalPixels,

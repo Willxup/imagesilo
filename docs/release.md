@@ -2,7 +2,7 @@
 
 ## 质量门
 
-`make check e2e` 覆盖 Go、React、OpenAPI 生成一致性和单 worker 浏览器闭环。`Verify` 工作流随后在原生 amd64、原生 arm64 各构建一次镜像、执行容器 smoke，并只运行并发 `1`、总计 `16` 个请求的图片处理 benchmark。
+`make check e2e` 覆盖全部 Go 包、React、OpenAPI 生成一致性和单 worker 浏览器闭环。`Verify` 工作流随后在原生 amd64、原生 arm64 各构建一次镜像、执行容器 smoke，并只运行并发 `1`、总计 `16` 个请求的图片处理 benchmark。Benchmark 容器限制为 1 CPU、768 MiB 和 256 PID，并强制要求全部请求成功、无 busy 响应、p95 不超过 20 秒且 cgroup 峰值不超过 512 MiB。
 
 容器 smoke 还会验证：
 
@@ -15,7 +15,7 @@
 
 ## 多架构 OCI manifest
 
-推送符合语义版本格式的 Git tag，例如 `v1.0.0-rc.1`。`Release image` 只能由该 tag push 自动触发，不接受手动运行；标签必须指向不含 `[skip ci]` 的提交。工作流在两个原生 runner 分别构建和 smoke，推送平台标签，最后创建同一版本的 OCI manifest；不会自动覆盖 `latest`。
+推送符合语义版本格式的 Git tag，例如 `v1.0.0-rc.1`。`Release image` 只能由该 tag push 自动触发，不接受手动运行；标签提交必须属于 `origin/main`。工作流以 fail-closed 方式查询 GHCR，在两个原生 runner 分别构建和 smoke，验证镜像中的提交 revision，再使用两个平台 digest 创建版本 OCI manifest；不会自动覆盖 `latest`。同一 tag 的同一提交重跑时会核对 content tag、平台 digest 和最终 manifest，内容完全一致则幂等通过，任何不一致都拒绝覆盖。
 
 发布后再次确认：
 
@@ -25,12 +25,12 @@ docker buildx imagetools inspect ghcr.io/willxup/imagesilo:v1.0.0-rc.1
 
 输出必须同时包含 `linux/amd64` 和 `linux/arm64`。
 
-## my-geelinx 受限验收
+## 外部 amd64 主机受限验收
 
-远程验收严格使用 `/var/tmp` 独立目录，默认只占 `0.5` CPU、`256m` 内存、`128` PID，处理并发固定为 `1`。脚本只要求 Docker、curl、Python 3、base64 和系统哈希工具，不要求安装 jq。默认连续运行 10 分钟，所有请求串行：
+远程验收严格使用规范化后的空 `/var/tmp/imagesilo-*` 独立目录，默认只占 `0.5` CPU、`256m` 内存、`128` PID，处理并发固定为 `1`。脚本只要求 Docker、curl、Python 3、base64 和系统哈希工具，不要求安装 jq。默认连续运行 10 分钟，所有请求串行：
 
 ```bash
-ssh my-geelinx
+ssh <amd64-test-host>
 cd /var/tmp/imagesilo-acceptance-src
 IMAGE=ghcr.io/willxup/imagesilo:v1.0.0-rc.1 \
 WORK_DIR=/var/tmp/imagesilo-acceptance-v1.0.0-rc.1 \
@@ -42,7 +42,7 @@ bash scripts/remote-release-acceptance.sh
 
 ### v0.1.0-rc.1 验收记录
 
-提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 已在 `my-geelinx` 原生 amd64 上完成：
+提交 `b866eebcd411a38fba2365786a1fa05ed4cc443d` 已在外部原生 amd64 共享主机上完成：
 
 - 构建器限制为 CPU 0、1 CPU quota、1 GiB 内存；镜像内 vips 测试通过后删除 builder。
 - 候选镜像大小 `94,845,421` 字节，固定 `10001:10001`、exec-form ENTRYPOINT 和内置健康检查。

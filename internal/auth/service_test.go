@@ -13,6 +13,12 @@ import (
 	"github.com/Willxup/imagesilo/internal/platform/database"
 )
 
+type loginResult struct {
+	identity SessionIdentity
+	token    string
+	err      error
+}
+
 func TestSessionAuthenticationUsesIndexAndReloads(t *testing.T) {
 	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
 	if err != nil {
@@ -160,5 +166,75 @@ func TestSessionCSRFPasswordChangeAndExpiryStayConsistent(t *testing.T) {
 	}
 	if deleted != 2 || service.SessionCount() != 0 {
 		t.Fatalf("CleanupExpired() deleted = %d, count = %d, want 2 and 0", deleted, service.SessionCount())
+	}
+}
+
+func TestPasswordChangeCannotLeaveOldPasswordSession(t *testing.T) {
+	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	defer db.Close()
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatalf("migrations.Apply() error = %v", err)
+	}
+
+	const oldPassword = "a secure original password"
+	const newPassword = "a secure replacement password"
+	passwordHash, err := hashPassword(oldPassword, PasswordParameters{
+		Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32,
+	})
+	if err != nil {
+		t.Fatalf("hashPassword() error = %v", err)
+	}
+	now := time.Unix(1_800_000_000, 0).UTC()
+	repository := NewRepository(db)
+	if err := repository.CreateAdmin(context.Background(), Admin{
+		ID: "admin-id", Email: "admin@example.com", PasswordHash: passwordHash, CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatalf("CreateAdmin() error = %v", err)
+	}
+	service, err := NewService(repository, NewSessionIndex())
+	if err != nil {
+		t.Fatalf("NewService() error = %v", err)
+	}
+	keeperIdentity, keeperToken, _, err := service.Login(context.Background(), "admin@example.com", oldPassword, now)
+	if err != nil {
+		t.Fatalf("keeper Login() error = %v", err)
+	}
+
+	loginRead := make(chan struct{})
+	releaseLogin := make(chan struct{})
+	changeAttempted := make(chan struct{})
+	service.afterLoginPasswordRead = func() {
+		close(loginRead)
+		<-releaseLogin
+	}
+	service.beforePasswordChangeLock = func() { close(changeAttempted) }
+
+	loginDone := make(chan loginResult, 1)
+	go func() {
+		identity, token, _, loginErr := service.Login(context.Background(), "admin@example.com", oldPassword, now.Add(time.Second))
+		loginDone <- loginResult{identity: identity, token: token, err: loginErr}
+	}()
+	<-loginRead
+	changeDone := make(chan error, 1)
+	go func() {
+		changeDone <- service.ChangePassword(
+			context.Background(), keeperIdentity, keeperToken, oldPassword, newPassword, now.Add(time.Minute),
+		)
+	}()
+	<-changeAttempted
+	close(releaseLogin)
+
+	oldLogin := <-loginDone
+	if oldLogin.err != nil {
+		t.Fatalf("concurrent old-password Login() error = %v", oldLogin.err)
+	}
+	if err := <-changeDone; err != nil {
+		t.Fatalf("ChangePassword() error = %v", err)
+	}
+	if _, err := service.Authenticate(oldLogin.token, now.Add(2*time.Minute)); !errors.Is(err, ErrInvalidSession) {
+		t.Fatalf("old-password session survived password change: identity=%+v error=%v", oldLogin.identity, err)
 	}
 }

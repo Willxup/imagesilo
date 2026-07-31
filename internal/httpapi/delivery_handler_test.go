@@ -128,7 +128,7 @@ func TestDeliveryServesMigrationDirectoryAsPublicPathFallback(t *testing.T) {
 			t.Fatalf("MkdirAll(%s): %v", directory, err)
 		}
 	}
-	migrationContent := []byte("mounted-migration-image")
+	migrationContent := phaseTwoJPEG(t)
 	migrationPath := filepath.Join(dataDirectory, "migrations", "i", "2022", "04", "sample.jpg")
 	if err := os.WriteFile(migrationPath, migrationContent, 0o640); err != nil {
 		t.Fatalf("WriteFile(migration) error = %v", err)
@@ -167,12 +167,18 @@ func TestDeliveryMigrationFallbackRejectsUnsafeAndNonImageFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(migrationsDirectory, "notes.txt"), []byte("not public"), 0o640); err != nil {
 		t.Fatalf("WriteFile(notes): %v", err)
 	}
+	if err := os.WriteFile(filepath.Join(migrationsDirectory, "disguised.jpg"), []byte("not an image"), 0o640); err != nil {
+		t.Fatalf("WriteFile(disguised): %v", err)
+	}
 	outsidePath := filepath.Join(dataDirectory, "outside.jpg")
 	if err := os.WriteFile(outsidePath, []byte("outside"), 0o640); err != nil {
 		t.Fatalf("WriteFile(outside): %v", err)
 	}
-	if err := os.Symlink(outsidePath, filepath.Join(migrationsDirectory, "escape.jpg")); err != nil {
-		t.Skipf("Symlink unavailable: %v", err)
+	requestPaths := []string{"/notes.txt", "/disguised.jpg", "/%2e%2e/outside.jpg"}
+	if err := os.Symlink(outsidePath, filepath.Join(migrationsDirectory, "escape.jpg")); err == nil {
+		requestPaths = append(requestPaths, "/escape.jpg")
+	} else {
+		t.Logf("Symlink unavailable: %v", err)
 	}
 
 	router := NewRouter(Dependencies{
@@ -180,7 +186,7 @@ func TestDeliveryMigrationFallbackRejectsUnsafeAndNonImageFiles(t *testing.T) {
 		Storage:       storage.NewFilesystem(dataDirectory),
 		Logger:        slog.New(slog.DiscardHandler),
 	})
-	for _, requestPath := range []string{"/notes.txt", "/escape.jpg", "/%2e%2e/outside.jpg"} {
+	for _, requestPath := range requestPaths {
 		response := deliveryRequest(router, http.MethodGet, requestPath, nil)
 		if response.Code != http.StatusNotFound {
 			t.Fatalf("GET %s status = %d, want %d", requestPath, response.Code, http.StatusNotFound)
@@ -213,6 +219,44 @@ func TestDeliveryAliasTakesPrecedenceOverMigrationFile(t *testing.T) {
 	response := deliveryRequest(router, http.MethodGet, "/legacy/sample.jpg", nil)
 	if response.Code != http.StatusOK || response.Body.String() != string(aliasContent) {
 		t.Fatalf("alias precedence response = %d %q", response.Code, response.Body.String())
+	}
+}
+
+func TestDeliveryCapacityCoversStandardAliasAndMigrationPaths(t *testing.T) {
+	dataDirectory := t.TempDir()
+	for _, directory := range []string{"images", filepath.Join("migrations", "legacy")} {
+		if err := os.MkdirAll(filepath.Join(dataDirectory, directory), 0o750); err != nil {
+			t.Fatalf("MkdirAll(%s): %v", directory, err)
+		}
+	}
+	const imageID = "019c1234-5678-7abc-8def-0123456789ab"
+	content := []byte("image")
+	if err := os.WriteFile(filepath.Join(dataDirectory, "images", imageID), content, 0o640); err != nil {
+		t.Fatalf("WriteFile(image): %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dataDirectory, "migrations", "legacy", "migration.jpg"), content, 0o640); err != nil {
+		t.Fatalf("WriteFile(migration): %v", err)
+	}
+	index := delivery.NewIndex()
+	index.Add(imageID, delivery.Target{
+		StorageKey: imageID, MIMEType: "image/jpeg", ETag: `"etag"`, Size: int64(len(content)),
+		LastModified: time.Now(), Visibility: "public", OriginalName: "sample.jpg",
+	})
+	index.AddAlias("/legacy/sample.jpg", imageID)
+	gate := delivery.NewGate(1)
+	release, ok := gate.TryAcquire()
+	if !ok {
+		t.Fatal("failed to occupy delivery gate")
+	}
+	defer release()
+	router := NewRouter(Dependencies{
+		DeliveryIndex: index, DeliveryGate: gate, Storage: storage.NewFilesystem(dataDirectory), Logger: slog.New(slog.DiscardHandler),
+	})
+	for _, requestPath := range []string{"/image/" + imageID, "/legacy/sample.jpg", "/legacy/migration.jpg"} {
+		response := deliveryRequest(router, http.MethodGet, requestPath, nil)
+		if response.Code != http.StatusServiceUnavailable || response.Header().Get("Retry-After") != "1" {
+			t.Fatalf("GET %s = %d, Retry-After = %q", requestPath, response.Code, response.Header().Get("Retry-After"))
+		}
 	}
 }
 

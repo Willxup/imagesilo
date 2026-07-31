@@ -35,15 +35,17 @@ export function ConfirmDialog({
       description={description}
       size="sm"
       closeLabel={closeLabel}
-      footer={(
+      footer={
         <>
-          <Button size="sm" variant="outline" type="button" disabled={pending} onClick={() => onOpenChange(false)}>{cancelLabel}</Button>
+          <Button data-modal-initial-focus size="sm" variant="outline" type="button" disabled={pending} onClick={() => onOpenChange(false)}>
+            {cancelLabel}
+          </Button>
           <Button size="sm" variant={destructive ? 'destructive' : 'default'} type="button" disabled={pending} onClick={onConfirm}>
             {pending ? <Icon name="loader" className="h-4 w-4 animate-spin" /> : destructive ? <Icon name="trash" /> : <Icon name="check" />}
             {confirmLabel}
           </Button>
         </>
-      )}
+      }
     />
   )
 }

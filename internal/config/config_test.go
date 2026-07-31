@@ -10,7 +10,9 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	t.Setenv("IMAGESILO_LISTEN_ADDRESS", "127.0.0.1:0")
 	t.Setenv("IMAGESILO_DATA_DIR", filepath.Join(t.TempDir(), "data"))
 	t.Setenv("IMAGESILO_PROCESSING_CONCURRENCY", "")
+	t.Setenv("IMAGESILO_DELIVERY_CONCURRENCY", "")
 	t.Setenv("IMAGESILO_SHUTDOWN_TIMEOUT", "")
+	t.Setenv("IMAGESILO_TRUST_PROXY_HEADERS", "")
 
 	cfg, err := Load()
 	if err != nil {
@@ -18,6 +20,24 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	}
 	if cfg.ProcessingConcurrency != 1 {
 		t.Fatalf("ProcessingConcurrency = %d, want lightweight default 1", cfg.ProcessingConcurrency)
+	}
+	if cfg.DeliveryConcurrency != 64 {
+		t.Fatalf("DeliveryConcurrency = %d, want lightweight default 64", cfg.DeliveryConcurrency)
+	}
+	if !cfg.TrustProxyHeaders {
+		t.Fatal("TrustProxyHeaders = false, want Nginx Proxy Manager default true")
+	}
+}
+
+func TestNativeDefaultListensOnlyOnLoopback(t *testing.T) {
+	t.Setenv("IMAGESILO_LISTEN_ADDRESS", "")
+	t.Setenv("IMAGESILO_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ListenAddress != "127.0.0.1:8080" {
+		t.Fatalf("ListenAddress = %q, want loopback default", cfg.ListenAddress)
 	}
 }
 

@@ -4,6 +4,8 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -12,6 +14,7 @@ import (
 
 	imagealias "github.com/Willxup/imagesilo/internal/alias"
 	"github.com/Willxup/imagesilo/internal/apitoken"
+	"github.com/Willxup/imagesilo/internal/delivery"
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/maintenance"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
@@ -30,6 +33,7 @@ type imageHandler struct {
 	storage       *storage.Filesystem
 	authenticator *authenticator
 	logger        *slog.Logger
+	deliveryGate  *delivery.Gate
 }
 
 type imageResponse struct {
@@ -106,8 +110,9 @@ func newImageHandler(
 	filesystem *storage.Filesystem,
 	authenticator *authenticator,
 	logger *slog.Logger,
+	deliveryGate *delivery.Gate,
 ) *imageHandler {
-	return &imageHandler{service: service, aliases: aliases, settings: settingsService, storage: filesystem, authenticator: authenticator, logger: logger}
+	return &imageHandler{service: service, aliases: aliases, settings: settingsService, storage: filesystem, authenticator: authenticator, logger: logger, deliveryGate: deliveryGate}
 }
 
 func (h *imageHandler) upload(w http.ResponseWriter, r *http.Request) {
@@ -121,35 +126,82 @@ func (h *imageHandler) upload(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, currentSettings.MaxUploadBytes+multipartOverheadBytes)
-	if err := r.ParseMultipartForm(256 << 10); err != nil {
-		var maxBytesError *http.MaxBytesError
-		if errors.As(err, &maxBytesError) {
-			writeError(w, r, http.StatusRequestEntityTooLarge, "file_too_large", "Image exceeds the maximum upload size.")
-			return
-		}
+	lease, ok := h.service.TryAcquireProcessing()
+	if !ok {
+		w.Header().Set("Retry-After", "1")
+		writeError(w, r, http.StatusServiceUnavailable, "processing_busy", "Image processor is at capacity. Retry shortly.")
+		return
+	}
+	defer lease.Release()
+	multipartReader, err := r.MultipartReader()
+	if err != nil {
 		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "A multipart image upload is required.")
 		return
 	}
-	defer r.MultipartForm.RemoveAll()
-	files := r.MultipartForm.File["file"]
-	if len(files) != 1 {
-		writeError(w, r, http.StatusBadRequest, "single_file_required", "Exactly one image file is required.")
-		return
-	}
+	var staged *images.StagedUpload
+	defer func() { h.service.DiscardStagedUpload(staged) }()
+	var originalName string
 	visibility := currentSettings.DefaultVisibility
-	if rawVisibility := strings.TrimSpace(r.FormValue("visibility")); rawVisibility != "" {
-		visibility = images.Visibility(rawVisibility)
-		if visibility != images.VisibilityPublic && visibility != images.VisibilityPrivate {
-			writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
+	visibilitySeen := false
+	for {
+		part, partErr := multipartReader.NextPart()
+		if errors.Is(partErr, io.EOF) {
+			break
+		}
+		if partErr != nil {
+			var maxBytesError *http.MaxBytesError
+			if errors.As(partErr, &maxBytesError) {
+				writeError(w, r, http.StatusRequestEntityTooLarge, "file_too_large", "Image exceeds the maximum upload size.")
+			} else {
+				writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to read multipart upload.")
+			}
+			return
+		}
+		formName := part.FormName()
+		switch formName {
+		case "file":
+			if staged != nil || part.FileName() == "" {
+				part.Close()
+				writeError(w, r, http.StatusBadRequest, "single_file_required", "Exactly one image file is required.")
+				return
+			}
+			originalName = part.FileName()
+			staged, err = h.service.StageUpload(part, currentSettings.MaxUploadBytes)
+			part.Close()
+			if err != nil {
+				h.writeUploadError(w, r, err)
+				return
+			}
+		case "visibility":
+			if visibilitySeen || part.FileName() != "" {
+				part.Close()
+				writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be supplied once as public or private.")
+				return
+			}
+			value, readErr := io.ReadAll(io.LimitReader(part, 65))
+			part.Close()
+			if readErr != nil || len(value) > 64 {
+				writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
+				return
+			}
+			visibilitySeen = true
+			if rawVisibility := strings.TrimSpace(string(value)); rawVisibility != "" {
+				visibility = images.Visibility(rawVisibility)
+			}
+		default:
+			part.Close()
+			writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Multipart upload contains an unsupported field.")
 			return
 		}
 	}
-	file, err := files[0].Open()
-	if err != nil {
-		writeError(w, r, http.StatusBadRequest, "invalid_multipart", "Unable to open uploaded image.")
+	if staged == nil {
+		writeError(w, r, http.StatusBadRequest, "single_file_required", "Exactly one image file is required.")
 		return
 	}
-	defer file.Close()
+	if visibility != images.VisibilityPublic && visibility != images.VisibilityPrivate {
+		writeError(w, r, http.StatusBadRequest, "invalid_visibility", "Visibility must be public or private.")
+		return
+	}
 	options := images.UploadOptions{Visibility: visibility, UploadedVia: "admin"}
 	options.Limits = processor.Limits{
 		MaxBytes: currentSettings.MaxUploadBytes, MaxTotalPixels: currentSettings.MaxTotalPixels,
@@ -168,7 +220,7 @@ func (h *imageHandler) upload(w http.ResponseWriter, r *http.Request) {
 		options.UploadedVia = "api_token"
 		options.UploadedByAPITokenID = &tokenID
 	}
-	uploaded, err := h.service.Upload(r.Context(), file, files[0].Filename, options, time.Now())
+	uploaded, err := h.service.CommitStagedUpload(r.Context(), staged, originalName, options, time.Now(), lease)
 	if err != nil {
 		h.writeUploadError(w, r, err)
 		return
@@ -191,6 +243,11 @@ func (h *imageHandler) thumbnail(w http.ResponseWriter, r *http.Request) {
 	if _, ok := h.authenticator.requireSession(w, r, false); !ok {
 		return
 	}
+	release, ok := acquireDeliverySlot(w, r, h.deliveryGate)
+	if !ok {
+		return
+	}
+	defer release()
 	rawID := chi.URLParam(r, "imageID")
 	id, err := uuid.Parse(rawID)
 	if err != nil || id.String() != rawID {
@@ -209,7 +266,8 @@ func (h *imageHandler) thumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "image/jpeg")
-	w.Header().Set("Cache-Control", "private, max-age=86400")
+	w.Header().Set("Cache-Control", "private, no-cache")
+	w.Header().Set("ETag", fmt.Sprintf(`"thumb-%x-%x"`, info.Size(), info.ModTime().UnixNano()))
 	http.ServeContent(w, r, rawID+".jpg", info.ModTime(), file)
 }
 
