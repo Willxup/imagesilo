@@ -15,15 +15,31 @@
 <p align="center">A lightweight, self-hosted home for your images.</p>
 
 <p align="center">
-  <a href="https://github.com/Willxup/imagesilo/releases"><img src="https://img.shields.io/github/v/release/Willxup/imagesilo?include_prereleases&amp;style=flat-square" alt="Latest release" /></a>
+  <a href="https://github.com/Willxup/imagesilo/releases/latest"><img src="https://img.shields.io/github/v/release/Willxup/imagesilo?style=flat-square" alt="Latest release" /></a>
   <a href="https://github.com/Willxup/imagesilo/actions/workflows/verify.yml"><img src="https://img.shields.io/github/actions/workflow/status/Willxup/imagesilo/verify.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="CI status" /></a>
   <a href="https://github.com/Willxup/imagesilo/pkgs/container/imagesilo"><img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="Docker image on GHCR" /></a>
   <img src="https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-FCC624?style=flat-square&amp;logo=linux&amp;logoColor=black" alt="Linux amd64 and arm64" />
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Willxup/imagesilo?style=flat-square" alt="MIT License" /></a>
 </p>
 
 ImageSilo is a Docker-first image host built as one Go process with SQLite and local file storage. It provides authenticated uploads, stable public URLs, historical aliases, scoped API tokens, image processing, and a responsive React administration interface without Redis, an external database, or a background job service.
 
-> The current release is `v0.1.0`. Every successful release also updates the mutable `latest` tag. Production deployments should still pin an immutable version tag or digest.
+> Release images use immutable version tags and the mutable `latest` tag. Production deployments should pin an immutable version tag or digest.
+
+## Screenshots
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light.jpg" />
+    <img src="./assets/screenshots/login-light.jpg" alt="ImageSilo sign-in page" width="49%" />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/upload-dark.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/upload-light.jpg" />
+    <img src="./assets/screenshots/upload-light.jpg" alt="ImageSilo image upload page" width="49%" />
+  </picture>
+</p>
 
 ## Features
 
@@ -64,7 +80,7 @@ To preserve an existing image URL tree without creating one alias at a time, mou
 
 ## Design Boundaries
 
-| Area | ImageSilo V1 |
+| Area | Implementation |
 | --- | --- |
 | Runtime | One Go process in one container |
 | Metadata | SQLite in `/data/db` |
@@ -116,11 +132,11 @@ Use `/healthz` for liveness and `/readyz` for SQLite readiness. Run `make e2e` f
 | Legacy image and URL migration | [Imports](./docs/imports.md) |
 | Inspection, cleanup, and index rebuilds | [Operations](./docs/operations.md) |
 | Architecture and data model | [Architecture](./docs/architecture.md) · [Data model](./docs/data-model.md) |
-| Security and lightweight resource evidence | [Security audit](./docs/security-audit.md) · [Performance baseline](./docs/performance-baseline.md) |
-| Release images and acceptance checks | [Release guide](./docs/release.md) |
+| Security and performance | [Security audit](./docs/security-audit.md) · [Performance baseline](./docs/performance-baseline.md) |
+| Release process and verification | [Release guide](./docs/release.md) |
 | HTTP API contract | [OpenAPI](./api/openapi.yaml) |
 | Bundled third-party licenses | [Third-party notices](./THIRD_PARTY_NOTICES.md) |
 
-## Project Status
+## License
 
-Stages 0–7 are complete, including native amd64/arm64 verification and the public `v0.1.0` release. Production migration remains a separate, environment-specific step. See [development status](./docs/development-status.md) for the current evidence and remaining work.
+This project is open source under the [MIT License](./LICENSE).

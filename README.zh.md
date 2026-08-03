@@ -15,15 +15,31 @@
 <p align="center">给图片一个轻量、稳定的自托管归处。</p>
 
 <p align="center">
-  <a href="https://github.com/Willxup/imagesilo/releases"><img src="https://img.shields.io/github/v/release/Willxup/imagesilo?include_prereleases&amp;style=flat-square" alt="最新版本" /></a>
+  <a href="https://github.com/Willxup/imagesilo/releases/latest"><img src="https://img.shields.io/github/v/release/Willxup/imagesilo?style=flat-square" alt="最新版本" /></a>
   <a href="https://github.com/Willxup/imagesilo/actions/workflows/verify.yml"><img src="https://img.shields.io/github/actions/workflow/status/Willxup/imagesilo/verify.yml?branch=main&amp;style=flat-square&amp;label=CI" alt="CI 状态" /></a>
   <a href="https://github.com/Willxup/imagesilo/pkgs/container/imagesilo"><img src="https://img.shields.io/badge/Docker-GHCR-2496ED?style=flat-square&amp;logo=docker&amp;logoColor=white" alt="GHCR Docker 镜像" /></a>
   <img src="https://img.shields.io/badge/Linux-amd64%20%7C%20arm64-FCC624?style=flat-square&amp;logo=linux&amp;logoColor=black" alt="Linux amd64 和 arm64" />
+  <a href="./LICENSE"><img src="https://img.shields.io/github/license/Willxup/imagesilo?style=flat-square" alt="MIT 许可证" /></a>
 </p>
 
 ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 元数据和本地文件存储。它提供安全上传、稳定公开 URL、历史别名、具名 API Token、图片处理和响应式 React 管理界面，不依赖 Redis、外部数据库或后台任务服务。
 
-> 当前版本为 `v0.1.0`。每次发布成功后也会更新可变的 `latest` 标签；生产部署仍建议固定不可变版本标签或 digest。
+> 发布镜像使用不可变版本标签和可变的 `latest` 标签；生产部署应固定不可变版本标签或 digest。
+
+## 界面预览
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light.jpg" />
+    <img src="./assets/screenshots/login-light.jpg" alt="ImageSilo 登录页" width="49%" />
+  </picture>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/upload-dark.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/upload-light.jpg" />
+    <img src="./assets/screenshots/upload-light.jpg" alt="ImageSilo 图片上传页" width="49%" />
+  </picture>
+</p>
 
 ## 功能特性
 
@@ -64,7 +80,7 @@ docker run --detach \
 
 ## 设计边界
 
-| 范围 | ImageSilo V1 |
+| 范围 | 实现方式 |
 | --- | --- |
 | 运行时 | 一个容器内的单个 Go 进程 |
 | 元数据 | `/data/db` 中的 SQLite |
@@ -116,11 +132,11 @@ IMAGESILO_COOKIE_SECURE=false \
 | 旧图片与历史 URL 迁移 | [导入指南](./docs/imports.md) |
 | 巡检、清理与索引重建 | [运维指南](./docs/operations.md) |
 | 架构与数据模型 | [架构](./docs/architecture.md) · [数据模型](./docs/data-model.md) |
-| 安全与轻量资源证据 | [安全审计](./docs/security-audit.md) · [性能基线](./docs/performance-baseline.md) |
-| 发布镜像与验收 | [发布指南](./docs/release.md) |
+| 安全与性能 | [安全审计](./docs/security-audit.md) · [性能基线](./docs/performance-baseline.md) |
+| 发布流程与验证 | [发布指南](./docs/release.md) |
 | HTTP API 契约 | [OpenAPI](./api/openapi.yaml) |
 | 随附的第三方许可证 | [第三方声明](./THIRD_PARTY_NOTICES.md) |
 
-## 项目状态
+## 许可证
 
-阶段 0—7 已完成，包括原生 amd64/arm64 验证和公开的 `v0.1.0` 正式版。生产迁移仍是独立的环境相关步骤；当前证据与剩余工作见[开发状态](./docs/development-status.md)。
+本项目基于 [MIT License](./LICENSE) 开源。
