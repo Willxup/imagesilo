@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
 import { BrandLogo } from '../../components/brand-logo'
-import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
 import { DropdownItem, DropdownMenu } from '../../components/ui/dropdown-menu'
 import { Icon } from '../../components/ui/icon'
@@ -98,40 +97,10 @@ export function LoginPage() {
       </div>
 
       <div className="login-shell">
-        <section className="login-hero" aria-labelledby="login-hero-title">
-          <div className="login-brand-row">
-            <div className="login-signal">
-              <img src="/brand/imagesilo-mark.png" alt="" />
-            </div>
-            <p className="page-kicker">{t('auth.heroEyebrow')}</p>
-          </div>
-          <div className="login-copy">
-            <h1 className="login-hero-title" id="login-hero-title">
-              {t('auth.heroTitle')}
-              <span>{t('auth.heroAccent')}</span>
-            </h1>
-            <p className="login-hero-copy">{t('auth.heroDescription')}</p>
-          </div>
-          <div className="login-features" aria-label={t('auth.features')}>
-            <Badge className="login-feature" variant="outline">
-              <Icon name="zap" />
-              {t('auth.lightweight')}
-            </Badge>
-            <Badge className="login-feature" variant="outline">
-              <Icon name="shield" />
-              {t('auth.selfHosted')}
-            </Badge>
-            <Badge className="login-feature" variant="outline">
-              <Icon name="server" />
-              {t('auth.directDelivery')}
-            </Badge>
-          </div>
-        </section>
-
         <div className="login-form-wrap">
           <form className="login-form" onSubmit={submit}>
             <BrandLogo imageClassName="h-10 w-auto" />
-            <h2 className="login-form-title">{t('auth.signIn')}</h2>
+            <h1 className="login-form-title">{t('auth.signIn')}</h1>
             <p className="login-form-copy">{t('auth.signInDescription')}</p>
 
             <label className="field-label" htmlFor="email">
@@ -139,7 +108,7 @@ export function LoginPage() {
             </label>
             <div className="field-shell">
               <Icon name="mail" />
-              <Input id="email" type="email" autoComplete="username" maxLength={254} required {...register('email')} />
+              <Input id="email" type="email" autoComplete="username" maxLength={254} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('email')} />
             </div>
 
             <label className="field-label" htmlFor="password">
@@ -147,12 +116,12 @@ export function LoginPage() {
             </label>
             <div className="field-shell">
               <Icon name="lock" />
-              <Input id="password" type="password" autoComplete="current-password" maxLength={1024} required {...register('password')} />
+              <Input id="password" type="password" autoComplete="current-password" maxLength={1024} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('password')} />
             </div>
 
-            {error ? <p className="mt-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
+            {error ? <p id="login-error" role="alert" className="mt-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
             <Button type="submit" disabled={formState.isSubmitting} className="mt-5 w-full bg-[var(--silo-gradient)] hover:opacity-90">
-              {formState.isSubmitting ? t('common.working') : t('auth.signIn')}
+              <span className="login-submit-label">{formState.isSubmitting ? t('common.working') : t('auth.signIn')}</span>
               <Icon name="arrowRight" />
             </Button>
           </form>

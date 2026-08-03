@@ -1,0 +1,101 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1120" fill="none">
+  <defs>
+    <linearGradient id="frame" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#F2F4F7"/>
+      <stop offset="1" stop-color="#D6DBE4"/>
+    </linearGradient>
+    <linearGradient id="teal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#102E2D"/>
+      <stop offset="1" stop-color="#1F4846"/>
+    </linearGradient>
+    <linearGradient id="navy" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#13243B"/>
+      <stop offset="1" stop-color="#1E3A54"/>
+    </linearGradient>
+    <linearGradient id="wine" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#512A2A"/>
+      <stop offset="1" stop-color="#352328"/>
+    </linearGradient>
+    <linearGradient id="charcoal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#28253A"/>
+      <stop offset="1" stop-color="#403C52"/>
+    </linearGradient>
+
+    <clipPath id="a"><rect x="-120" y="30" width="420" height="330" rx="32"/></clipPath>
+    <clipPath id="b"><rect x="332" y="-80" width="438" height="390" rx="32"/></clipPath>
+    <clipPath id="c"><rect x="802" y="-96" width="398" height="350" rx="32"/></clipPath>
+    <clipPath id="d"><rect x="-92" y="392" width="426" height="400" rx="32"/></clipPath>
+    <clipPath id="e"><rect x="366" y="344" width="454" height="372" rx="32"/></clipPath>
+    <clipPath id="f"><rect x="852" y="300" width="382" height="424" rx="32"/></clipPath>
+    <clipPath id="g"><rect x="-76" y="824" width="420" height="342" rx="32"/></clipPath>
+    <clipPath id="h"><rect x="376" y="760" width="458" height="360" rx="32"/></clipPath>
+    <clipPath id="i"><rect x="870" y="770" width="382" height="380" rx="32"/></clipPath>
+  </defs>
+
+  <g id="tile-field" transform="rotate(-8 600 560)">
+    <g clip-path="url(#a)">
+      <rect x="-120" y="30" width="420" height="330" fill="#A5A58B"/>
+      <path d="M-120 30H50L300 252V360H205L-120 124V30Z" fill="url(#teal)"/>
+      <path d="M-120 360L300 118V360H-120Z" fill="#E5653D"/>
+    </g>
+    <rect x="-120" y="30" width="420" height="330" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#b)">
+      <rect x="332" y="-80" width="438" height="390" fill="#7D9BA6"/>
+      <path d="M332 8L770 230V310H332V8Z" fill="#D2AA65"/>
+      <path d="M460 310H770V230L628 158L460 310Z" fill="#C7D3D5" fill-opacity=".42"/>
+      <path d="M616-80H770V60L616-22V-80Z" fill="#102A33"/>
+    </g>
+    <rect x="332" y="-80" width="438" height="390" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#c)">
+      <rect x="802" y="-96" width="398" height="350" fill="url(#wine)"/>
+      <path d="M802-96H1200L802 196V-96Z" fill="#C94E3A"/>
+      <path d="M802-18L918-96H802V-18Z" fill="#E7C5BB"/>
+    </g>
+    <rect x="802" y="-96" width="398" height="350" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#d)">
+      <rect x="-92" y="392" width="426" height="400" fill="url(#charcoal)"/>
+      <path d="M70 792L334 468V704L260 792H70Z" fill="#947ABE"/>
+      <path d="M190 792L334 614V792H190Z" fill="#E8A77A"/>
+    </g>
+    <rect x="-92" y="392" width="426" height="400" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#e)">
+      <rect x="366" y="344" width="454" height="372" fill="#CFD9DC"/>
+      <path d="M366 408L820 606V716H714L366 564V408Z" fill="#7699A7"/>
+      <path d="M366 586L658 716H366V586Z" fill="url(#navy)"/>
+    </g>
+    <rect x="366" y="344" width="454" height="372" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#f)">
+      <rect x="852" y="300" width="382" height="424" fill="#A6A68B"/>
+      <path d="M852 300H1234L852 650V300Z" fill="url(#teal)"/>
+      <path d="M1042 724L1234 542V724H1042Z" fill="#E5653D"/>
+    </g>
+    <rect x="852" y="300" width="382" height="424" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#g)">
+      <rect x="-76" y="824" width="420" height="342" fill="#E9D0C7"/>
+      <path d="M-76 1166L344 824V1166H-76Z" fill="#C74B38"/>
+      <path d="M-76 824H156L-76 1010V824Z" fill="#F2E7E2"/>
+    </g>
+    <rect x="-76" y="824" width="420" height="342" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#h)">
+      <rect x="376" y="760" width="458" height="360" fill="url(#teal)"/>
+      <path d="M376 798L834 972V1120H714L376 992V798Z" fill="#789AA6"/>
+      <path d="M376 760H834V820L376 990V760Z" fill="#1B4144" fill-opacity=".78"/>
+    </g>
+    <rect x="376" y="760" width="458" height="360" rx="32" stroke="url(#frame)" stroke-width="16"/>
+
+    <g clip-path="url(#i)">
+      <rect x="870" y="770" width="382" height="380" fill="url(#charcoal)"/>
+      <path d="M940 1150L1252 778V1000L1126 1150H940Z" fill="#947ABE"/>
+      <path d="M1086 1150L1252 952V1150H1086Z" fill="#E8A77A"/>
+    </g>
+    <rect x="870" y="770" width="382" height="380" rx="32" stroke="url(#frame)" stroke-width="16"/>
+  </g>
+  <use href="#tile-field" transform="translate(1160 -20) rotate(3 600 560)"/>
+</svg>
