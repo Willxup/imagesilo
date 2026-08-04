@@ -1236,10 +1236,11 @@ components:
         indexConsistent: { type: boolean }
     SystemOverview:
       type: object
-      required: [imageCount, storedBytes, aliasCount, heapAllocBytes, heapSysBytes, rssBytes, goroutines, indexes, indexConsistent, missingImageCount, missingImageIds, lastInspection, lastRebuild, lastDaily]
+      required: [imageCount, storedBytes, migrationStoredBytes, aliasCount, heapAllocBytes, heapSysBytes, rssBytes, goroutines, indexes, indexConsistent, missingImageCount, missingImageIds, lastInspection, lastRebuild, lastDaily]
       properties:
         imageCount: { type: integer, format: int64, minimum: 0 }
         storedBytes: { type: integer, format: int64, minimum: 0 }
+        migrationStoredBytes: { type: integer, format: int64, minimum: 0 }
         aliasCount: { type: integer, format: int64, minimum: 0 }
         heapAllocBytes: { type: integer, format: int64, minimum: 0 }
         heapSysBytes: { type: integer, format: int64, minimum: 0 }

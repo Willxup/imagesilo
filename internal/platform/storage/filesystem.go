@@ -42,6 +42,7 @@ type MigrationFile struct {
 type MigrationList struct {
 	Files        []MigrationFile
 	SkippedFiles int
+	StoredBytes  int64
 }
 
 type MigrationDeleteResult struct {
@@ -97,6 +98,7 @@ func (f *Filesystem) ListMigrationImages(ctx context.Context) (MigrationList, er
 			result.SkippedFiles++
 			return nil
 		}
+		result.StoredBytes += info.Size()
 		file, mimeType, err := openMigrationImage(root, relativePath)
 		if err != nil {
 			result.SkippedFiles++

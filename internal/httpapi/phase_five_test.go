@@ -91,11 +91,16 @@ func TestPhaseFiveOverviewInspectionAndManualRebuild(t *testing.T) {
 	fixture := newPhaseTwoFixture(t)
 	cookies, csrfToken, _ := fixture.login(nil, phaseTwoPassword)
 	image := fixture.uploadBytes(cookies, csrfToken, "public", "", "overview.jpg", phaseTwoJPEG(t))
+	migrationBytes := phaseTwoJPEG(t)
+	if err := os.WriteFile(filepath.Join(fixture.dataDirectory, "migrations", "overview.jpg"), migrationBytes, 0o640); err != nil {
+		t.Fatalf("write migration image: %v", err)
+	}
 
 	overview := fixture.request(http.MethodGet, "/api/v1/overview", nil, cookies, "", "")
 	var firstOverview overviewResponse
 	if err := json.Unmarshal(overview.Body.Bytes(), &firstOverview); overview.Code != http.StatusOK || err != nil ||
-		firstOverview.ImageCount != 1 || firstOverview.Indexes.Images != 1 || !firstOverview.IndexConsistent {
+		firstOverview.ImageCount != 1 || firstOverview.MigrationStoredBytes != int64(len(migrationBytes)) ||
+		firstOverview.Indexes.Images != 1 || !firstOverview.IndexConsistent {
 		t.Fatalf("overview status = %d, value = %+v, error = %v", overview.Code, firstOverview, err)
 	}
 	if err := os.Remove(filepath.Join(fixture.dataDirectory, "images", image.ID)); err != nil {

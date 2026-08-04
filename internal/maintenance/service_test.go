@@ -18,6 +18,7 @@ import (
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
+	"github.com/Willxup/imagesilo/internal/migrationimage"
 	"github.com/Willxup/imagesilo/internal/platform/database"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 )
@@ -140,10 +141,24 @@ func TestSizeMismatchIsReportedUnavailableAndNeverCleanedAsOrphan(t *testing.T) 
 	}
 }
 
+func TestOverviewIncludesMigrationDirectoryStorage(t *testing.T) {
+	directory, service, db := prepareMaintenanceTest(t)
+	defer db.Close()
+	content := []byte("migration directory bytes")
+	if err := os.WriteFile(filepath.Join(directory, "migrations", "notes.txt"), content, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	overview, err := service.Overview(context.Background())
+	if err != nil || overview.MigrationStoredBytes != int64(len(content)) {
+		t.Fatalf("Overview() migration storage = %d, %v", overview.MigrationStoredBytes, err)
+	}
+}
+
 func prepareMaintenanceTest(t *testing.T) (string, *Service, *sql.DB) {
 	t.Helper()
 	directory := t.TempDir()
-	for _, path := range []string{"db", "images", filepath.Join("cache", "thumbnails"), "tmp"} {
+	for _, path := range []string{"db", "images", "migrations", filepath.Join("cache", "thumbnails"), "tmp"} {
 		if err := os.MkdirAll(filepath.Join(directory, path), 0o750); err != nil {
 			t.Fatal(err)
 		}
@@ -171,7 +186,10 @@ func prepareMaintenanceTest(t *testing.T) (string, *Service, *sql.DB) {
 	deliveryIndex := delivery.NewIndex()
 	rebuilder := indexstate.NewRebuilder(db, filesystem, authRepository, tokenRepository, deliveryIndex, sessionIndex, tokenIndex, barrier)
 	var logs bytes.Buffer
-	service := NewService(NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, slog.New(slog.NewJSONHandler(&logs, nil)))
+	service := NewService(
+		NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService,
+		migrationimage.NewService(filesystem, false), slog.New(slog.NewJSONHandler(&logs, nil)),
+	)
 	return directory, service, db
 }
 

@@ -75,10 +75,12 @@ func TestListMigrationImagesSkipsInvalidContentAndSymlinks(t *testing.T) {
 	if err := os.WriteFile(validPath, jpegBytes, 0o640); err != nil {
 		t.Fatalf("WriteFile(valid): %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(migrationsDirectory, "disguised.jpg"), []byte("not an image"), 0o640); err != nil {
+	disguisedBytes := []byte("not an image")
+	if err := os.WriteFile(filepath.Join(migrationsDirectory, "disguised.jpg"), disguisedBytes, 0o640); err != nil {
 		t.Fatalf("WriteFile(disguised): %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(migrationsDirectory, "notes.txt"), []byte("not public"), 0o640); err != nil {
+	notesBytes := []byte("not public")
+	if err := os.WriteFile(filepath.Join(migrationsDirectory, "notes.txt"), notesBytes, 0o640); err != nil {
 		t.Fatalf("WriteFile(notes): %v", err)
 	}
 	if err := os.Symlink(validPath, filepath.Join(migrationsDirectory, "linked.jpg")); err != nil {
@@ -94,6 +96,9 @@ func TestListMigrationImagesSkipsInvalidContentAndSymlinks(t *testing.T) {
 	}
 	if listed.SkippedFiles < 2 {
 		t.Fatalf("SkippedFiles = %d, want at least invalid content and unsupported extension", listed.SkippedFiles)
+	}
+	if want := int64(len(jpegBytes) + len(disguisedBytes) + len(notesBytes)); listed.StoredBytes != want {
+		t.Fatalf("StoredBytes = %d, want %d for all regular files", listed.StoredBytes, want)
 	}
 }
 
