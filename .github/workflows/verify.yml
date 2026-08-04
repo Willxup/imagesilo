@@ -1,4 +1,4 @@
-name: Verify
+name: Quick verify
 
 on:
   pull_request:
@@ -29,73 +29,5 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: Install frontend dependencies
         run: npm --prefix web ci
-      - name: Run quality gate
+      - name: Run quick quality gate
         run: make check e2e
-
-  container-smoke:
-    needs: quality
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-24.04
-            platform: linux/amd64
-            suffix: amd64
-            port: 18080
-            benchmark_port: 18090
-          - runner: ubuntu-24.04-arm
-            platform: linux/arm64
-            suffix: arm64
-            port: 18081
-            benchmark_port: 18091
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 30
-    steps:
-      - name: Check out source
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - name: Set up Go
-        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
-        with:
-          go-version-file: .go-version
-          cache: true
-      - name: Benchmark delivery index
-        run: |
-          output="delivery-index-benchmark-${{ matrix.suffix }}.jsonl"
-          go run ./tests/performance/delivery_index_benchmark | tee "$output"
-          jq --exit-status --slurp 'all(.[]; .lookupFailures == 0 and .bytesPerPath < 1024)' "$output" >/dev/null
-          {
-            echo "### Native ${{ matrix.suffix }} delivery index benchmark"
-            echo '```json'
-            cat "$output"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-      - name: Build native container image
-        run: docker build --platform "${{ matrix.platform }}" --file deploy/docker/Dockerfile --tag "imagesilo:smoke-${{ matrix.suffix }}" .
-      - name: Run login, upload, delivery, and restart smoke test
-        env:
-          IMAGE: imagesilo:smoke-${{ matrix.suffix }}
-          PLATFORM: ${{ matrix.platform }}
-          PORT: ${{ matrix.port }}
-          SMOKE_SUFFIX: ${{ matrix.suffix }}
-        run: bash scripts/container-smoke.sh
-      - name: Benchmark native processing at concurrency 1
-        env:
-          IMAGE: imagesilo:smoke-${{ matrix.suffix }}
-          PLATFORM: ${{ matrix.platform }}
-          PORT: ${{ matrix.benchmark_port }}
-          BENCH_SUFFIX: ${{ matrix.suffix }}
-          CONCURRENCIES: "1"
-          CPU_LIMIT: "1"
-          MEMORY_LIMIT: 768m
-          PIDS_LIMIT: "256"
-          MAX_MEMORY_PEAK_BYTES: "536870912"
-          MAX_P95_MILLISECONDS: "20000"
-        run: |
-          output="processing-benchmark-${{ matrix.suffix }}.jsonl"
-          bash scripts/processing-benchmark.sh | tee "$output"
-          {
-            echo "### Native ${{ matrix.suffix }} processing benchmark (concurrency 1)"
-            echo '```json'
-            cat "$output"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"

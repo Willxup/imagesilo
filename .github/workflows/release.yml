@@ -46,6 +46,7 @@ jobs:
           echo "repository=ghcr.io/${owner}/imagesilo" >> "$GITHUB_OUTPUT"
 
   quality:
+    name: Release quality
     needs: preflight
     runs-on: ubuntu-24.04
     timeout-minutes: 20
@@ -72,7 +73,8 @@ jobs:
       - name: Run release quality gate
         run: make check e2e
 
-  platform-image:
+  release-smoke:
+    name: Release smoke and publish (${{ matrix.suffix }})
     needs: [preflight, quality]
     permissions:
       contents: read
@@ -86,11 +88,13 @@ jobs:
             architecture: amd64
             suffix: amd64
             port: 18100
+            benchmark_port: 18110
           - runner: ubuntu-24.04-arm
             platform: linux/arm64
             architecture: arm64
             suffix: arm64
             port: 18101
+            benchmark_port: 18111
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     env:
@@ -105,6 +109,17 @@ jobs:
         with:
           go-version-file: .go-version
           cache: true
+      - name: Benchmark delivery index
+        run: |
+          output="delivery-index-benchmark-${{ matrix.suffix }}.jsonl"
+          go run ./tests/performance/delivery_index_benchmark | tee "$output"
+          jq --exit-status --slurp 'all(.[]; .lookupFailures == 0 and .bytesPerPath < 1024)' "$output" >/dev/null
+          {
+            echo "### Native ${{ matrix.suffix }} delivery index benchmark"
+            echo '```json'
+            cat "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Resolve immutable image references
         id: image
         shell: bash
@@ -171,6 +186,28 @@ jobs:
           PORT: ${{ matrix.port }}
           SMOKE_SUFFIX: release-${{ matrix.suffix }}
         run: bash scripts/container-smoke.sh
+      - name: Benchmark native processing at concurrency 1
+        if: steps.state.outputs.mode == 'build'
+        env:
+          IMAGE: ${{ steps.image.outputs.content_target }}
+          PLATFORM: ${{ matrix.platform }}
+          PORT: ${{ matrix.benchmark_port }}
+          BENCH_SUFFIX: release-${{ matrix.suffix }}
+          CONCURRENCIES: "1"
+          CPU_LIMIT: "1"
+          MEMORY_LIMIT: 768m
+          PIDS_LIMIT: "256"
+          MAX_MEMORY_PEAK_BYTES: "536870912"
+          MAX_P95_MILLISECONDS: "20000"
+        run: |
+          output="processing-benchmark-${{ matrix.suffix }}.jsonl"
+          bash scripts/processing-benchmark.sh | tee "$output"
+          {
+            echo "### Native ${{ matrix.suffix }} processing benchmark (concurrency 1)"
+            echo '```json'
+            cat "$output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
       - name: Publish new immutable platform content
         if: steps.state.outputs.mode == 'build'
         shell: bash
@@ -209,7 +246,8 @@ jobs:
           echo "digest=$platform_digest" >> "$GITHUB_OUTPUT"
 
   manifest:
-    needs: [preflight, platform-image]
+    name: Publish release manifest
+    needs: [preflight, release-smoke]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
