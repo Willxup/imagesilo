@@ -78,6 +78,44 @@ docker run --detach \
 
 如果需要完整保留旧图床的 URL 目录树，可以将原目录只读挂载到 `/data/migrations`，无需逐条创建历史路径。例如 `/data/migrations/i/2022/04/example.jpg` 会直接通过 `/i/2022/04/example.jpg` 访问。相同路径同时存在时，后台管理的历史路径映射优先；该目录只公开 JPEG、PNG、WebP 和 GIF 文件。后台“迁移管理”可以在只读模式下浏览和复制这些直链；文件列表使用 30 分钟惰性快照，也可手动刷新，图片直链不受列表缓存影响。仅对专用迁移副本启用永久删除时，才将挂载改为可写并设置 `IMAGESILO_MIGRATION_MUTATIONS=true`。
 
+## 开启迁移删除管理
+
+迁移删除默认关闭，并且只建议对有独立备份的专用迁移副本开启。环境变量、挂载模式和宿主机权限必须同时满足要求；只设置环境变量但保留只读挂载仍然无法删除。
+
+在 `docker-compose.yaml` 中设置删除开关，并确保 `/data/migrations` 使用可写挂载：
+
+```yaml
+services:
+  imagesilo:
+    image: ghcr.io/willxup/imagesilo:v0.2.0
+    environment:
+      IMAGESILO_MIGRATION_MUTATIONS: "true"
+    volumes:
+      - ./data:/data
+      - ./migration:/data/migrations:rw
+```
+
+如果当前迁移挂载以 `:ro` 结尾，必须将其改为 `:rw` 或省略挂载模式。如果迁移文件直接位于可写的 `./data/migrations` 中，则不需要再增加单独的迁移挂载。
+
+容器固定使用 UID/GID `10001:10001`。仅对专用迁移副本执行以下权限设置：
+
+```bash
+sudo chown -R 10001:10001 ./migration
+sudo find ./migration -type d -exec chmod 750 {} +
+sudo find ./migration -type f -exec chmod 640 {} +
+```
+
+验证配置并重建容器；普通 `docker compose restart` 不会应用新的环境变量：
+
+```bash
+docker compose config --quiet
+docker compose up -d --force-recreate
+docker compose exec imagesilo sh -c \
+  'test "$IMAGESILO_MIGRATION_MUTATIONS" = true && test -w /data/migrations'
+```
+
+删除操作不可恢复。删除图片后，ImageSilo 还会递归移除真正为空的父目录，包括空的顶层 `i` 或 `images`，但不会删除 `/data/migrations` 根目录。不要对旧图床唯一原件开启此能力。
+
 ## 设计边界
 
 | 范围 | 实现方式 |

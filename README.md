@@ -78,6 +78,44 @@ For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECUR
 
 To preserve an existing image URL tree without creating one alias at a time, mount it read-only at `/data/migrations`. A file mounted as `/data/migrations/i/2022/04/example.jpg` is immediately available at `/i/2022/04/example.jpg`. Managed historical aliases take precedence when both sources contain the same path; only JPEG, PNG, WebP, and GIF files are exposed. The Migration management page can browse and copy these URLs in read-only mode; its file list uses a 30-minute lazy snapshot with manual refresh, while direct image delivery is never gated by that list cache. Only for a dedicated migration copy, make the mount writable and set `IMAGESILO_MIGRATION_MUTATIONS=true` to enable permanent deletion.
 
+## Enable Migration Deletion
+
+Migration deletion is disabled by default and should only be enabled for a dedicated migration copy with an independent backup. The environment variable, mount mode, and host permissions must all allow deletion. Setting the variable while retaining a read-only mount is not sufficient.
+
+Enable the capability in `docker-compose.yaml` and mount `/data/migrations` writable:
+
+```yaml
+services:
+  imagesilo:
+    image: ghcr.io/willxup/imagesilo:v0.2.0
+    environment:
+      IMAGESILO_MIGRATION_MUTATIONS: "true"
+    volumes:
+      - ./data:/data
+      - ./migration:/data/migrations:rw
+```
+
+If the existing migration mount ends in `:ro`, change it to `:rw` or omit the mount mode. A separate migration mount is unnecessary when the files already live inside a writable `./data/migrations` directory.
+
+The container runs as UID/GID `10001:10001`. Apply these permissions only to a dedicated migration copy:
+
+```bash
+sudo chown -R 10001:10001 ./migration
+sudo find ./migration -type d -exec chmod 750 {} +
+sudo find ./migration -type f -exec chmod 640 {} +
+```
+
+Validate the configuration and recreate the container. A regular `docker compose restart` does not apply new environment variables:
+
+```bash
+docker compose config --quiet
+docker compose up -d --force-recreate
+docker compose exec imagesilo sh -c \
+  'test "$IMAGESILO_MIGRATION_MUTATIONS" = true && test -w /data/migrations'
+```
+
+Deletion cannot be undone. After deleting an image, ImageSilo recursively removes truly empty parent directories, including empty top-level `i` or `images` directories, but never removes the `/data/migrations` root. Do not enable this capability for the only copy of a legacy image library.
+
 ## Design Boundaries
 
 | Area | Implementation |
