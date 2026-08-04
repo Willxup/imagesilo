@@ -61,7 +61,7 @@
 
 阶段 7 已完成。GitHub Actions [Release image run 30505989284](https://github.com/Willxup/imagesilo/actions/runs/30505989284) 由 `v0.1.0-rc.1` tag push 自动触发并全部成功；公开 GHCR 多架构镜像和 [GitHub Pre-release](https://github.com/Willxup/imagesilo/releases/tag/v0.1.0-rc.1) 均已验证。
 
-`.github/workflows/verify.yml` 和 `scripts/container-smoke.sh` 已成为后续提交的固定阶段门。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
+`.github/workflows/verify.yml` 是后续提交的快速质量门；双架构 `scripts/container-smoke.sh` 只在 Release Tag 流程执行，并在对应架构 smoke 成功后才允许发布平台镜像。脚本在本机和 GitHub 均确认成功/失败结束后不遗留临时容器或 named volume。
 
 ## 阶段门
 

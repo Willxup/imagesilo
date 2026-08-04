@@ -2,9 +2,11 @@
 
 ## 质量门
 
-`make check e2e` 覆盖全部 Go 包、React、OpenAPI 生成一致性和单 worker 浏览器闭环。`Verify` 工作流随后在原生 amd64、原生 arm64 各构建一次镜像、执行容器 smoke，并只运行并发 `1`、总计 `16` 个请求的图片处理 benchmark。Benchmark 容器限制为 1 CPU、768 MiB 和 256 PID，并强制要求全部请求成功、无 busy 响应、p95 不超过 20 秒且 cgroup 峰值不超过 512 MiB。
+PR 的 `Quick verify` 工作流只执行 `make check e2e`，覆盖全部 Go 包、React、OpenAPI 生成一致性和单 worker 浏览器闭环，不构建容器镜像。推送 Release Tag 后，`Release image` 工作流重新执行质量门，再在原生 amd64、原生 arm64 执行 Delivery Index benchmark、构建镜像、容器 smoke 和并发 `1` 的图片处理 benchmark。只有全部验证成功的同一镜像才会推送对应平台标签；两个架构都成功后才创建版本与 `latest` manifest。
 
-容器 smoke 还会验证：
+图片处理 benchmark 每个架构总计 `16` 个请求，容器限制为 1 CPU、768 MiB 和 256 PID，并强制要求全部请求成功、无 busy 响应、p95 不超过 20 秒且 cgroup 峰值不超过 512 MiB。
+
+Release smoke 还会验证：
 
 - 公开标准 URL 和别名的 Range、条件请求、HEAD 与相同 ETag。
 - 固定 `10001:10001`、exec-form ENTRYPOINT 和内置健康检查。
