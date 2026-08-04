@@ -111,7 +111,10 @@
   --tail-border: #e4e4e7;
   --tail-border-strong: #d4d4d8;
   --tail-brand-soft: #edf4ff;
-  --tail-header: rgba(250, 250, 250, 0.96);
+  --tail-sidebar: rgba(250, 250, 250, 0.72);
+  --tail-header: rgba(250, 250, 250, 0.68);
+  --tail-page-art-opacity: 0.12;
+  --tail-page-art-filter: brightness(0.64) saturate(0.62) contrast(0.94);
   --color-background: #f4f4f5;
   --color-foreground: #18181b;
   --color-card: var(--tail-card);
@@ -151,7 +154,10 @@
   --tail-border: #2f2f34;
   --tail-border-strong: #3f3f46;
   --tail-brand-soft: rgba(37, 99, 235, 0.14);
-  --tail-header: rgba(24, 24, 27, 0.96);
+  --tail-sidebar: rgba(24, 24, 27, 0.74);
+  --tail-header: rgba(24, 24, 27, 0.68);
+  --tail-page-art-opacity: 0.2;
+  --tail-page-art-filter: grayscale(0.52) brightness(0.38) saturate(0.48) contrast(1.08);
   --color-background: #111113;
   --color-foreground: #f4f4f5;
   --color-card: var(--tail-card);
@@ -323,9 +329,22 @@ input[type="checkbox"]:disabled {
 
 /* TailAdmin shell */
 .tail-admin-shell {
+  position: relative;
   min-height: 100vh;
   overflow-x: clip;
   background: var(--tail-page);
+  isolation: isolate;
+}
+
+.tail-admin-shell::before {
+  position: fixed;
+  z-index: 0;
+  inset: 0;
+  background: url('/brand/imagesilo-login-mosaic.svg') center / cover no-repeat;
+  content: "";
+  filter: var(--tail-page-art-filter);
+  opacity: var(--tail-page-art-opacity);
+  pointer-events: none;
 }
 
 .tail-sidebar {
@@ -338,9 +357,10 @@ input[type="checkbox"]:disabled {
   height: 100vh;
   flex-direction: column;
   border-right: 1px solid var(--tail-border);
-  background: var(--tail-surface);
+  background: var(--tail-sidebar);
   padding: 0 16px;
   color: var(--tail-text);
+  backdrop-filter: blur(18px) saturate(1.08);
   transition: width 300ms ease, transform 300ms ease, padding 300ms ease;
 }
 
@@ -423,11 +443,6 @@ input[type="checkbox"]:disabled {
   color: #d4d4d8;
 }
 
-:root[data-theme="dark"] .tail-sidebar,
-:root[data-theme="dark"] .tail-header {
-  background: var(--tail-surface);
-}
-
 .tail-nav-link:hover {
   background: #f2f4f7;
   color: #344054;
@@ -488,6 +503,8 @@ input[type="checkbox"]:disabled {
 }
 
 .tail-main-frame {
+  position: relative;
+  z-index: 1;
   display: flex;
   min-width: 0;
   min-height: 100vh;
@@ -507,7 +524,7 @@ input[type="checkbox"]:disabled {
   height: 64px;
   border-bottom: 1px solid var(--tail-border);
   background: var(--tail-header);
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(18px) saturate(1.08);
 }
 
 .tail-header-inner {
