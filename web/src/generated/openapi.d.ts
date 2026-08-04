@@ -809,6 +809,8 @@ export interface components {
             /** Format: int64 */
             storedBytes: number;
             /** Format: int64 */
+            migrationStoredBytes: number;
+            /** Format: int64 */
             aliasCount: number;
             /** Format: int64 */
             heapAllocBytes: number;

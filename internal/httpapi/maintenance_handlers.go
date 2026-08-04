@@ -42,20 +42,21 @@ type rebuildResponse struct {
 }
 
 type overviewResponse struct {
-	ImageCount        int64               `json:"imageCount"`
-	StoredBytes       int64               `json:"storedBytes"`
-	AliasCount        int64               `json:"aliasCount"`
-	HeapAllocBytes    uint64              `json:"heapAllocBytes"`
-	HeapSysBytes      uint64              `json:"heapSysBytes"`
-	RSSBytes          uint64              `json:"rssBytes"`
-	Goroutines        int                 `json:"goroutines"`
-	Indexes           indexStatsResponse  `json:"indexes"`
-	IndexConsistent   bool                `json:"indexConsistent"`
-	MissingImageCount int                 `json:"missingImageCount"`
-	MissingImageIDs   []string            `json:"missingImageIds"`
-	LastInspection    *inspectionResponse `json:"lastInspection"`
-	LastRebuild       *rebuildResponse    `json:"lastRebuild"`
-	LastDaily         *dailyResponse      `json:"lastDaily"`
+	ImageCount           int64               `json:"imageCount"`
+	StoredBytes          int64               `json:"storedBytes"`
+	MigrationStoredBytes int64               `json:"migrationStoredBytes"`
+	AliasCount           int64               `json:"aliasCount"`
+	HeapAllocBytes       uint64              `json:"heapAllocBytes"`
+	HeapSysBytes         uint64              `json:"heapSysBytes"`
+	RSSBytes             uint64              `json:"rssBytes"`
+	Goroutines           int                 `json:"goroutines"`
+	Indexes              indexStatsResponse  `json:"indexes"`
+	IndexConsistent      bool                `json:"indexConsistent"`
+	MissingImageCount    int                 `json:"missingImageCount"`
+	MissingImageIDs      []string            `json:"missingImageIds"`
+	LastInspection       *inspectionResponse `json:"lastInspection"`
+	LastRebuild          *rebuildResponse    `json:"lastRebuild"`
+	LastDaily            *dailyResponse      `json:"lastDaily"`
 }
 
 type dailyResponse struct {
@@ -110,7 +111,8 @@ func (h *maintenanceHandler) inspect(w http.ResponseWriter, r *http.Request) {
 
 func toOverviewResponse(value maintenance.Overview) overviewResponse {
 	response := overviewResponse{
-		ImageCount: value.Persistent.ImageCount, StoredBytes: value.Persistent.StoredBytes, AliasCount: value.Persistent.AliasCount,
+		ImageCount: value.Persistent.ImageCount, StoredBytes: value.Persistent.StoredBytes,
+		MigrationStoredBytes: value.MigrationStoredBytes, AliasCount: value.Persistent.AliasCount,
 		HeapAllocBytes: value.Runtime.HeapAllocBytes, HeapSysBytes: value.Runtime.HeapSysBytes,
 		RSSBytes: value.Runtime.RSSBytes, Goroutines: value.Runtime.Goroutines,
 		Indexes: indexStatsResponse{

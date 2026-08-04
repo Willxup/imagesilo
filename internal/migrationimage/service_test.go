@@ -86,6 +86,10 @@ func TestSearchCachesUntilRefreshAndDeleteUpdatesSnapshot(t *testing.T) {
 	if err != nil || len(initial.Items) != 1 || initial.Items[0].Path != "/i/first.jpg" {
 		t.Fatalf("initial Search() = %+v, %v", initial, err)
 	}
+	initialBytes, err := service.StoredBytes(context.Background())
+	if err != nil || initialBytes != int64(len(migrationTestJPEG(t))) {
+		t.Fatalf("initial StoredBytes() = %d, %v", initialBytes, err)
+	}
 	writeMigrationTestImage(t, dataDirectory, "images/second.jpg", migrationTestJPEG(t), base.Add(time.Hour))
 	cached, err := service.Search(context.Background(), ListFilter{})
 	if err != nil || len(cached.Items) != 1 {
@@ -98,6 +102,10 @@ func TestSearchCachesUntilRefreshAndDeleteUpdatesSnapshot(t *testing.T) {
 	if err != nil || len(refreshed.Items) != 2 || refreshed.Items[0].Path != "/images/second.jpg" {
 		t.Fatalf("refreshed Search() = %+v, %v", refreshed, err)
 	}
+	refreshedBytes, err := service.StoredBytes(context.Background())
+	if err != nil || refreshedBytes != 2*initialBytes {
+		t.Fatalf("refreshed StoredBytes() = %d, %v", refreshedBytes, err)
+	}
 
 	if _, err := service.Delete(context.Background(), "/images/second.jpg"); err != nil {
 		t.Fatalf("Delete() error = %v", err)
@@ -105,6 +113,10 @@ func TestSearchCachesUntilRefreshAndDeleteUpdatesSnapshot(t *testing.T) {
 	afterDelete, err := service.Search(context.Background(), ListFilter{})
 	if err != nil || len(afterDelete.Items) != 1 || afterDelete.Items[0].Path != "/i/first.jpg" {
 		t.Fatalf("Search() after deletion = %+v, %v", afterDelete, err)
+	}
+	afterDeleteBytes, err := service.StoredBytes(context.Background())
+	if err != nil || afterDeleteBytes != initialBytes {
+		t.Fatalf("StoredBytes() after deletion = %d, %v", afterDeleteBytes, err)
 	}
 }
 

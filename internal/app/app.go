@@ -92,10 +92,10 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		cancel()
 		return nil, fmt.Errorf("load application settings: %w", err)
 	}
-	maintenanceService := maintenance.NewService(
-		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger,
-	)
 	migrationImageService := migrationimage.NewService(filesystem, cfg.MigrationMutations)
+	maintenanceService := maintenance.NewService(
+		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, migrationImageService, logger,
+	)
 	unavailableIDs := append(append([]string(nil), loadResult.Delivery.MissingIDs...), loadResult.Delivery.InvalidSizeIDs...)
 	maintenanceService.RecordStartupMissing(unavailableIDs)
 	ui, err := webui.New()

@@ -7,6 +7,7 @@ import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { Icon } from '../../components/ui/icon'
+import type { IconName } from '../../components/ui/icon'
 import { apiRequest } from '../../lib/api-client'
 import { formatBytes } from '../../lib/image-links'
 import type { InspectionResult, RebuildResult, SystemOverview } from '../../lib/api-types'
@@ -47,21 +48,38 @@ export function SystemOverviewPanel() {
 
 function Overview({ value }: { value: SystemOverview }) {
   const { t } = useTranslation()
-  const cards = [
-    [t('settings.imageCount'), String(value.imageCount)], [t('settings.storageUsed'), formatBytes(value.storedBytes)],
-    [t('settings.aliasCount'), String(value.aliasCount)], [t('settings.rss'), formatBytes(value.rssBytes)],
-    [t('settings.heap'), formatBytes(value.heapAllocBytes)], [t('settings.goroutines'), String(value.goroutines)],
+  const rows: Array<Array<{ icon: IconName, label: string, value: string }>> = [
+    [
+      { icon: 'images', label: t('settings.imageCount'), value: String(value.imageCount) },
+      { icon: 'history', label: t('settings.aliasCount'), value: String(value.aliasCount) },
+      { icon: 'server', label: t('settings.storageUsed'), value: formatBytes(value.storedBytes) },
+      { icon: 'refresh', label: t('settings.migrationStorageUsed'), value: formatBytes(value.migrationStoredBytes) },
+    ],
+    [
+      { icon: 'server', label: t('settings.rss'), value: formatBytes(value.rssBytes) },
+      { icon: 'activity', label: t('settings.heap'), value: formatBytes(value.heapAllocBytes) },
+      { icon: 'server', label: t('settings.heapSys'), value: formatBytes(value.heapSysBytes) },
+      { icon: 'activity', label: t('settings.goroutines'), value: String(value.goroutines) },
+    ],
   ]
   return (
     <div className="mt-5">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {cards.map(([label, number], index) => (
-          <Card className="p-5 md:p-6" key={label}>
-            <span className="mb-5 flex h-12 w-12 items-center justify-center rounded-xl bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90">
-              <Icon name={index < 3 ? 'images' : index === 5 ? 'activity' : 'server'} className="h-6 w-6" />
-            </span>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{label}</p>
-            <p className="mt-2 text-title-sm font-bold text-gray-800 dark:text-white/90">{number}</p>
+      <div className="grid gap-3">
+        {rows.map((metrics) => (
+          <Card className="p-5 md:p-6" key={metrics[0].label}>
+            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+              {metrics.map((metric) => (
+                <div className="flex min-w-0 items-center gap-3" key={metric.label}>
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-white/90">
+                    <Icon name={metric.icon} className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0">
+                    <p className="text-sm text-gray-500 dark:text-gray-400">{metric.label}</p>
+                    <p className="mt-1 truncate text-title-sm font-bold text-gray-800 dark:text-white/90" title={metric.value}>{metric.value}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
           </Card>
         ))}
       </div>

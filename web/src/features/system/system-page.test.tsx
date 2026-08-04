@@ -12,6 +12,7 @@ vi.mock('../../lib/api-client', () => ({ apiRequest: vi.fn() }))
 const overview = {
   imageCount: 12,
   storedBytes: 1024,
+  migrationStoredBytes: 3 * 1024,
   aliasCount: 3,
   heapAllocBytes: 2 * 1024,
   heapSysBytes: 4 * 1024,
@@ -55,6 +56,8 @@ describe('SystemPage', () => {
     renderPage()
     expect(await screen.findByText('系统状态')).toBeInTheDocument()
     expect(await screen.findByText('12')).toBeInTheDocument()
+    expect(screen.getByText('迁移用量')).toBeInTheDocument()
+    expect(screen.getByText('Go Heap Sys')).toBeInTheDocument()
     expect(screen.getByText('数据库与图片/别名索引数量一致。')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: '立即巡检' }))

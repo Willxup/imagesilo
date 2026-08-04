@@ -253,8 +253,10 @@ func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate,
 	settingsService := settings.NewService(settings.NewRepository(db))
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
-	maintenanceService := maintenance.NewService(maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger)
 	migrationImageService := migrationimage.NewService(filesystem, true)
+	maintenanceService := maintenance.NewService(
+		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, migrationImageService, logger,
+	)
 	router := NewRouter(Dependencies{
 		DB: db, Logger: logger, Auth: authService, APITokens: tokenService,
 		Aliases: aliasService, Images: imageService, Importer: importService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,

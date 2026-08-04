@@ -73,6 +73,7 @@ type Service struct {
 type migrationSnapshot struct {
 	items        []Image
 	skippedFiles int
+	storedBytes  int64
 	scannedAt    time.Time
 }
 
@@ -92,6 +93,14 @@ func (s *Service) MutationsEnabled() bool {
 func (s *Service) Refresh(ctx context.Context) error {
 	_, err := s.loadSnapshot(ctx, true)
 	return err
+}
+
+func (s *Service) StoredBytes(ctx context.Context) (int64, error) {
+	snapshot, err := s.loadSnapshot(ctx, false)
+	if err != nil {
+		return 0, err
+	}
+	return snapshot.storedBytes, nil
 }
 
 func (s *Service) Search(ctx context.Context, filter ListFilter) (Page, error) {
@@ -245,7 +254,9 @@ func (s *Service) scanSnapshot(ctx context.Context) (*migrationSnapshot, error) 
 		}
 		return items[left].ModifiedAt.After(items[right].ModifiedAt)
 	})
-	return &migrationSnapshot{items: items, skippedFiles: skipped, scannedAt: s.now().UTC()}, nil
+	return &migrationSnapshot{
+		items: items, skippedFiles: skipped, storedBytes: scanned.StoredBytes, scannedAt: s.now().UTC(),
+	}, nil
 }
 
 func (s *Service) removeCachedPath(canonicalPath string) {
@@ -255,12 +266,17 @@ func (s *Service) removeCachedPath(canonicalPath string) {
 		return
 	}
 	items := make([]Image, 0, len(s.snapshot.items))
+	storedBytes := s.snapshot.storedBytes
 	for _, item := range s.snapshot.items {
 		if item.Path != canonicalPath {
 			items = append(items, item)
+		} else {
+			storedBytes -= item.StoredSize
 		}
 	}
-	s.snapshot = &migrationSnapshot{items: items, skippedFiles: s.snapshot.skippedFiles, scannedAt: s.snapshot.scannedAt}
+	s.snapshot = &migrationSnapshot{
+		items: items, skippedFiles: s.snapshot.skippedFiles, storedBytes: storedBytes, scannedAt: s.snapshot.scannedAt,
+	}
 }
 
 func validateListFilter(filter ListFilter) error {

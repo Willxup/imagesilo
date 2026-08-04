@@ -23,15 +23,16 @@ type IndexStats struct {
 }
 
 type Overview struct {
-	Persistent        PersistentStats
-	Runtime           RuntimeSnapshot
-	Indexes           IndexStats
-	IndexConsistent   bool
-	MissingImageCount int
-	MissingImageIDs   []string
-	LastInspection    *InspectionResult
-	LastRebuild       *RebuildResult
-	LastDaily         *DailyResult
+	Persistent           PersistentStats
+	MigrationStoredBytes int64
+	Runtime              RuntimeSnapshot
+	Indexes              IndexStats
+	IndexConsistent      bool
+	MissingImageCount    int
+	MissingImageIDs      []string
+	LastInspection       *InspectionResult
+	LastRebuild          *RebuildResult
+	LastDaily            *DailyResult
 }
 
 type InspectionResult struct {
@@ -72,6 +73,7 @@ type DailyResult struct {
 type Service struct {
 	repository        *Repository
 	storage           *storage.Filesystem
+	migrationStorage  migrationStorage
 	rebuilder         *indexstate.Rebuilder
 	delivery          *delivery.Index
 	sessions          *auth.Service
@@ -85,6 +87,10 @@ type Service struct {
 	lastDaily         *DailyResult
 }
 
+type migrationStorage interface {
+	StoredBytes(context.Context) (int64, error)
+}
+
 func NewService(
 	repository *Repository,
 	filesystem *storage.Filesystem,
@@ -92,11 +98,12 @@ func NewService(
 	deliveryIndex *delivery.Index,
 	sessions *auth.Service,
 	tokens *apitoken.Service,
+	migrationStorage migrationStorage,
 	logger *slog.Logger,
 ) *Service {
 	return &Service{
 		repository: repository, storage: filesystem, rebuilder: rebuilder,
-		delivery: deliveryIndex, sessions: sessions, tokens: tokens, logger: logger,
+		delivery: deliveryIndex, sessions: sessions, tokens: tokens, migrationStorage: migrationStorage, logger: logger,
 	}
 }
 
@@ -113,6 +120,10 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	if err != nil {
 		return Overview{}, err
 	}
+	migrationBytes, err := s.migrationStorage.StoredBytes(ctx)
+	if err != nil {
+		return Overview{}, err
+	}
 	s.mu.RLock()
 	missingCount := s.missingImageCount
 	missingIDs := append([]string(nil), s.missingImageIDs...)
@@ -121,7 +132,7 @@ func (s *Service) Overview(ctx context.Context) (Overview, error) {
 	lastDaily := cloneDaily(s.lastDaily)
 	s.mu.RUnlock()
 	return Overview{
-		Persistent: persistent, Runtime: CaptureRuntime(), Indexes: indexes, IndexConsistent: consistent,
+		Persistent: persistent, MigrationStoredBytes: migrationBytes, Runtime: CaptureRuntime(), Indexes: indexes, IndexConsistent: consistent,
 		MissingImageCount: missingCount, MissingImageIDs: missingIDs,
 		LastInspection: lastInspection, LastRebuild: lastRebuild, LastDaily: lastDaily,
 	}, nil
