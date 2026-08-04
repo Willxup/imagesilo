@@ -1,6 +1,8 @@
 /bin/
 /coverage/
 /data/
+/.worktrees/
+/.agents/
 *.log
 .DS_Store
 
