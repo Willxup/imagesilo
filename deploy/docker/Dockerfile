@@ -3,17 +3,19 @@ ARG GO_IMAGE=golang:1.26.5-bookworm@sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e5
 ARG RUNTIME_IMAGE=debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 ARG VIPS_VERSION=8.18.4
 ARG VIPS_SHA256=2677bad6c422617fd1172d359c16af34e736965d042c214203a87187d26ff037
+ARG VERSION=dev
 ARG BUILD_REVISION=unknown
 ARG BUILD_SOURCE=https://github.com/Willxup/imagesilo
 
 FROM ${NODE_IMAGE} AS web-build
+ARG VERSION
 WORKDIR /src/web
 COPY web/package.json web/package-lock.json ./
 RUN npm ci
 COPY web/ ./
 COPY api/ /src/api/
 COPY assets/ /src/assets/
-RUN npm run generate:api && npm run build
+RUN npm run generate:api && VITE_APP_VERSION="${VERSION}" npm run build
 
 FROM ${GO_IMAGE} AS vips-build
 ARG VIPS_VERSION

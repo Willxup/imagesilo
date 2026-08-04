@@ -7,6 +7,11 @@ test('desktop administrator completes upload, management, alias, settings, theme
   const brandLogo = page.getByRole('img', { name: 'ImageSilo' })
   await expect(brandLogo).toBeVisible()
   await expect.poll(() => brandLogo.locator('img:visible').evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0)
+  const footer = page.getByRole('contentinfo')
+  await expect(footer).toContainText('© 2026')
+  await expect(footer.getByRole('link', { name: 'ImageSilo' })).toHaveAttribute('href', 'https://github.com/Willxup/imagesilo')
+  await expect(footer.getByRole('link', { name: 'License' })).toHaveAttribute('href', 'https://github.com/Willxup/imagesilo/blob/main/LICENSE')
+  await expect(footer.getByRole('link', { name: 'Version: dev' })).toHaveAttribute('href', 'https://github.com/Willxup/imagesilo/releases')
   expect((await request.get('/brand/favicon-64.png')).status()).toBe(200)
   const imageName = 'desktop-e2e.webp'
   await uploadTinyImage(page, imageName)
