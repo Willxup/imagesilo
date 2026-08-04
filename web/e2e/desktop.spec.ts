@@ -26,6 +26,33 @@ test('desktop administrator completes upload, management, alias, settings, theme
   await page.getByRole('button', { name: /复制.*MD/ }).click()
   await expect.poll(() => readClipboard(page)).toContain('![')
 
+  const migrationListPattern = '**/api/v1/migration-images?*'
+  await page.route(migrationListPattern, async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 400))
+    await route.continue()
+  })
+  await page.getByRole('link', { name: '迁移管理' }).click()
+  await expect(page.getByText('正在扫描迁移文件…')).toBeVisible()
+  const migrationPath = '/i/2026/08/migration-e2e.webp'
+  const migrationCard = page.locator('article').filter({ hasText: migrationPath })
+  await expect(migrationCard).toBeVisible()
+  await page.unroute(migrationListPattern)
+  const refreshMigrationList = page.getByRole('button', { name: '刷新' })
+  await expect(refreshMigrationList).toBeVisible()
+  await expect(refreshMigrationList).toHaveCSS('font-size', '14px')
+  await expect(page.getByRole('button', { name: '应用筛选' })).toHaveCSS('font-size', '14px')
+  await refreshMigrationList.focus()
+  await refreshMigrationList.press('Enter')
+  await expect(page.getByText('迁移文件列表已刷新。')).toBeVisible()
+  await expect(migrationCard.getByRole('img', { name: 'migration-e2e.webp' })).toBeVisible()
+  await expect(page.getByText('迁移目录已开启永久删除')).toBeVisible()
+  await migrationCard.getByRole('button', { name: /复制(直链|MD)/ }).click()
+  await expect.poll(() => readClipboard(page)).toContain(migrationPath)
+  await migrationCard.getByRole('button', { name: `删除迁移图片 ${migrationPath}` }).click()
+  await page.getByRole('dialog').getByRole('button', { name: '永久删除' }).click()
+  await expect(migrationCard).not.toBeVisible()
+  expect((await request.get(migrationPath)).status()).toBe(404)
+
   await page.getByRole('link', { name: '路径映射' }).click()
   const aliasPath = '/legacy/desktop-e2e.webp'
   await page.getByLabel('历史路径').first().fill(aliasPath)

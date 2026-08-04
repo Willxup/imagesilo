@@ -46,7 +46,9 @@ sudo install -d -o 10001 -g 10001 -m 0750 \
 
 将 `--volume imagesilo-data:/data` 替换为 `--volume /srv/imagesilo/data:/data`。权限错误会在启动阶段直接失败，不会退回 root 运行。
 
-需要保留旧图床目录结构时，可以再把旧图片根目录只读挂载到 `/data/migrations`，例如 `--volume /srv/legacy-images:/data/migrations:ro`。挂载目录中的相对路径会直接成为公开 URL；具体边界见[导入指南](./imports.md)。
+需要保留旧图床目录结构时，可以再把旧图片根目录只读挂载到 `/data/migrations`，例如 `--volume /srv/legacy-images:/data/migrations:ro`。挂载目录中的相对路径会直接成为公开 URL，后台迁移管理仍可浏览和复制直链。
+
+只有需要从后台永久删除“专用迁移副本”时，才同时使用可写挂载、确保 UID/GID `10001:10001` 拥有删除权限，并增加 `--env IMAGESILO_MIGRATION_MUTATIONS=true`。该开关默认 `false`；仅改为可写挂载不会自动开放删除。不要对旧图床唯一原件启用此能力，具体边界见[导入指南](./imports.md)。
 
 ## 一致备份
 

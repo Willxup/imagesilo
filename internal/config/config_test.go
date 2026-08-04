@@ -27,6 +27,22 @@ func TestLoadUsesSafeDefaults(t *testing.T) {
 	if !cfg.TrustProxyHeaders {
 		t.Fatal("TrustProxyHeaders = false, want Nginx Proxy Manager default true")
 	}
+	if cfg.MigrationMutations {
+		t.Fatal("MigrationMutations = true, want safe read-only default false")
+	}
+}
+
+func TestLoadAcceptsExplicitMigrationMutations(t *testing.T) {
+	t.Setenv("IMAGESILO_LISTEN_ADDRESS", "127.0.0.1:0")
+	t.Setenv("IMAGESILO_DATA_DIR", filepath.Join(t.TempDir(), "data"))
+	t.Setenv("IMAGESILO_MIGRATION_MUTATIONS", "true")
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if !cfg.MigrationMutations {
+		t.Fatal("MigrationMutations = false, want configured true")
+	}
 }
 
 func TestNativeDefaultListensOnlyOnLoopback(t *testing.T) {

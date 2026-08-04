@@ -19,6 +19,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
 	"github.com/Willxup/imagesilo/internal/maintenance"
+	"github.com/Willxup/imagesilo/internal/migrationimage"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
@@ -94,6 +95,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 	maintenanceService := maintenance.NewService(
 		maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger,
 	)
+	migrationImageService := migrationimage.NewService(filesystem, cfg.MigrationMutations)
 	unavailableIDs := append(append([]string(nil), loadResult.Delivery.MissingIDs...), loadResult.Delivery.InvalidSizeIDs...)
 	maintenanceService.RecordStartupMissing(unavailableIDs)
 	ui, err := webui.New()
@@ -114,6 +116,7 @@ func Build(ctx context.Context, cfg config.Config, db *sql.DB, logger *slog.Logg
 		Settings:              settingsService,
 		Setup:                 setupService,
 		Maintenance:           maintenanceService,
+		MigrationImages:       migrationImageService,
 		DeliveryIndex:         deliveryIndex,
 		DeliveryGate:          deliveryGate,
 		Storage:               filesystem,

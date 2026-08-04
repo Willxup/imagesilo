@@ -200,6 +200,12 @@ textarea {
   font: inherit;
 }
 
+[data-slot="button"] {
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 20px;
+}
+
 button,
 a,
 summary {
@@ -1204,6 +1210,47 @@ input[type="checkbox"]:disabled {
   color: #2563eb;
 }
 
+.migration-mode-notice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  border: 1px solid color-mix(in srgb, #f59e0b 34%, var(--tail-border));
+  border-radius: 14px;
+  background: color-mix(in srgb, #f59e0b 7%, var(--tail-card));
+  padding: 14px 16px;
+  color: var(--tail-text-soft);
+}
+
+.migration-mode-notice > svg {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 auto;
+  margin-top: 1px;
+  color: #d97706;
+}
+
+.migration-mode-notice strong {
+  display: block;
+  color: var(--tail-text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.migration-mode-notice p {
+  margin: 3px 0 0;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.migration-mode-notice.is-writable {
+  border-color: color-mix(in srgb, #12b76a 34%, var(--tail-border));
+  background: color-mix(in srgb, #12b76a 7%, var(--tail-card));
+}
+
+.migration-mode-notice.is-writable > svg {
+  color: #12b76a;
+}
+
 .image-card {
   position: relative;
   border: 1px solid var(--tail-border);
@@ -1246,6 +1293,14 @@ input[type="checkbox"]:disabled {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+}
+
+.migration-image-actions {
+  flex-wrap: wrap;
+}
+
+.migration-image-path {
+  overflow-wrap: anywhere;
 }
 
 .image-card-actions [data-slot="button"] {

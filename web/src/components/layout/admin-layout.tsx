@@ -16,6 +16,7 @@ const repositoryURL = 'https://github.com/Willxup/imagesilo'
 const workspaceNavigation: { icon: IconName; key: string; to: string }[] = [
   { icon: 'upload', key: 'upload', to: '/admin/upload' },
   { icon: 'images', key: 'images', to: '/admin/images' },
+  { icon: 'server', key: 'migrations', to: '/admin/migrations' },
   { icon: 'history', key: 'aliases', to: '/admin/aliases' },
   { icon: 'key', key: 'apiTokens', to: '/admin/api-tokens' },
 ]
@@ -237,7 +238,14 @@ export function AdminLayout() {
         </header>
 
         <main className="tail-content">
-          <Suspense fallback={<div className="tail-loading">{t('common.loading')}</div>}>
+          <Suspense
+            fallback={
+              <div className="tail-loading flex items-center gap-2" role="status">
+                <Icon name="loader" className="animate-spin" />
+                {location.pathname === '/admin/migrations' ? t('migrations.scanning') : t('common.loading')}
+              </div>
+            }
+          >
             <div className={`page-transition${location.pathname.startsWith('/admin/images/') ? ' is-detail' : ''}`} key={location.pathname}>
               <Outlet />
             </div>

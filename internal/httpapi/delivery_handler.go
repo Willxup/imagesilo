@@ -1,8 +1,6 @@
 package httpapi
 
 import (
-	"errors"
-	"io"
 	"mime"
 	"net/http"
 	"net/url"
@@ -98,11 +96,7 @@ func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request,
 		return false
 	}
 	relativePath := strings.TrimPrefix(decoded, "/")
-	mimeType, ok := migrationMIMETypes[strings.ToLower(path.Ext(relativePath))]
-	if !ok {
-		return false
-	}
-	file, err := h.storage.OpenMigration(relativePath)
+	file, mimeType, err := h.storage.OpenMigrationImage(relativePath)
 	if err != nil {
 		return false
 	}
@@ -111,10 +105,6 @@ func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request,
 	if err != nil {
 		return false
 	}
-	if !migrationContentMatches(file, mimeType) {
-		return false
-	}
-
 	w.Header().Set("Content-Type", mimeType)
 	w.Header().Set("Cache-Control", "public, no-cache")
 	if disposition := mime.FormatMediaType("inline", map[string]string{"filename": path.Base(relativePath)}); disposition != "" {
@@ -122,26 +112,6 @@ func (h *deliveryHandler) serveMigration(w http.ResponseWriter, r *http.Request,
 	}
 	http.ServeContent(w, r, path.Base(relativePath), info.ModTime(), file)
 	return true
-}
-
-func migrationContentMatches(file io.ReadSeeker, expectedMIME string) bool {
-	var header [512]byte
-	read, err := file.Read(header[:])
-	if err != nil && !errors.Is(err, io.EOF) {
-		return false
-	}
-	if _, err := file.Seek(0, io.SeekStart); err != nil {
-		return false
-	}
-	return read > 0 && http.DetectContentType(header[:read]) == expectedMIME
-}
-
-var migrationMIMETypes = map[string]string{
-	".gif":  "image/gif",
-	".jpeg": "image/jpeg",
-	".jpg":  "image/jpeg",
-	".png":  "image/png",
-	".webp": "image/webp",
 }
 
 func (h *deliveryHandler) rejectURLToken(w http.ResponseWriter, r *http.Request) bool {

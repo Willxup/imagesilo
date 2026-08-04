@@ -12,6 +12,7 @@ import (
 	images "github.com/Willxup/imagesilo/internal/image"
 	"github.com/Willxup/imagesilo/internal/importer"
 	"github.com/Willxup/imagesilo/internal/maintenance"
+	"github.com/Willxup/imagesilo/internal/migrationimage"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
 	"github.com/Willxup/imagesilo/internal/settings"
 	"github.com/Willxup/imagesilo/internal/setup"
@@ -35,6 +36,7 @@ type Dependencies struct {
 	Settings              *settings.Service
 	Setup                 *setup.Service
 	Maintenance           *maintenance.Service
+	MigrationImages       *migrationimage.Service
 	DeliveryIndex         *delivery.Index
 	DeliveryGate          *delivery.Gate
 	Storage               *storage.Filesystem
@@ -123,6 +125,12 @@ func NewRouter(dependencies Dependencies) http.Handler {
 		router.Get("/api/v1/overview", maintenanceHandler.overview)
 		router.Post("/api/v1/maintenance/rebuild", maintenanceHandler.rebuild)
 		router.Post("/api/v1/maintenance/inspect", maintenanceHandler.inspect)
+	}
+	if dependencies.MigrationImages != nil && dependencies.Auth != nil {
+		migrationImageHandler := newMigrationImageHandler(dependencies.MigrationImages, authenticator, dependencies.Logger)
+		router.Get("/api/v1/migration-images", migrationImageHandler.list)
+		router.Post("/api/v1/migration-images/refresh", migrationImageHandler.refresh)
+		router.Post("/api/v1/migration-images/batch-delete", migrationImageHandler.batchDelete)
 	}
 	var imageDelivery *deliveryHandler
 	if dependencies.DeliveryIndex != nil && dependencies.Storage != nil {

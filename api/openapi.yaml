@@ -153,6 +153,81 @@ paths:
           $ref: '#/components/responses/Forbidden'
         '409':
           $ref: '#/components/responses/Conflict'
+  /api/v1/migration-images:
+    get:
+      operationId: listMigrationImages
+      security:
+        - sessionCookie: []
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 100, default: 24 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+        - name: q
+          in: query
+          description: 按迁移图片文件名或完整公网路径搜索
+          schema: { type: string, maxLength: 256 }
+        - name: format
+          in: query
+          schema: { type: string, enum: [jpeg, png, webp, gif] }
+        - name: minBytes
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+        - name: maxBytes
+          in: query
+          schema: { type: integer, format: int64, minimum: 0 }
+      responses:
+        '200':
+          description: 迁移目录中可公开交付图片的平铺分页列表
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MigrationImageList' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+  /api/v1/migration-images/batch-delete:
+    post:
+      operationId: batchDeleteMigrationImages
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/BatchMigrationImageRequest' }
+      responses:
+        '200':
+          description: 永久删除迁移图片并递归清理空父目录后的逐项结果
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MigrationImageBatchResult' }
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+  /api/v1/migration-images/refresh:
+    post:
+      operationId: refreshMigrationImages
+      security:
+        - sessionCookie: []
+      parameters:
+        - $ref: '#/components/parameters/CSRFToken'
+      responses:
+        '204':
+          description: 已重新扫描迁移目录并替换文件列表快照
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
   /api/v1/images:
     get:
       operationId: listImages
@@ -895,6 +970,54 @@ components:
           type: array
           items: { $ref: '#/components/schemas/Image' }
         nextCursor: { type: string }
+    MigrationImage:
+      type: object
+      required: [path, originalName, mimeType, extension, storedSize, standardUrl, modifiedAt]
+      properties:
+        path: { type: string, maxLength: 2048, pattern: '^/' }
+        originalName: { type: string }
+        mimeType: { type: string, enum: [image/jpeg, image/png, image/webp, image/gif] }
+        extension: { type: string, enum: [.jpg, .jpeg, .png, .webp, .gif] }
+        storedSize: { type: integer, format: int64, minimum: 1 }
+        standardUrl: { type: string, maxLength: 2048, pattern: '^/' }
+        modifiedAt: { type: string, format: date-time }
+    MigrationImageList:
+      type: object
+      required: [items, skippedFiles, mutationsEnabled]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MigrationImage' }
+        nextCursor: { type: string }
+        skippedFiles: { type: integer, minimum: 0 }
+        mutationsEnabled: { type: boolean }
+    BatchMigrationImageRequest:
+      type: object
+      additionalProperties: false
+      required: [paths]
+      properties:
+        paths:
+          type: array
+          minItems: 1
+          maxItems: 100
+          uniqueItems: true
+          items: { type: string, maxLength: 2048, pattern: '^/' }
+    MigrationImageOperationItem:
+      type: object
+      required: [path, status]
+      properties:
+        path: { type: string, maxLength: 2048, pattern: '^/' }
+        status: { type: string, enum: [deleted, cleanup_pending, not_found, error] }
+        removedDirectories: { type: integer, minimum: 0 }
+        directoryCleanupPending: { type: boolean }
+        errorCode: { type: string }
+    MigrationImageBatchResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/MigrationImageOperationItem' }
     ImageDetail:
       allOf:
         - $ref: '#/components/schemas/Image'
@@ -1204,6 +1327,9 @@ components:
       description: 请求被限速
       headers:
         Retry-After: { schema: { type: integer, minimum: 1 } }
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    InternalServerError:
+      description: 服务器无法完成请求
       content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
     ServiceUnavailable:
       description: 服务未就绪或图片解码安全门满载

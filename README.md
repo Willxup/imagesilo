@@ -57,7 +57,7 @@ ImageSilo is a Docker-first image host built as one Go process with SQLite and l
 Docker is the supported production runtime. The following starts a local evaluation instance with a named volume:
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.2.0
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -76,7 +76,7 @@ On the first launch, run `docker logs -f imagesilo` and copy the `bootstrap_toke
 
 For production, terminate HTTPS at a reverse proxy, keep `IMAGESILO_COOKIE_SECURE=true`, and back up the complete `/data` directory while writes are stopped. See the [deployment guide](./docs/deployment.md) before exposing the service.
 
-To preserve an existing image URL tree without creating one alias at a time, mount it read-only at `/data/migrations`. A file mounted as `/data/migrations/i/2022/04/example.jpg` is immediately available at `/i/2022/04/example.jpg`. Managed historical aliases take precedence when both sources contain the same path; only JPEG, PNG, WebP, and GIF files are exposed.
+To preserve an existing image URL tree without creating one alias at a time, mount it read-only at `/data/migrations`. A file mounted as `/data/migrations/i/2022/04/example.jpg` is immediately available at `/i/2022/04/example.jpg`. Managed historical aliases take precedence when both sources contain the same path; only JPEG, PNG, WebP, and GIF files are exposed. The Migration management page can browse and copy these URLs in read-only mode; its file list uses a 30-minute lazy snapshot with manual refresh, while direct image delivery is never gated by that list cache. Only for a dedicated migration copy, make the mount writable and set `IMAGESILO_MIGRATION_MUTATIONS=true` to enable permanent deletion.
 
 ## Design Boundaries
 
@@ -85,7 +85,7 @@ To preserve an existing image URL tree without creating one alias at a time, mou
 | Runtime | One Go process in one container |
 | Metadata | SQLite in `/data/db` |
 | Images | Local files in `/data/images` |
-| Path-preserving migrations | Read-only image tree in `/data/migrations` |
+| Path-preserving migrations | Image tree in `/data/migrations`, read-only by default with opt-in deletion |
 | Cache | Local thumbnails in `/data/cache` |
 | Processing | libvips, concurrency `1` by default |
 | Delivery | File streaming with ETag revalidation; unlimited by default (`0`), optionally capped |

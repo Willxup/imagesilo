@@ -1,8 +1,11 @@
-import type { Image } from './api-types'
-
 export type LinkFormat = 'direct' | 'markdown' | 'html' | 'bbcode'
 
-export function imageLinks(image: Image): Record<LinkFormat, string> {
+export type LinkableImage = {
+  originalName: string
+  standardUrl: string
+}
+
+export function imageLinks(image: LinkableImage): Record<LinkFormat, string> {
   const direct = new URL(image.standardUrl, window.location.origin).toString()
   const alt = image.originalName.replaceAll(']', '\\]')
   return {

@@ -148,6 +148,54 @@ export interface paths {
         patch: operations["updateAdministratorProfile"];
         trace?: never;
     };
+    "/api/v1/migration-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["listMigrationImages"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migration-images/batch-delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["batchDeleteMigrationImages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/migration-images/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["refreshMigrationImages"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/images": {
         parameters: {
             query?: never;
@@ -566,6 +614,39 @@ export interface components {
             items: components["schemas"]["Image"][];
             nextCursor?: string;
         };
+        MigrationImage: {
+            path: string;
+            originalName: string;
+            /** @enum {string} */
+            mimeType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+            /** @enum {string} */
+            extension: ".jpg" | ".jpeg" | ".png" | ".webp" | ".gif";
+            /** Format: int64 */
+            storedSize: number;
+            standardUrl: string;
+            /** Format: date-time */
+            modifiedAt: string;
+        };
+        MigrationImageList: {
+            items: components["schemas"]["MigrationImage"][];
+            nextCursor?: string;
+            skippedFiles: number;
+            mutationsEnabled: boolean;
+        };
+        BatchMigrationImageRequest: {
+            paths: string[];
+        };
+        MigrationImageOperationItem: {
+            path: string;
+            /** @enum {string} */
+            status: "deleted" | "cleanup_pending" | "not_found" | "error";
+            removedDirectories?: number;
+            directoryCleanupPending?: boolean;
+            errorCode?: string;
+        };
+        MigrationImageBatchResult: {
+            items: components["schemas"]["MigrationImageOperationItem"][];
+        };
         ImageDetail: components["schemas"]["Image"] & {
             aliases: components["schemas"]["ImageAlias"][];
         };
@@ -836,6 +917,15 @@ export interface components {
                 "application/json": components["schemas"]["Error"];
             };
         };
+        /** @description 服务器无法完成请求 */
+        InternalServerError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/json": components["schemas"]["Error"];
+            };
+        };
         /** @description 服务未就绪或图片解码安全门满载 */
         ServiceUnavailable: {
             headers: {
@@ -1077,6 +1167,90 @@ export interface operations {
             401: components["responses"]["Unauthorized"];
             403: components["responses"]["Forbidden"];
             409: components["responses"]["Conflict"];
+        };
+    };
+    listMigrationImages: {
+        parameters: {
+            query?: {
+                limit?: number;
+                cursor?: string;
+                /** @description 按迁移图片文件名或完整公网路径搜索 */
+                q?: string;
+                format?: "jpeg" | "png" | "webp" | "gif";
+                minBytes?: number;
+                maxBytes?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 迁移目录中可公开交付图片的平铺分页列表 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationImageList"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+        };
+    };
+    batchDeleteMigrationImages: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BatchMigrationImageRequest"];
+            };
+        };
+        responses: {
+            /** @description 永久删除迁移图片并递归清理空父目录后的逐项结果 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MigrationImageBatchResult"];
+                };
+            };
+            400: components["responses"]["BadRequest"];
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+        };
+    };
+    refreshMigrationImages: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description 必须与当前 Session 绑定的 imagesilo_csrf Cookie 完全一致。 */
+                "X-CSRF-Token": components["parameters"]["CSRFToken"];
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description 已重新扫描迁移目录并替换文件列表快照 */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthorized"];
+            403: components["responses"]["Forbidden"];
+            500: components["responses"]["InternalServerError"];
         };
     };
     listImages: {

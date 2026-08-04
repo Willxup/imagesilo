@@ -28,6 +28,7 @@ import (
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
 	"github.com/Willxup/imagesilo/internal/indexstate"
 	"github.com/Willxup/imagesilo/internal/maintenance"
+	"github.com/Willxup/imagesilo/internal/migrationimage"
 	"github.com/Willxup/imagesilo/internal/platform/database"
 	"github.com/Willxup/imagesilo/internal/platform/processor"
 	"github.com/Willxup/imagesilo/internal/platform/storage"
@@ -210,7 +211,7 @@ func newPhaseTwoFixture(t *testing.T) *phaseTwoFixture {
 func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate, processingConcurrency int) *phaseTwoFixture {
 	t.Helper()
 	dataDirectory := t.TempDir()
-	for _, path := range []string{"db", "images", filepath.Join("cache", "thumbnails"), "tmp"} {
+	for _, path := range []string{"db", "images", "migrations", filepath.Join("cache", "thumbnails"), "tmp"} {
 		if err := os.MkdirAll(filepath.Join(dataDirectory, path), 0o750); err != nil {
 			t.Fatalf("MkdirAll(%s) error = %v", path, err)
 		}
@@ -253,10 +254,11 @@ func newHTTPFixture(t *testing.T, engine processor.Engine, gate *processor.Gate,
 	var logs bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logs, nil))
 	maintenanceService := maintenance.NewService(maintenance.NewRepository(db), filesystem, rebuilder, deliveryIndex, authService, tokenService, logger)
+	migrationImageService := migrationimage.NewService(filesystem, true)
 	router := NewRouter(Dependencies{
 		DB: db, Logger: logger, Auth: authService, APITokens: tokenService,
 		Aliases: aliasService, Images: imageService, Importer: importService, Settings: settingsService, DeliveryIndex: deliveryIndex, Storage: filesystem,
-		Maintenance: maintenanceService, CookieSecure: false, ProcessingConcurrency: processingConcurrency,
+		Maintenance: maintenanceService, MigrationImages: migrationImageService, CookieSecure: false, ProcessingConcurrency: processingConcurrency,
 	})
 	return &phaseTwoFixture{
 		t: t, db: db, router: router, authService: authService, tokenService: tokenService, dataDirectory: dataDirectory, logs: &logs,

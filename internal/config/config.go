@@ -29,6 +29,7 @@ type Config struct {
 	ShutdownTimeout       time.Duration
 	CookieSecure          bool
 	TrustProxyHeaders     bool
+	MigrationMutations    bool
 }
 
 func Load() (Config, error) {
@@ -76,6 +77,13 @@ func Load() (Config, error) {
 			return Config{}, fmt.Errorf("IMAGESILO_TRUST_PROXY_HEADERS must be true or false: %w", err)
 		}
 		cfg.TrustProxyHeaders = value
+	}
+	if raw := os.Getenv("IMAGESILO_MIGRATION_MUTATIONS"); raw != "" {
+		value, err := strconv.ParseBool(raw)
+		if err != nil {
+			return Config{}, fmt.Errorf("IMAGESILO_MIGRATION_MUTATIONS must be true or false: %w", err)
+		}
+		cfg.MigrationMutations = value
 	}
 
 	if err := cfg.Validate(); err != nil {

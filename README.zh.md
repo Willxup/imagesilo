@@ -57,7 +57,7 @@ ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 
 Docker 是唯一支持的生产运行方式。以下命令使用 named volume 启动一个本地体验实例：
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.1.0
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.2.0
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -76,7 +76,7 @@ docker run --detach \
 
 生产环境应在反向代理终止 HTTPS、保持 `IMAGESILO_COOKIE_SECURE=true`，并在停止写入时完整备份 `/data`。对外开放前请先阅读[部署指南](./docs/deployment.md)。
 
-如果需要完整保留旧图床的 URL 目录树，可以将原目录只读挂载到 `/data/migrations`，无需逐条创建历史路径。例如 `/data/migrations/i/2022/04/example.jpg` 会直接通过 `/i/2022/04/example.jpg` 访问。相同路径同时存在时，后台管理的历史路径映射优先；该目录只公开 JPEG、PNG、WebP 和 GIF 文件。
+如果需要完整保留旧图床的 URL 目录树，可以将原目录只读挂载到 `/data/migrations`，无需逐条创建历史路径。例如 `/data/migrations/i/2022/04/example.jpg` 会直接通过 `/i/2022/04/example.jpg` 访问。相同路径同时存在时，后台管理的历史路径映射优先；该目录只公开 JPEG、PNG、WebP 和 GIF 文件。后台“迁移管理”可以在只读模式下浏览和复制这些直链；文件列表使用 30 分钟惰性快照，也可手动刷新，图片直链不受列表缓存影响。仅对专用迁移副本启用永久删除时，才将挂载改为可写并设置 `IMAGESILO_MIGRATION_MUTATIONS=true`。
 
 ## 设计边界
 
@@ -85,7 +85,7 @@ docker run --detach \
 | 运行时 | 一个容器内的单个 Go 进程 |
 | 元数据 | `/data/db` 中的 SQLite |
 | 图片 | `/data/images` 中的本地文件 |
-| 保留路径迁移 | `/data/migrations` 中的只读图片目录树 |
+| 保留路径迁移 | `/data/migrations` 中默认只读、可显式开启删除管理的图片目录树 |
 | 缓存 | `/data/cache` 中的本地缩略图 |
 | 图片处理 | libvips，默认并发 `1` |
 | 图片读取 | 文件流式交付与 ETag 复验，默认不限制（`0`），可选配置上限 |

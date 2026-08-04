@@ -1,14 +1,21 @@
 package storage
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
+	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"time"
 )
+
+var ErrUnsafeMigrationPath = errors.New("migration path contains a symbolic link or non-directory component")
 
 type Filesystem struct {
 	imagesDirectory     string
@@ -24,6 +31,24 @@ type FileEntry struct {
 	Regular    bool
 }
 
+type MigrationFile struct {
+	RelativePath string
+	MIMEType     string
+	Extension    string
+	Size         int64
+	ModifiedAt   time.Time
+}
+
+type MigrationList struct {
+	Files        []MigrationFile
+	SkippedFiles int
+}
+
+type MigrationDeleteResult struct {
+	RemovedDirectories    int
+	DirectoryCleanupError error
+}
+
 func NewFilesystem(dataDirectory string) *Filesystem {
 	return &Filesystem{
 		imagesDirectory:     filepath.Join(dataDirectory, "images"),
@@ -33,24 +58,136 @@ func NewFilesystem(dataDirectory string) *Filesystem {
 	}
 }
 
-func (f *Filesystem) OpenMigration(relativePath string) (*os.File, error) {
+func (f *Filesystem) OpenMigrationImage(relativePath string) (*os.File, string, error) {
+	root, err := os.OpenRoot(f.migrationsDirectory)
+	if err != nil {
+		return nil, "", fmt.Errorf("open migration root: %w", err)
+	}
+	defer root.Close()
+	return openMigrationImage(root, relativePath)
+}
+
+func (f *Filesystem) ListMigrationImages(ctx context.Context) (MigrationList, error) {
+	root, err := os.OpenRoot(f.migrationsDirectory)
+	if err != nil {
+		return MigrationList{}, fmt.Errorf("open migration root: %w", err)
+	}
+	defer root.Close()
+
+	result := MigrationList{Files: []MigrationFile{}}
+	err = fs.WalkDir(root.FS(), ".", func(relativePath string, entry fs.DirEntry, walkErr error) error {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if walkErr != nil {
+			if relativePath == "." {
+				return walkErr
+			}
+			result.SkippedFiles++
+			if entry != nil && entry.IsDir() {
+				return fs.SkipDir
+			}
+			return nil
+		}
+		if relativePath == "." || entry.IsDir() {
+			return nil
+		}
+		info, err := entry.Info()
+		if err != nil || !info.Mode().IsRegular() {
+			result.SkippedFiles++
+			return nil
+		}
+		file, mimeType, err := openMigrationImage(root, relativePath)
+		if err != nil {
+			result.SkippedFiles++
+			return nil
+		}
+		file.Close()
+		result.Files = append(result.Files, MigrationFile{
+			RelativePath: relativePath,
+			MIMEType:     mimeType,
+			Extension:    strings.ToLower(path.Ext(relativePath)),
+			Size:         info.Size(),
+			ModifiedAt:   info.ModTime().UTC(),
+		})
+		return nil
+	})
+	if err != nil {
+		return MigrationList{}, fmt.Errorf("scan migration directory: %w", err)
+	}
+	return result, nil
+}
+
+func (f *Filesystem) RemoveMigrationImage(relativePath string) (MigrationDeleteResult, error) {
+	root, err := os.OpenRoot(f.migrationsDirectory)
+	if err != nil {
+		return MigrationDeleteResult{}, fmt.Errorf("open migration root: %w", err)
+	}
+	defer root.Close()
+	if err := validateMigrationDeletePath(root, relativePath); err != nil {
+		return MigrationDeleteResult{}, err
+	}
+
+	file, _, err := openMigrationImage(root, relativePath)
+	if err != nil {
+		return MigrationDeleteResult{}, err
+	}
+	if err := file.Close(); err != nil {
+		return MigrationDeleteResult{}, fmt.Errorf("close migration file: %w", err)
+	}
+	if err := root.Remove(relativePath); err != nil {
+		return MigrationDeleteResult{}, fmt.Errorf("remove migration file: %w", err)
+	}
+
+	result := MigrationDeleteResult{}
+	for directory := path.Dir(relativePath); directory != "."; directory = path.Dir(directory) {
+		info, err := root.Lstat(directory)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			continue
+		case err != nil:
+			result.DirectoryCleanupError = fmt.Errorf("inspect migration directory %q before cleanup: %w", directory, err)
+			return result, nil
+		case info.Mode()&os.ModeSymlink != 0 || !info.IsDir():
+			result.DirectoryCleanupError = fmt.Errorf("inspect migration directory %q before cleanup: %w", directory, ErrUnsafeMigrationPath)
+			return result, nil
+		}
+		err = root.Remove(directory)
+		switch {
+		case err == nil:
+			result.RemovedDirectories++
+		case errors.Is(err, fs.ErrNotExist):
+			continue
+		case errors.Is(err, syscall.ENOTEMPTY), errors.Is(err, syscall.EEXIST):
+			return result, nil
+		default:
+			result.DirectoryCleanupError = fmt.Errorf("remove empty migration directory %q: %w", directory, err)
+			return result, nil
+		}
+	}
+	return result, nil
+}
+
+func validateMigrationDeletePath(root *os.Root, relativePath string) error {
 	if relativePath == "" || !fs.ValidPath(relativePath) || strings.ContainsAny(relativePath, "\\\x00") {
-		return nil, fmt.Errorf("invalid migration path")
+		return fmt.Errorf("invalid migration path")
 	}
-	file, err := os.OpenInRoot(f.migrationsDirectory, relativePath)
-	if err != nil {
-		return nil, fmt.Errorf("open migration file: %w", err)
+	components := strings.Split(relativePath, "/")
+	current := ""
+	for index, component := range components {
+		current = path.Join(current, component)
+		info, err := root.Lstat(current)
+		if err != nil {
+			return fmt.Errorf("inspect migration path component %q: %w", current, err)
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("inspect migration path component %q: %w", current, ErrUnsafeMigrationPath)
+		}
+		if index < len(components)-1 && !info.IsDir() {
+			return fmt.Errorf("inspect migration path component %q: %w", current, ErrUnsafeMigrationPath)
+		}
 	}
-	info, err := file.Stat()
-	if err != nil {
-		file.Close()
-		return nil, fmt.Errorf("inspect migration file: %w", err)
-	}
-	if !info.Mode().IsRegular() {
-		file.Close()
-		return nil, fmt.Errorf("migration path is not a regular file")
-	}
-	return file, nil
+	return nil
 }
 
 func (f *Filesystem) CommitThumbnailTemporary(temporaryPath, imageID string) error {
@@ -257,4 +394,64 @@ func openRegularInRoot(root, name string) (*os.File, error) {
 		return nil, fmt.Errorf("path is not a regular file")
 	}
 	return file, nil
+}
+
+func openMigrationImage(root *os.Root, relativePath string) (*os.File, string, error) {
+	if relativePath == "" || !fs.ValidPath(relativePath) || strings.ContainsAny(relativePath, "\\\x00") {
+		return nil, "", fmt.Errorf("invalid migration path")
+	}
+	mimeType, ok := migrationMIMETypes[strings.ToLower(path.Ext(relativePath))]
+	if !ok {
+		return nil, "", fmt.Errorf("unsupported migration image extension")
+	}
+	linkInfo, err := root.Lstat(relativePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("inspect migration path: %w", err)
+	}
+	if !linkInfo.Mode().IsRegular() {
+		return nil, "", fmt.Errorf("migration path is not a regular file")
+	}
+	file, err := root.Open(relativePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("open migration file: %w", err)
+	}
+	info, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, "", fmt.Errorf("inspect migration file: %w", err)
+	}
+	if !info.Mode().IsRegular() || !os.SameFile(linkInfo, info) {
+		file.Close()
+		return nil, "", fmt.Errorf("migration path changed while opening")
+	}
+	matched, err := contentMatchesMIME(file, mimeType)
+	if err != nil {
+		file.Close()
+		return nil, "", fmt.Errorf("inspect migration image content: %w", err)
+	}
+	if !matched {
+		file.Close()
+		return nil, "", fmt.Errorf("migration image content does not match its extension")
+	}
+	return file, mimeType, nil
+}
+
+func contentMatchesMIME(file io.ReadSeeker, expectedMIME string) (bool, error) {
+	var header [512]byte
+	read, err := file.Read(header[:])
+	if err != nil && !errors.Is(err, io.EOF) {
+		return false, err
+	}
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return false, err
+	}
+	return read > 0 && http.DetectContentType(header[:read]) == expectedMIME, nil
+}
+
+var migrationMIMETypes = map[string]string{
+	".gif":  "image/gif",
+	".jpeg": "image/jpeg",
+	".jpg":  "image/jpeg",
+	".png":  "image/png",
+	".webp": "image/webp",
 }

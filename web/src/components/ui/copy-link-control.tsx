@@ -2,9 +2,8 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import type { Image } from '../../lib/api-types'
 import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
-import { copyText, imageLinks, type LinkFormat } from '../../lib/image-links'
+import { copyText, imageLinks, type LinkableImage, type LinkFormat } from '../../lib/image-links'
 import { Button } from './button'
 import { DropdownItem, DropdownMenu } from './dropdown-menu'
 import { Icon, type IconName } from './icon'
@@ -23,7 +22,7 @@ function initialFormat(): LinkFormat {
   return formats.includes(value as LinkFormat) ? (value as LinkFormat) : 'direct'
 }
 
-export function CopyLinkControl({ image, compact = false, onCopied }: { image: Image; compact?: boolean; onCopied?: (format: LinkFormat) => void }) {
+export function CopyLinkControl({ image, compact = false, onCopied }: { image: LinkableImage; compact?: boolean; onCopied?: (format: LinkFormat) => void }) {
   const { t } = useTranslation()
   const [format, setFormat] = useState<LinkFormat>(initialFormat)
   const [open, setOpen] = useState(false)
