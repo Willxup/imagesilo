@@ -157,6 +157,7 @@ jobs:
         run: |
           docker build \
             --platform "${{ matrix.platform }}" \
+            --build-arg "VERSION=${RELEASE_TAG}" \
             --build-arg "BUILD_REVISION=${RELEASE_COMMIT}" \
             --build-arg "BUILD_SOURCE=https://github.com/${GITHUB_REPOSITORY}" \
             --file deploy/docker/Dockerfile \

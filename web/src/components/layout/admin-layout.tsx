@@ -4,6 +4,7 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
 
 import { useAuth } from '../../features/auth/auth-context'
 import { writeLocalStorage } from '../../lib/browser-storage'
+import { AppFooter } from '../app-footer'
 import { BrandLogo } from '../brand-logo'
 import { Button } from '../ui/button'
 import { DropdownItem, DropdownMenu } from '../ui/dropdown-menu'
@@ -251,6 +252,7 @@ export function AdminLayout() {
             </div>
           </Suspense>
         </main>
+        <AppFooter />
       </div>
 
       <Modal

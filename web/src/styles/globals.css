@@ -488,8 +488,10 @@ input[type="checkbox"]:disabled {
 }
 
 .tail-main-frame {
+  display: flex;
   min-width: 0;
   min-height: 100vh;
+  flex-direction: column;
   margin-left: 248px;
   transition: margin-left 300ms ease;
 }
@@ -792,8 +794,62 @@ input[type="checkbox"]:disabled {
 .tail-content {
   width: 100%;
   max-width: 1440px;
+  flex: 1 0 auto;
   margin: 0 auto;
   padding: 20px 20px 72px;
+}
+
+.app-footer {
+  display: grid;
+  flex: 0 0 auto;
+  gap: 6px;
+  justify-items: center;
+  padding: 20px 20px 24px;
+  color: var(--tail-text-soft);
+  font-size: 11px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.app-footer-line {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.app-footer-powered {
+  font-size: 10px;
+}
+
+.app-footer a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: 4px;
+  color: inherit;
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.app-footer a:hover {
+  color: #2563eb;
+}
+
+.app-footer a:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.app-footer-github {
+  width: 16px;
+  height: 16px;
+}
+
+.app-footer-version {
+  white-space: nowrap;
 }
 
 .page-transition {
@@ -2714,6 +2770,14 @@ input[type="checkbox"]:disabled {
 }
 
 @media (max-width: 720px) {
+  .app-footer {
+    padding: 16px 16px 22px;
+  }
+
+  .app-footer-line {
+    gap: 7px;
+  }
+
   .page-heading-row {
     display: grid;
   }
