@@ -154,7 +154,7 @@ export function UploadPage() {
         </div>
       </div>
       <form onSubmit={(event) => void submit(event)}>
-        <ComponentCard className="mt-8" title={t('upload.chooseFiles')}>
+        <ComponentCard className="upload-panel mt-8" title={t('upload.chooseFiles')}>
           <label
             className={`upload-dropzone ${dragActive ? 'is-dragging' : ''}`}
             htmlFor="upload-files"
@@ -243,7 +243,7 @@ export function UploadPage() {
           </div>
         </div>
       ) : null}
-      <div className="mt-6 grid gap-3">
+      <div className="upload-queue mt-6 grid gap-3">
         {items.map((item) => (
           <UploadRow item={item} key={item.id} uploading={uploading} onCancel={() => item.controller?.abort()} onRetry={() => void retry(item)} />
         ))}
