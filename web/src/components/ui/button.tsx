@@ -8,7 +8,8 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: "bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600",
+        default: "[background:var(--silo-gradient)] text-white shadow-theme-xs hover:opacity-90",
+        brandSolid: "bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600",
         outline:
           "border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white",
         secondary:

@@ -130,7 +130,7 @@ export function SetupPage() {
             </label>
           </div>
           {error ? <p className="setup-error">{error}</p> : null}
-          <Button className="w-full" type="submit" disabled={pending}>
+          <Button className="w-full" variant="brandSolid" type="submit" disabled={pending}>
             <Icon name={pending ? 'loader' : 'arrowRight'} className={pending ? 'animate-spin' : ''} />
             {pending ? t('common.working') : t('setup.finish')}
           </Button>
