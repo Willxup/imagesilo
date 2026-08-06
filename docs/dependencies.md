@@ -1,13 +1,13 @@
 # 依赖版本基线
 
-解析日期：2026-07-29。全部版本排除了 alpha、beta、RC、preview 和 nightly；直接依赖使用精确版本，前端完整依赖树由 `package-lock.json` 锁定。
+依赖解析基线日期：2026-07-29；工具链与基础镜像复核日期：2026-08-06。全部版本排除了 alpha、beta、RC、preview 和 nightly；直接依赖使用精确版本，前端完整依赖树由 `package-lock.json` 锁定。
 
 ## 工具链与原生组件
 
 | 组件 | 精确版本 | 官方来源 |
 |---|---:|---|
 | Go | 1.26.5 | `https://go.dev/dl/` |
-| Node.js | 26.5.0 | `https://nodejs.org/dist/` |
+| Node.js | 24.19.0 | `https://nodejs.org/dist/` |
 | TypeScript | 5.9.3 | `https://registry.npmjs.org/typescript/5.9.3` |
 | SQLite | 3.53.4 | `https://www.sqlite.org/download.html` |
 | libvips | 8.18.4 | `https://github.com/libvips/libvips/releases/tag/v8.18.4` |
@@ -42,8 +42,8 @@ React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公�
 
 | 用途 | 镜像 | Digest |
 |---|---|---|
-| Go 构建 | `golang:1.26.5-bookworm` | `sha256:1ecb7edf62a0408027bd5729dfd6b1b8766e578e8df93995b225dfd0944eb651` |
-| Node 构建 | `node:26.5.0-bookworm-slim` | `sha256:2d49d876e96237d76de412761cf05dbfe5aee325cc4406a4d41d5824c5bb8beb` |
+| Go 构建 | `golang:1.26.5-bookworm` | `sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599` |
+| Node 构建 | `node:24.19.0-bookworm-slim` | `sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03` |
 | 运行时 | `debian:bookworm-slim` | `sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818` |
 
 这些 digest 在依赖升级时重新解析，并重新执行 amd64/arm64 构建与 smoke test。

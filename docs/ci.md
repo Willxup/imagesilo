@@ -7,6 +7,9 @@
 - `actions/checkout` 7.0.1
 - `actions/setup-go` 7.0.0
 - `actions/setup-node` 7.0.0
+- `docker/login-action` 4.6.0（仅 Release）
+
+以上 JavaScript Actions 均声明使用 Node.js 24 runtime。`actions/setup-node` 再从 `.node-version` 安装精确的 Node.js 24.19.0；Go 工具链由 `.go-version` 固定为 1.26.5。
 
 唯一的 `quality` job 执行 `make check e2e`，覆盖 Go、React、OpenAPI 生成一致性、Lint、类型检查、单元/集成测试和单 worker 浏览器闭环。该工作流不构建容器镜像、不运行容器 smoke，也不接触 GHCR；`quality` check 名称保持不变。
 

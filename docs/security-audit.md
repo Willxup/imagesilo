@@ -61,4 +61,4 @@
 
 公开 OCI manifest 为 `sha256:573233d00455ab6e8dad9d875ad0ede7f770436ce24bb05f6d21bc02fac053cc`；amd64 子 manifest 为 `sha256:ee410a57912c125234e5547520a1f5b38a253649cfeec88aec34d53903838ad8`，arm64 子 manifest 为 `sha256:a5437e2348e74a9aaa53e0ac7f685c379153d9183362651e1a88a077f9f9452d`。独立匿名 GHCR token 请求返回 HTTP 200，证明无需仓库或包权限即可拉取。
 
-本次唯一非阻断注记是固定版本 `docker/login-action` 仍声明 Node.js 20，GitHub Runner 已自动强制使用 Node.js 24；不影响镜像内容或运行时资源边界，后续依赖维护时升级其已审计 commit pin。
+2026-08-06 复核已将 `docker/login-action` 升级到声明 Node.js 24 runtime 的 4.6.0，并继续固定到已验证的完整 commit SHA。仓库内 `actions/checkout`、`actions/setup-go`、`actions/setup-node` 和 `docker/login-action` 的当前 pin 均声明 `node24`，原 Node.js 20 弃用提示已从配置源消除。
