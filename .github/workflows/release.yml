@@ -130,7 +130,7 @@ jobs:
           echo "platform_target=$platform_target" >> "$GITHUB_OUTPUT"
           echo "content_target=$content_target" >> "$GITHUB_OUTPUT"
       - name: Log in to GHCR
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -263,7 +263,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: Log in to GHCR
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
         with:
           registry: ghcr.io
           username: ${{ github.actor }}

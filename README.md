@@ -137,7 +137,7 @@ NFS and SMB are not supported. Do not run two ImageSilo containers against the s
 ### Prerequisites
 
 - Go 1.26.5
-- Node.js 26.5.0
+- Node.js 24.19.0
 - npm
 
 ### Build and Verify
