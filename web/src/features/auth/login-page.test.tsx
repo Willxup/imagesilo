@@ -22,5 +22,7 @@ describe('LoginPage', () => {
     expect(screen.getByRole('img', { name: 'ImageSilo' })).toBeInTheDocument()
     expect(await screen.findByLabelText('管理员邮箱')).toBeInTheDocument()
     expect(screen.getByLabelText('密码')).toBeInTheDocument()
+    expect(screen.getByRole('contentinfo')).toHaveTextContent(/© 2026ImageSilo·License/)
+    expect(screen.getByRole('link', { name: 'Version: dev' })).toHaveAttribute('href', 'https://github.com/Willxup/imagesilo/releases')
   })
 })

@@ -2554,13 +2554,29 @@ input[type="checkbox"]:disabled {
   display: flex;
   min-height: 100vh;
   min-height: 100dvh;
+  flex-direction: column;
+  overflow-x: hidden;
+  background: var(--login-backdrop);
+  isolation: isolate;
+}
+
+.login-page-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  min-height: 0;
+  flex: 1 0 auto;
   align-items: center;
   justify-content: flex-end;
-  overflow-x: hidden;
-  overflow-y: auto;
-  background: var(--login-backdrop);
-  padding: 76px clamp(40px, 6vw, 96px) 52px;
-  isolation: isolate;
+  padding: 72px clamp(40px, 6vw, 96px) clamp(12px, 3dvh, 28px);
+}
+
+.login-page > .app-footer {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  padding-top: 12px;
 }
 
 .login-page::before,
@@ -2643,7 +2659,7 @@ input[type="checkbox"]:disabled {
   border: 1px solid var(--login-card-border);
   border-radius: 24px;
   background: var(--login-card);
-  padding: 42px 40px 40px;
+  padding: clamp(28px, 5dvh, 42px) 40px clamp(28px, 5dvh, 40px);
   box-shadow: 0 24px 72px rgba(35, 43, 56, 0.2), 0 4px 18px rgba(35, 43, 56, 0.08);
   backdrop-filter: blur(24px);
 }
@@ -2691,7 +2707,7 @@ input[type="checkbox"]:disabled {
 }
 
 .login-form-title {
-  margin: 30px 0 0;
+  margin: clamp(20px, 4dvh, 30px) 0 0;
   color: var(--tail-text);
   font-size: 32px;
   font-weight: 600;
@@ -2699,7 +2715,7 @@ input[type="checkbox"]:disabled {
 }
 
 .login-form-copy {
-  margin: 8px 0 28px;
+  margin: 8px 0 clamp(20px, 4dvh, 28px);
   color: var(--tail-text-soft);
   font-size: 12px;
   line-height: 18px;
@@ -2821,10 +2837,10 @@ input[type="checkbox"]:disabled {
     min-height: 0;
   }
 
-  .login-page {
+  .login-page-content {
     align-items: center;
     justify-content: center;
-    padding: 92px 24px 40px;
+    padding: 92px 24px clamp(12px, 3dvh, 28px);
   }
 
   .login-page::before {
@@ -2847,7 +2863,8 @@ input[type="checkbox"]:disabled {
 
   .login-form-wrap {
     min-height: 0;
-    padding: 42px 36px 40px;
+    padding-right: 36px;
+    padding-left: 36px;
   }
 }
 
@@ -2923,9 +2940,9 @@ input[type="checkbox"]:disabled {
     top: 14px;
   }
 
-  .login-page {
+  .login-page-content {
     align-items: center;
-    padding: 64px 16px;
+    padding: 64px 16px clamp(8px, 2dvh, 16px);
   }
 
   .login-page::before {

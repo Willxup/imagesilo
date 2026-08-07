@@ -3,6 +3,7 @@ import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 
+import { AppFooter } from '../../components/app-footer'
 import { BrandLogo } from '../../components/brand-logo'
 import { Button } from '../../components/ui/button'
 import { DropdownItem, DropdownMenu } from '../../components/ui/dropdown-menu'
@@ -65,7 +66,7 @@ export function LoginPage() {
   }
 
   return (
-    <main className="login-page text-ink">
+    <div className="login-page text-ink">
       <div className="login-toolbar">
         <Button
           size="icon-sm"
@@ -96,37 +97,40 @@ export function LoginPage() {
         </DropdownMenu>
       </div>
 
-      <div className="login-shell">
-        <div className="login-form-wrap">
-          <form className="login-form" onSubmit={submit}>
-            <BrandLogo imageClassName="h-10 w-auto" />
-            <h1 className="login-form-title">{t('auth.signIn')}</h1>
-            <p className="login-form-copy">{t('auth.signInDescription')}</p>
+      <main className="login-page-content">
+        <div className="login-shell">
+          <div className="login-form-wrap">
+            <form className="login-form" onSubmit={submit}>
+              <BrandLogo imageClassName="h-10 w-auto" />
+              <h1 className="login-form-title">{t('auth.signIn')}</h1>
+              <p className="login-form-copy">{t('auth.signInDescription')}</p>
 
-            <label className="field-label" htmlFor="email">
-              {t('auth.email')}
-            </label>
-            <div className="field-shell">
-              <Icon name="mail" />
-              <Input id="email" type="email" autoComplete="username" maxLength={254} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('email')} />
-            </div>
+              <label className="field-label" htmlFor="email">
+                {t('auth.email')}
+              </label>
+              <div className="field-shell">
+                <Icon name="mail" />
+                <Input id="email" type="email" autoComplete="username" maxLength={254} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('email')} />
+              </div>
 
-            <label className="field-label" htmlFor="password">
-              {t('auth.password')}
-            </label>
-            <div className="field-shell">
-              <Icon name="lock" />
-              <Input id="password" type="password" autoComplete="current-password" maxLength={1024} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('password')} />
-            </div>
+              <label className="field-label" htmlFor="password">
+                {t('auth.password')}
+              </label>
+              <div className="field-shell">
+                <Icon name="lock" />
+                <Input id="password" type="password" autoComplete="current-password" maxLength={1024} required aria-invalid={Boolean(error)} aria-describedby={error ? 'login-error' : undefined} {...register('password')} />
+              </div>
 
-            {error ? <p id="login-error" role="alert" className="mt-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
-            <Button type="submit" disabled={formState.isSubmitting} className="mt-5 w-full bg-[var(--silo-gradient)] hover:opacity-90">
-              <span className="login-submit-label">{formState.isSubmitting ? t('common.working') : t('auth.signIn')}</span>
-              <Icon name="arrowRight" />
-            </Button>
-          </form>
+              {error ? <p id="login-error" role="alert" className="mt-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
+              <Button type="submit" disabled={formState.isSubmitting} className="mt-5 w-full bg-[var(--silo-gradient)] hover:opacity-90">
+                <span className="login-submit-label">{formState.isSubmitting ? t('common.working') : t('auth.signIn')}</span>
+                <Icon name="arrowRight" />
+              </Button>
+            </form>
+          </div>
         </div>
-      </div>
-    </main>
+      </main>
+      <AppFooter />
+    </div>
   )
 }
