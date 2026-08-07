@@ -6,11 +6,17 @@ export const tinyWebP = Buffer.from('UklGRiIAAABXRUJQVlA4IBYAAAAwAQCdASoBAAEADsD
 export async function login(page: Page) {
   await page.goto('/admin/login')
   await expect(page.getByRole('contentinfo')).toBeVisible()
-  const viewport = await page.evaluate(() => ({
-    clientHeight: document.documentElement.clientHeight,
-    scrollHeight: document.documentElement.scrollHeight,
-  }))
-  expect(viewport.scrollHeight).toBeLessThanOrEqual(viewport.clientHeight)
+  const viewport = await page.evaluate(() => {
+    const loginPage = document.querySelector<HTMLElement>('.login-page')
+    return {
+      documentClientHeight: document.documentElement.clientHeight,
+      documentScrollHeight: document.documentElement.scrollHeight,
+      loginClientHeight: loginPage?.clientHeight ?? 0,
+      loginScrollHeight: loginPage?.scrollHeight ?? 0,
+    }
+  })
+  expect(viewport.documentScrollHeight).toBeLessThanOrEqual(viewport.documentClientHeight)
+  expect(viewport.loginScrollHeight).toBeLessThanOrEqual(viewport.loginClientHeight)
   await page.getByLabel('管理员邮箱').fill('e2e@example.com')
   await page.getByLabel('密码').fill('imagesilo-e2e-password')
   await page.getByRole('button', { name: '登录' }).click()

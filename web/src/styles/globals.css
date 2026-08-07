@@ -2555,7 +2555,7 @@ input[type="checkbox"]:disabled {
   min-height: 100vh;
   min-height: 100dvh;
   flex-direction: column;
-  overflow-x: hidden;
+  overflow-x: clip;
   background: var(--login-backdrop);
   isolation: isolate;
 }
@@ -2588,7 +2588,7 @@ input[type="checkbox"]:disabled {
 }
 
 .login-page::before {
-  inset: -8%;
+  inset: 0 -8%;
   background: url('/brand/imagesilo-login-mosaic.svg') center / cover no-repeat;
   filter: saturate(0.92) contrast(0.98);
 }
