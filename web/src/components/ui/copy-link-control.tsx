@@ -22,8 +22,18 @@ function initialFormat(): LinkFormat {
   return formats.includes(value as LinkFormat) ? (value as LinkFormat) : 'direct'
 }
 
-export function CopyLinkControl({ image, compact = false, onCopied }: { image: LinkableImage; compact?: boolean; onCopied?: (format: LinkFormat) => void }) {
-  return <CopyLinksControl images={[image]} compact={compact} onCopied={onCopied} />
+export function CopyLinkControl({
+  image,
+  compact = false,
+  menuAlign = 'right',
+  onCopied,
+}: {
+  image: LinkableImage
+  compact?: boolean
+  menuAlign?: 'left' | 'right'
+  onCopied?: (format: LinkFormat) => void
+}) {
+  return <CopyLinksControl images={[image]} compact={compact} menuAlign={menuAlign} onCopied={onCopied} />
 }
 
 export function CopyLinksControl({
@@ -31,12 +41,14 @@ export function CopyLinksControl({
   compact = false,
   label,
   ariaLabel,
+  menuAlign = 'right',
   onCopied,
 }: {
   images: readonly LinkableImage[]
   compact?: boolean
   label?: string
   ariaLabel?: (formatLabel: string) => string
+  menuAlign?: 'left' | 'right'
   onCopied?: (format: LinkFormat) => void
 }) {
   const { t } = useTranslation()
@@ -88,7 +100,7 @@ export function CopyLinksControl({
       <DropdownMenu
         open={open}
         onOpenChange={setOpen}
-        align="right"
+        align={menuAlign}
         className="copy-format-menu"
         trigger={
           <button

@@ -329,7 +329,7 @@ function UploadResult({ image }: { image: Image }) {
         })}
       </p>
       <div className="mt-3">
-        <CopyLinkControl image={image} />
+        <CopyLinkControl image={image} menuAlign="left" />
       </div>
     </div>
   )

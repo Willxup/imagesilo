@@ -17,11 +17,21 @@ test('desktop administrator completes upload, management, alias, settings, theme
   await uploadTinyImage(page, imageName)
   await page.getByRole('button', { name: '复制直链', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain('/image/')
+  await page.setViewportSize({ width: 1024, height: 768 })
   await page.getByRole('button', { name: /选择链接格式/ }).click()
-  await expect(page.getByRole('button', { name: '复制 Markdown', exact: true })).toBeVisible()
+  const uploadFormatMenu = page.locator('.upload-queue .ui-dropdown-panel')
+  await expect(uploadFormatMenu).toBeVisible()
+  const [uploadContentBox, uploadMenuBox] = await Promise.all([
+    page.locator('.tail-content').boundingBox(),
+    uploadFormatMenu.boundingBox(),
+  ])
+  expect(uploadContentBox).not.toBeNull()
+  expect(uploadMenuBox).not.toBeNull()
+  expect(uploadMenuBox!.x).toBeGreaterThanOrEqual(uploadContentBox!.x)
   await page.getByRole('button', { name: '复制 Markdown', exact: true }).click()
   await page.getByRole('button', { name: /复制.*MD/ }).click()
   await expect.poll(() => readClipboard(page)).toContain('![')
+  await page.setViewportSize({ width: 1280, height: 720 })
 
   await page.getByRole('link', { name: '图片管理' }).click()
   const thumbnail = page.getByRole('img', { name: imageName })

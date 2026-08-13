@@ -136,5 +136,10 @@ describe('UploadPage', () => {
           '![second.jpg](http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ac)',
       )
     })
+
+    const firstUploadRow = screen.getByText('first.jpg').closest('article')!
+    const rowFormatButton = firstUploadRow.querySelector<HTMLButtonElement>('.copy-link-caret')!
+    fireEvent.click(rowFormatButton)
+    expect(rowFormatButton.closest('.ui-dropdown-root')?.querySelector('.ui-dropdown-panel')).toHaveClass('is-left')
   })
 })
