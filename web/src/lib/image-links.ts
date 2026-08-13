@@ -16,6 +16,10 @@ export function imageLinks(image: LinkableImage): Record<LinkFormat, string> {
   }
 }
 
+export function imageLinksText(images: readonly LinkableImage[], format: LinkFormat) {
+  return images.map((image) => imageLinks(image)[format]).join('\n')
+}
+
 export async function copyText(value: string) {
   await navigator.clipboard.writeText(value)
 }

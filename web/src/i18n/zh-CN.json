@@ -90,6 +90,9 @@
     "visibility": "可见性",
     "visibilityDefault": "使用系统默认值",
     "uploadCount": "上传 {{count}} 个文件",
+    "copyCompleted": "复制全部成功链接",
+    "copyCompletedFormat": "复制 {{count}} 张成功图片的{{format}}",
+    "completedLinks": "{{count}} 张图片已上传成功，可一次复制全部链接。",
     "empty": "还没有待上传文件。",
     "progress": "上传进度 {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · 节省 {{percent}}%",
@@ -165,6 +168,8 @@
     "copyLinksHelp": "主按钮复制当前格式，右侧菜单可切换直链、Markdown、BBCode 或 HTML。",
     "readyLink": "链接已就绪",
     "copySelectedFormat": "复制{{format}}",
+    "copySelectedLinks": "复制链接",
+    "copySelectedLinksFormat": "复制选中 {{count}} 张图片的{{format}}",
     "chooseLinkFormat": "选择链接格式",
     "linkFormat": {
       "direct": "复制直链",
@@ -188,6 +193,10 @@
     "uploadedAt": "上传时间",
     "processing": "处理摘要",
     "aliases": "历史路径",
+    "aliasPath": "新历史路径",
+    "addAlias": "添加历史路径",
+    "aliasSaving": "正在添加…",
+    "aliasCreateFailed": "历史路径添加失败，请检查路径格式或冲突。",
     "noAliases": "这张图片没有历史路径映射。"
   },
   "visibility": {
@@ -339,6 +348,7 @@
   },
   "toast": {
     "linkCopied": "已复制{{format}}",
+    "linksCopied": "已复制 {{count}} 张图片的{{format}}",
     "linkCopiedSimple": "链接已复制",
     "copyFailed": "复制失败，请检查浏览器剪贴板权限。",
     "operationFailed": "操作失败，请重试。",

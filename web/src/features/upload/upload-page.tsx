@@ -1,15 +1,16 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { ComponentCard } from '../../components/ui/component-card'
-import { CopyLinkControl } from '../../components/ui/copy-link-control'
+import { CopyLinkControl, CopyLinksControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
 import { Select } from '../../components/ui/select'
 import { ApiError, apiRequest, uploadForm } from '../../lib/api-client'
+import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { formatBytes } from '../../lib/image-links'
 import type { Image, SystemInfo, Visibility } from '../../lib/api-types'
 
@@ -25,15 +26,22 @@ type UploadItem = {
   error?: string
 }
 
+const visibilityStorageKey = 'imagesilo_upload_visibility'
+
 export function UploadPage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const systemQuery = useQuery({ queryKey: ['system'], queryFn: () => apiRequest<SystemInfo>('/api/v1/system') })
   const [items, setItems] = useState<UploadItem[]>([])
-  const [visibility, setVisibility] = useState<Visibility | 'default'>('default')
+  const [visibility, setVisibility] = useState<Visibility | 'default'>(storedVisibility)
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const completedImages = useMemo(() => items.flatMap((item) => (item.result ? [item.result] : [])), [items])
+
+  useEffect(() => {
+    writeLocalStorage(visibilityStorageKey, visibility)
+  }, [visibility])
 
   function addFiles(files: File[]) {
     const supported = files.filter(isSupportedImageFile)
@@ -233,6 +241,16 @@ export function UploadPage() {
         </ComponentCard>
       </form>
       {error ? <p className="mt-5 rounded-xl bg-danger-soft px-4 py-3 text-danger">{error}</p> : null}
+      {!uploading && items.length > 1 && completedImages.length > 0 ? (
+        <Card size="sm" className="mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
+          <p className="text-sm text-muted-foreground">{t('upload.completedLinks', { count: completedImages.length })}</p>
+          <CopyLinksControl
+            images={completedImages}
+            label={t('upload.copyCompleted')}
+            ariaLabel={(format) => t('upload.copyCompletedFormat', { count: completedImages.length, format })}
+          />
+        </Card>
+      ) : null}
       {items.length === 0 ? (
         <div className="empty-state">
           <div>
@@ -325,4 +343,9 @@ function savingsPercent(image: Image) {
 function isSupportedImageFile(file: File) {
   if (['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(file.type)) return true
   return file.type === '' && /\.(?:jpe?g|png|webp|gif)$/i.test(file.name)
+}
+
+function storedVisibility(): Visibility | 'default' {
+  const value = readLocalStorage(visibilityStorageKey)
+  return value === 'public' || value === 'private' ? value : 'default'
 }

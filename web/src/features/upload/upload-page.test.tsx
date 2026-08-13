@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
@@ -15,6 +15,9 @@ vi.mock('../../lib/api-client', async (importOriginal) => {
 describe('UploadPage', () => {
   afterEach(cleanup)
   beforeEach(() => {
+    window.localStorage.clear()
+    vi.mocked(apiRequest).mockReset()
+    vi.mocked(uploadForm).mockReset()
     vi.mocked(apiRequest).mockResolvedValue({
       processingConcurrency: 1,
       maxBatchCount: 20,
@@ -64,5 +67,63 @@ describe('UploadPage', () => {
     fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [file] } })
     fireEvent.click(await screen.findByRole('button', { name: /上传 1 个文件/ }))
     expect(await screen.findByText('Image exceeds the configured maximum.')).toBeInTheDocument()
+  })
+
+  it('restores upload visibility and copies all successful links', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    window.localStorage.setItem('imagesilo_upload_visibility', 'private')
+    vi.mocked(uploadForm).mockImplementation(async (_path, body) => {
+      const file = body.get('file') as File
+      const suffix = file.name === 'first.jpg' ? 'ab' : 'ac'
+      return {
+        id: `019c1234-5678-7abc-8def-0123456789${suffix}`,
+        originalName: file.name,
+        mimeType: 'image/jpeg',
+        extension: '.jpg',
+        width: 1,
+        height: 1,
+        sourceSize: 4,
+        storedSize: 4,
+        sourceSha256: 'a'.repeat(64),
+        storedSha256: 'a'.repeat(64),
+        processingSummary: {
+          action: 'preserve',
+          sourceFormat: 'jpeg',
+          storedFormat: 'jpeg',
+          preserved: true,
+          compressionEnabled: false,
+          conversionEnabled: false,
+        },
+        visibility: 'private',
+        standardUrl: `/image/019c1234-5678-7abc-8def-0123456789${suffix}`,
+        thumbnailUrl: `/api/v1/images/019c1234-5678-7abc-8def-0123456789${suffix}/thumbnail`,
+        createdAt: '2026-08-13T00:00:00Z',
+      }
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <UploadPage />
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByLabelText('可见性')).toHaveTextContent('私密')
+    const files = [
+      new File(['jpeg'], 'first.jpg', { type: 'image/jpeg' }),
+      new File(['jpeg'], 'second.jpg', { type: 'image/jpeg' }),
+    ]
+    fireEvent.change(screen.getByLabelText('选择图片文件'), { target: { files } })
+    fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+
+    const copyAll = await screen.findByRole('button', { name: '复制 2 张成功图片的直链' })
+    expect(vi.mocked(uploadForm).mock.calls.every(([, body]) => body.get('visibility') === 'private')).toBe(true)
+    fireEvent.click(copyAll)
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ab\n' +
+          'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ac',
+      )
+    })
   })
 })

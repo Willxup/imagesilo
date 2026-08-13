@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
-import { copyText, imageLinks, type LinkableImage, type LinkFormat } from '../../lib/image-links'
+import { copyText, imageLinksText, type LinkableImage, type LinkFormat } from '../../lib/image-links'
 import { Button } from './button'
 import { DropdownItem, DropdownMenu } from './dropdown-menu'
 import { Icon, type IconName } from './icon'
@@ -23,21 +23,42 @@ function initialFormat(): LinkFormat {
 }
 
 export function CopyLinkControl({ image, compact = false, onCopied }: { image: LinkableImage; compact?: boolean; onCopied?: (format: LinkFormat) => void }) {
+  return <CopyLinksControl images={[image]} compact={compact} onCopied={onCopied} />
+}
+
+export function CopyLinksControl({
+  images,
+  compact = false,
+  label,
+  ariaLabel,
+  onCopied,
+}: {
+  images: readonly LinkableImage[]
+  compact?: boolean
+  label?: string
+  ariaLabel?: (formatLabel: string) => string
+  onCopied?: (format: LinkFormat) => void
+}) {
   const { t } = useTranslation()
   const [format, setFormat] = useState<LinkFormat>(initialFormat)
   const [open, setOpen] = useState(false)
   const [copying, setCopying] = useState(false)
-  const links = imageLinks(image)
+  const count = images.length
 
   useEffect(() => {
     writeLocalStorage(storageKey, format)
   }, [format])
 
   async function copy() {
+    if (count === 0) return
     setCopying(true)
     try {
-      await copyText(links[format])
-      toast.success(t('toast.linkCopied', { format: t(`images.linkFormatShort.${format}`) }))
+      await copyText(imageLinksText(images, format))
+      toast.success(
+        count === 1
+          ? t('toast.linkCopied', { format: t(`images.linkFormatShort.${format}`) })
+          : t('toast.linksCopied', { count, format: t(`images.linkFormatShort.${format}`) }),
+      )
       onCopied?.(format)
     } catch {
       toast.error(t('toast.copyFailed'))
@@ -53,12 +74,16 @@ export function CopyLinkControl({ image, compact = false, onCopied }: { image: L
         size={compact ? 'xs' : 'sm'}
         variant="outline"
         type="button"
-        disabled={copying}
-        aria-label={t('images.copySelectedFormat', { format: t(`images.linkFormatShort.${format}`) })}
+        disabled={copying || count === 0}
+        aria-label={ariaLabel?.(t(`images.linkFormatShort.${format}`)) ?? (
+          count === 1
+            ? t('images.copySelectedFormat', { format: t(`images.linkFormatShort.${format}`) })
+            : t('images.copySelectedLinksFormat', { count, format: t(`images.linkFormatShort.${format}`) })
+        )}
         onClick={() => void copy()}
       >
         <Icon name={copying ? 'loader' : 'copy'} className={copying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-        <span className="image-action-label">{t('common.copy')}</span>
+        <span className="image-action-label">{label ?? t('common.copy')}</span>
       </Button>
       <DropdownMenu
         open={open}

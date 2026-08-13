@@ -14,10 +14,14 @@ import { Icon } from '../../components/ui/icon'
 import { Input } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { apiRequest } from '../../lib/api-client'
+import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { formatBytes } from '../../lib/image-links'
 import type { MigrationImage, MigrationImageBatchResult, MigrationImageList } from '../../lib/api-types'
 
 type ViewMode = 'grid' | 'list'
+
+const viewModeStorageKey = 'imagesilo_migration_view_mode'
+const filtersOpenStorageKey = 'imagesilo_migration_filters_open'
 
 export function MigrationImagePage() {
   const { t } = useTranslation()
@@ -26,8 +30,8 @@ export function MigrationImagePage() {
   const searchKey = searchParams.toString()
   const filters = useMemo(() => normalizedFilterQuery(new URLSearchParams(searchKey)), [searchKey])
   const filterValues = useMemo(() => new URLSearchParams(filters), [filters])
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [filtersOpen, setFiltersOpen] = useState(() => readLocalStorage(filtersOpenStorageKey) === 'true')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (readLocalStorage(viewModeStorageKey) === 'list' ? 'list' : 'grid'))
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteSnapshot, setDeleteSnapshot] = useState<string[]>([])
@@ -84,6 +88,14 @@ export function MigrationImagePage() {
   useEffect(() => {
     setSelected(new Set())
   }, [searchKey])
+
+  useEffect(() => {
+    writeLocalStorage(filtersOpenStorageKey, String(filtersOpen))
+  }, [filtersOpen])
+
+  useEffect(() => {
+    writeLocalStorage(viewModeStorageKey, viewMode)
+  }, [viewMode])
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()

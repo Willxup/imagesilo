@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -10,9 +10,10 @@ import { ComponentCard } from '../../components/ui/component-card'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { CopyLinkControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
+import { Input } from '../../components/ui/input'
 import { apiRequest } from '../../lib/api-client'
 import { formatBytes } from '../../lib/image-links'
-import type { DeleteImageResult, ImageDetail, Visibility, WebPConversionResult } from '../../lib/api-types'
+import type { DeleteImageResult, ImageAlias, ImageDetail, Visibility, WebPConversionResult } from '../../lib/api-types'
 
 export function ImageDetailPage() {
   const { t } = useTranslation()
@@ -24,6 +25,7 @@ export function ImageDetailPage() {
   const [leaving, setLeaving] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
+  const [aliasPath, setAliasPath] = useState('')
 
   useEffect(() => () => {
     if (returnTimer.current !== null) window.clearTimeout(returnTimer.current)
@@ -73,6 +75,28 @@ export function ImageDetailPage() {
     },
     onError: () => toast.error(t('toast.webpFailed'), { id: 'detail-conversion' }),
   })
+  const aliasCreation = useMutation({
+    mutationFn: (path: string) =>
+      apiRequest<ImageAlias>('/api/v1/aliases', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path, imageId, source: 'admin' }),
+      }),
+    onMutate: () => toast.loading(t('images.aliasSaving'), { id: 'detail-alias' }),
+    onSuccess: async () => {
+      setAliasPath('')
+      await queryClient.invalidateQueries({ queryKey: ['image', imageId] })
+      await queryClient.invalidateQueries({ queryKey: ['aliases'] })
+      toast.success(t('toast.aliasCreated'), { id: 'detail-alias' })
+    },
+    onError: () => toast.error(t('images.aliasCreateFailed'), { id: 'detail-alias' }),
+  })
+
+  function createAlias(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+    const path = aliasPath.trim()
+    if (path) aliasCreation.mutate(path)
+  }
 
   if (query.isLoading) return <p className="text-muted-foreground">{t('common.loading')}</p>
   if (query.isError || !query.data) return <p className="text-danger">{t('images.detailFailed')}</p>
@@ -113,6 +137,22 @@ export function ImageDetailPage() {
           </dl>
         </ComponentCard>
         <ComponentCard title={t('images.aliases')}>
+          <form className="mb-4 flex flex-col gap-2 sm:flex-row" onSubmit={createAlias}>
+            <label className="sr-only" htmlFor="detail-alias-path">{t('images.aliasPath')}</label>
+            <Input
+              className="min-w-0 flex-1"
+              id="detail-alias-path"
+              value={aliasPath}
+              onChange={(event) => setAliasPath(event.target.value)}
+              placeholder="/i/2026/08/example.jpg"
+              maxLength={2048}
+              required
+            />
+            <Button type="submit" variant="outline" disabled={!aliasPath.trim() || aliasCreation.isPending}>
+              <Icon name={aliasCreation.isPending ? 'loader' : 'plus'} className={aliasCreation.isPending ? 'animate-spin' : ''} />
+              {aliasCreation.isPending ? t('images.aliasSaving') : t('images.addAlias')}
+            </Button>
+          </form>
           {image.aliases.length === 0 ? <p className="text-muted-foreground">{t('images.noAliases')}</p> : <ul className="grid gap-3">{image.aliases.map((alias) => <li className="rounded-xl bg-canvas p-3" key={alias.id}><code className="break-all text-sm">{alias.path}</code><p className="mt-1 text-xs text-muted-foreground">{alias.source}</p></li>)}</ul>}
         </ComponentCard>
       </div>

@@ -57,7 +57,7 @@ ImageSilo is a Docker-first image host built as one Go process with SQLite and l
 Docker is the supported production runtime. The following starts a local evaluation instance with a named volume:
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.2.0
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:latest
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -87,7 +87,7 @@ Enable the capability in `docker-compose.yaml` and mount `/data/migrations` writ
 ```yaml
 services:
   imagesilo:
-    image: ghcr.io/willxup/imagesilo:v0.2.0
+    image: ghcr.io/willxup/imagesilo:latest
     environment:
       IMAGESILO_MIGRATION_MUTATIONS: "true"
     volumes:

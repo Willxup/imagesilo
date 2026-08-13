@@ -90,6 +90,9 @@
     "visibility": "Visibility",
     "visibilityDefault": "Use system default",
     "uploadCount": "Upload {{count}} files",
+    "copyCompleted": "Copy all successful links",
+    "copyCompletedFormat": "Copy {{format}} for {{count}} successful images",
+    "completedLinks": "{{count}} images uploaded successfully. Copy all links at once.",
     "empty": "No files are queued.",
     "progress": "Upload progress {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · saved {{percent}}%",
@@ -165,6 +168,8 @@
     "copyLinksHelp": "The main button copies the current format; use the menu to switch between direct, Markdown, BBCode, and HTML.",
     "readyLink": "Link ready",
     "copySelectedFormat": "Copy {{format}}",
+    "copySelectedLinks": "Copy links",
+    "copySelectedLinksFormat": "Copy {{format}} for {{count}} selected images",
     "chooseLinkFormat": "Choose link format",
     "linkFormat": {
       "direct": "Copy direct link",
@@ -188,6 +193,10 @@
     "uploadedAt": "Uploaded at",
     "processing": "Processing summary",
     "aliases": "Historical paths",
+    "aliasPath": "New historical path",
+    "addAlias": "Add historical path",
+    "aliasSaving": "Adding…",
+    "aliasCreateFailed": "Unable to add the historical path. Check its format or conflicts.",
     "noAliases": "This image has no historical path aliases."
   },
   "visibility": {
@@ -339,6 +348,7 @@
   },
   "toast": {
     "linkCopied": "Copied {{format}}",
+    "linksCopied": "Copied {{format}} for {{count}} images",
     "linkCopiedSimple": "Link copied",
     "copyFailed": "Copy failed. Check browser clipboard permission.",
     "operationFailed": "The operation failed. Try again.",
