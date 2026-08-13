@@ -118,11 +118,22 @@ describe('UploadPage', () => {
 
     const copyAll = await screen.findByRole('button', { name: '复制 2 张成功图片的直链' })
     expect(vi.mocked(uploadForm).mock.calls.every(([, body]) => body.get('visibility') === 'private')).toBe(true)
+    expect(copyAll.closest('[data-slot="card"]')).toHaveClass('overflow-visible')
     fireEvent.click(copyAll)
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
         'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ab\n' +
           'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ac',
+      )
+    })
+
+    fireEvent.click(screen.getAllByRole('button', { name: /选择链接格式/ })[0])
+    fireEvent.click(screen.getByRole('button', { name: '复制 Markdown' }))
+    fireEvent.click(screen.getByRole('button', { name: '复制 2 张成功图片的MD' }))
+    await waitFor(() => {
+      expect(writeText).toHaveBeenLastCalledWith(
+        '![first.jpg](http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ab)\n' +
+          '![second.jpg](http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ac)',
       )
     })
   })

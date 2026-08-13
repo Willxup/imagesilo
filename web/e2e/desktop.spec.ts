@@ -17,6 +17,11 @@ test('desktop administrator completes upload, management, alias, settings, theme
   await uploadTinyImage(page, imageName)
   await page.getByRole('button', { name: '复制直链', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain('/image/')
+  await page.getByRole('button', { name: /选择链接格式/ }).click()
+  await expect(page.getByRole('button', { name: '复制 Markdown', exact: true })).toBeVisible()
+  await page.getByRole('button', { name: '复制 Markdown', exact: true }).click()
+  await page.getByRole('button', { name: /复制.*MD/ }).click()
+  await expect.poll(() => readClipboard(page)).toContain('![')
 
   await page.getByRole('link', { name: '图片管理' }).click()
   const thumbnail = page.getByRole('img', { name: imageName })
@@ -27,7 +32,7 @@ test('desktop administrator completes upload, management, alias, settings, theme
   await expect(page).toHaveURL(/\/admin\/images\/[^/]+$/)
 
   await page.getByRole('button', { name: '选择链接格式' }).click()
-  await page.getByRole('button', { name: '复制 Markdown' }).click()
+  await page.getByRole('button', { name: '复制 Markdown', exact: true }).click()
   await page.getByRole('button', { name: /复制.*MD/ }).click()
   await expect.poll(() => readClipboard(page)).toContain('![')
 

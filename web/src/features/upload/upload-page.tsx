@@ -242,7 +242,7 @@ export function UploadPage() {
       </form>
       {error ? <p className="mt-5 rounded-xl bg-danger-soft px-4 py-3 text-danger">{error}</p> : null}
       {!uploading && items.length > 1 && completedImages.length > 0 ? (
-        <Card size="sm" className="mt-5 flex flex-wrap items-center justify-between gap-3 p-4">
+        <Card size="sm" className="mt-5 flex flex-wrap items-center justify-between gap-3 overflow-visible p-4">
           <p className="text-sm text-muted-foreground">{t('upload.completedLinks', { count: completedImages.length })}</p>
           <CopyLinksControl
             images={completedImages}
@@ -274,7 +274,7 @@ function UploadRow({ item, uploading, onCancel, onRetry }: { item: UploadItem; u
   const { t } = useTranslation()
   return (
     <article>
-      <Card size="sm" className="p-4">
+      <Card size="sm" className="overflow-visible p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
             <span className="nav-icon-wrap text-cyan">
