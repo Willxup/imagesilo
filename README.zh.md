@@ -57,7 +57,7 @@ ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 
 Docker 是唯一支持的生产运行方式。以下命令使用 named volume 启动一个本地体验实例：
 
 ```bash
-export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:v0.2.0
+export IMAGESILO_IMAGE=ghcr.io/willxup/imagesilo:latest
 
 docker pull "$IMAGESILO_IMAGE"
 docker volume create imagesilo-data
@@ -87,7 +87,7 @@ docker run --detach \
 ```yaml
 services:
   imagesilo:
-    image: ghcr.io/willxup/imagesilo:v0.2.0
+    image: ghcr.io/willxup/imagesilo:latest
     environment:
       IMAGESILO_MIGRATION_MUTATIONS: "true"
     volumes:

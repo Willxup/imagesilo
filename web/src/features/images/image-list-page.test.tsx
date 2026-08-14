@@ -35,10 +35,21 @@ const image = {
   createdAt: '2026-07-29T00:00:00Z',
 } as Image
 
+const secondImage = {
+  ...image,
+  id: '019c1234-5678-7abc-8def-0123456789ac',
+  originalName: 'second.png',
+  mimeType: 'image/png',
+  extension: '.png',
+  standardUrl: '/image/019c1234-5678-7abc-8def-0123456789ac',
+  thumbnailUrl: '/api/v1/images/019c1234-5678-7abc-8def-0123456789ac/thumbnail',
+} as Image
+
 describe('ImageListPage', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
+    window.localStorage.clear()
     vi.mocked(apiRequest).mockReset()
     vi.mocked(apiRequest).mockResolvedValue({ items: [image] } as ImageList)
   })
@@ -94,6 +105,57 @@ describe('ImageListPage', () => {
       const today = new Date()
       const expected = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
       expect(new URL(String(matching?.[0]), 'http://imagesilo.test').searchParams.get('createdFrom')).toBe(expected)
+    })
+  })
+
+  it('copies selected image links as one newline-delimited payload', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })
+    vi.mocked(apiRequest).mockResolvedValue({ items: [image, secondImage] } as ImageList)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ImageListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    fireEvent.click(await screen.findByRole('checkbox', { name: '选择图片 sample.jpg' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: '选择图片 second.png' }))
+    fireEvent.click(screen.getByRole('button', { name: '复制选中 2 张图片的直链' }))
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ab\n' +
+          'http://localhost:3000/image/019c1234-5678-7abc-8def-0123456789ac',
+      )
+    })
+  })
+
+  it('restores and updates local library preferences', async () => {
+    window.localStorage.setItem('imagesilo_image_view_mode', 'list')
+    window.localStorage.setItem('imagesilo_image_filters_open', 'true')
+    window.localStorage.setItem('imagesilo_image_advanced_filters_open', 'true')
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <ImageListPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
+    await screen.findByRole('img', { name: 'sample.jpg' })
+    expect(document.querySelector('.image-list')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '高级筛选' })).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.getByRole('button', { name: '收起筛选' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '网格' }))
+    fireEvent.click(screen.getByRole('button', { name: '收起筛选' }))
+    await waitFor(() => {
+      expect(window.localStorage.getItem('imagesilo_image_view_mode')).toBe('grid')
+      expect(window.localStorage.getItem('imagesilo_image_filters_open')).toBe('false')
     })
   })
 })

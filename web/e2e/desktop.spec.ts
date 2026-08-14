@@ -17,17 +17,53 @@ test('desktop administrator completes upload, management, alias, settings, theme
   await uploadTinyImage(page, imageName)
   await page.getByRole('button', { name: '复制直链', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain('/image/')
+  await page.setViewportSize({ width: 1024, height: 768 })
+  await page.getByRole('button', { name: /选择链接格式/ }).click()
+  const uploadFormatMenu = page.locator('.upload-queue .ui-dropdown-panel')
+  await expect(uploadFormatMenu).toBeVisible()
+  const [uploadContentBox, uploadMenuBox] = await Promise.all([
+    page.locator('.tail-content').boundingBox(),
+    uploadFormatMenu.boundingBox(),
+  ])
+  expect(uploadContentBox).not.toBeNull()
+  expect(uploadMenuBox).not.toBeNull()
+  expect(uploadMenuBox!.x).toBeGreaterThanOrEqual(uploadContentBox!.x)
+  await page.getByRole('button', { name: '复制 Markdown', exact: true }).click()
+  await page.getByRole('button', { name: /复制.*MD/ }).click()
+  await expect.poll(() => readClipboard(page)).toContain('![')
+  await page.setViewportSize({ width: 1280, height: 720 })
 
   await page.getByRole('link', { name: '图片管理' }).click()
   const thumbnail = page.getByRole('img', { name: imageName })
   await expect(thumbnail).toBeVisible()
   await expect(thumbnail).toHaveAttribute('src', /\/api\/v1\/images\/.+\/thumbnail/)
+  const imageCheckbox = page.getByRole('checkbox', { name: `选择图片 ${imageName}` })
+  await imageCheckbox.check()
+  const [batchCopyButtonBox, batchFormatButtonBox] = await Promise.all([
+    page.locator('.floating-batch-toolbar .copy-link-main').boundingBox(),
+    page.locator('.floating-batch-toolbar .copy-link-caret').boundingBox(),
+  ])
+  expect(batchCopyButtonBox).not.toBeNull()
+  expect(batchFormatButtonBox).not.toBeNull()
+  expect(batchFormatButtonBox!.height).toBe(batchCopyButtonBox!.height)
+  await page.locator('.floating-batch-toolbar .copy-link-caret').click()
+  const batchFormatMenu = page.locator('.floating-batch-toolbar .copy-format-menu')
+  await expect(batchFormatMenu).toBeVisible()
+  await page.waitForTimeout(200)
+  const [batchToolbarBox, batchFormatMenuBox] = await Promise.all([
+    page.locator('.floating-batch-toolbar').boundingBox(),
+    batchFormatMenu.boundingBox(),
+  ])
+  expect(batchToolbarBox).not.toBeNull()
+  expect(batchFormatMenuBox).not.toBeNull()
+  expect(batchFormatMenuBox!.y + batchFormatMenuBox!.height).toBeLessThanOrEqual(batchToolbarBox!.y)
+  await imageCheckbox.uncheck()
   await page.locator('article').filter({ hasText: imageName }).click()
   await expect(page.getByRole('heading', { name: imageName })).toBeVisible()
   await expect(page).toHaveURL(/\/admin\/images\/[^/]+$/)
 
   await page.getByRole('button', { name: '选择链接格式' }).click()
-  await page.getByRole('button', { name: '复制 Markdown' }).click()
+  await page.getByRole('button', { name: '复制 Markdown', exact: true }).click()
   await page.getByRole('button', { name: /复制.*MD/ }).click()
   await expect.poll(() => readClipboard(page)).toContain('![')
 

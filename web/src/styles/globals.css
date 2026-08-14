@@ -2432,6 +2432,11 @@ input[type="checkbox"]:disabled {
   height: 9px;
 }
 
+.floating-batch-actions .copy-link-control[data-compact],
+.floating-batch-actions .copy-link-control[data-compact] .copy-link-caret {
+  height: 36px;
+}
+
 .copy-link-main {
   border-top-right-radius: 0 !important;
   border-bottom-right-radius: 0 !important;
@@ -2487,6 +2492,11 @@ input[type="checkbox"]:disabled {
 .image-card-actions .copy-format-menu {
   top: auto;
   bottom: calc(100% + 8px);
+}
+
+.floating-batch-actions .copy-format-menu {
+  top: auto;
+  bottom: calc(100% + 20px);
 }
 
 @keyframes ui-menu-in {
@@ -3036,7 +3046,7 @@ input[type="checkbox"]:disabled {
 
   .floating-batch-actions {
     min-width: 0;
-    overflow-x: auto;
+    overflow: visible;
   }
 
   .floating-batch-actions [data-slot="button"] span {

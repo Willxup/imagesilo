@@ -35,6 +35,7 @@ describe('MigrationImagePage', () => {
   afterEach(cleanup)
 
   beforeEach(() => {
+    window.localStorage.clear()
     vi.mocked(apiRequest).mockReset()
   })
 
@@ -98,6 +99,24 @@ describe('MigrationImagePage', () => {
     await waitFor(() => {
       const refresh = vi.mocked(apiRequest).mock.calls.find(([path]) => String(path).endsWith('/refresh'))
       expect(refresh?.[1]?.method).toBe('POST')
+    })
+  })
+
+  it('restores and updates local migration library preferences', async () => {
+    window.localStorage.setItem('imagesilo_migration_view_mode', 'list')
+    window.localStorage.setItem('imagesilo_migration_filters_open', 'true')
+    vi.mocked(apiRequest).mockResolvedValue({ items: [image], skippedFiles: 0, mutationsEnabled: false } as MigrationImageList)
+    renderPage()
+
+    await screen.findByRole('img', { name: '旧图.jpg' })
+    expect(document.querySelector('.image-list')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '收起筛选' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: '网格' }))
+    fireEvent.click(screen.getByRole('button', { name: '收起筛选' }))
+    await waitFor(() => {
+      expect(window.localStorage.getItem('imagesilo_migration_view_mode')).toBe('grid')
+      expect(window.localStorage.getItem('imagesilo_migration_filters_open')).toBe('false')
     })
   })
 })

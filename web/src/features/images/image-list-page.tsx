@@ -9,16 +9,21 @@ import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
 import { Checkbox } from '../../components/ui/checkbox'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
-import { CopyLinkControl } from '../../components/ui/copy-link-control'
+import { CopyLinkControl, CopyLinksControl } from '../../components/ui/copy-link-control'
 import { DatePicker } from '../../components/ui/date-picker'
 import { Icon } from '../../components/ui/icon'
 import { Input } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { apiRequest } from '../../lib/api-client'
+import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { formatBytes } from '../../lib/image-links'
 import type { BatchOperationResult, Image, ImageList, Visibility } from '../../lib/api-types'
 
 type ViewMode = 'grid' | 'list'
+
+const viewModeStorageKey = 'imagesilo_image_view_mode'
+const filtersOpenStorageKey = 'imagesilo_image_filters_open'
+const advancedFiltersOpenStorageKey = 'imagesilo_image_advanced_filters_open'
 
 export function ImageListPage() {
   const { t, i18n } = useTranslation()
@@ -28,11 +33,13 @@ export function ImageListPage() {
   const searchKey = searchParams.toString()
   const filters = useMemo(() => normalizedFilterQuery(new URLSearchParams(searchKey)), [searchKey])
   const filterValues = useMemo(() => new URLSearchParams(filters), [filters])
-  const [filtersOpen, setFiltersOpen] = useState(false)
-  const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [filtersOpen, setFiltersOpen] = useState(() => storedBoolean(filtersOpenStorageKey))
+  const [advancedOpen, setAdvancedOpen] = useState(
+    () => hasAdvancedParameters(searchParams) || storedBoolean(advancedFiltersOpenStorageKey),
+  )
   const [createdFrom, setCreatedFrom] = useState(() => dateParameterValue(searchParams.get('createdFrom')))
   const [createdTo, setCreatedTo] = useState(() => dateParameterValue(searchParams.get('createdTo')))
-  const [viewMode, setViewMode] = useState<ViewMode>('grid')
+  const [viewMode, setViewMode] = useState<ViewMode>(storedViewMode)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const [deleteSnapshot, setDeleteSnapshot] = useState<string[]>([])
@@ -47,6 +54,7 @@ export function ImageListPage() {
     getNextPageParam: (page) => page.nextCursor || undefined,
   })
   const images = useMemo(() => query.data?.pages.flatMap((page) => page.items) ?? [], [query.data])
+  const selectedImages = useMemo(() => images.filter((image) => selected.has(image.id)), [images, selected])
   const visibilityMutation = useMutation({
     mutationFn: ({ id, visibility }: { id: string; visibility: Visibility }) =>
       apiRequest<void>(`/api/v1/images/${id}/visibility`, {
@@ -100,8 +108,20 @@ export function ImageListPage() {
     setSelected(new Set())
     setCreatedFrom(dateParameterValue(current.get('createdFrom')))
     setCreatedTo(dateParameterValue(current.get('createdTo')))
-    setAdvancedOpen(hasAdvancedParameters(current))
+    if (hasAdvancedParameters(current)) setAdvancedOpen(true)
   }, [searchKey])
+
+  useEffect(() => {
+    writeLocalStorage(filtersOpenStorageKey, String(filtersOpen))
+  }, [filtersOpen])
+
+  useEffect(() => {
+    writeLocalStorage(advancedFiltersOpenStorageKey, String(advancedOpen))
+  }, [advancedOpen])
+
+  useEffect(() => {
+    writeLocalStorage(viewModeStorageKey, viewMode)
+  }, [viewMode])
 
   function showBatchToast(result: BatchOperationResult, id: string) {
     const failures = result.items.filter((item) => item.status === 'error' || item.status === 'not_found' || item.status === 'cleanup_pending')
@@ -341,6 +361,12 @@ export function ImageListPage() {
             {t('images.selected', { count: selected.size })}
           </span>
           <div className="floating-batch-actions">
+            <CopyLinksControl
+              images={selectedImages}
+              compact
+              label={t('images.copySelectedLinks')}
+              ariaLabel={(format) => t('images.copySelectedLinksFormat', { count: selectedImages.length, format })}
+            />
             <Button
               size="xs"
               variant="outline"
@@ -605,4 +631,12 @@ function bytesToMiB(raw: string | null) {
   const bytes = Number(raw)
   if (!Number.isFinite(bytes) || bytes <= 0) return ''
   return String(Math.round((bytes / 1024 / 1024) * 10) / 10)
+}
+
+function storedBoolean(key: string) {
+  return readLocalStorage(key) === 'true'
+}
+
+function storedViewMode(): ViewMode {
+  return readLocalStorage(viewModeStorageKey) === 'list' ? 'list' : 'grid'
 }
