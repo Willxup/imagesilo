@@ -3046,7 +3046,7 @@ input[type="checkbox"]:disabled {
 
   .floating-batch-actions {
     min-width: 0;
-    overflow-x: auto;
+    overflow: visible;
   }
 
   .floating-batch-actions [data-slot="button"] span {

@@ -18,6 +18,15 @@ test('mobile administrator can login, upload, manage, and copy a link', async ({
   await card.getByRole('button', { name: '改为公开' }).click()
   await expect(card.getByText('公开', { exact: true })).toBeVisible()
 
+  const imageCheckbox = card.getByRole('checkbox', { name: `选择图片 ${imageName}` })
+  await imageCheckbox.check()
+  const batchToolbar = page.locator('.floating-batch-toolbar')
+  await batchToolbar.locator('.copy-link-caret').click()
+  await page.getByRole('button', { name: '复制 BBCode', exact: true }).click()
+  await batchToolbar.getByRole('button', { name: /复制选中 1 张图片的BBCode/ }).click()
+  await expect.poll(() => readClipboard(page)).toContain('[img]')
+  await imageCheckbox.uncheck()
+
   const menuButton = page.getByRole('button', { name: '打开菜单' })
   await menuButton.focus()
   await menuButton.press('Enter')
@@ -27,6 +36,6 @@ test('mobile administrator can login, upload, manage, and copy a link', async ({
   const migrationPath = '/i/2026/08/migration-mobile.webp'
   const migrationCard = page.locator('article').filter({ hasText: migrationPath })
   await expect(migrationCard).toBeVisible()
-  await migrationCard.getByRole('button', { name: '复制直链', exact: true }).click()
+  await migrationCard.getByRole('button', { name: '复制BBCode', exact: true }).click()
   await expect.poll(() => readClipboard(page)).toContain(migrationPath)
 })
