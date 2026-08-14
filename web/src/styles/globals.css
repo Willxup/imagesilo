@@ -2432,6 +2432,11 @@ input[type="checkbox"]:disabled {
   height: 9px;
 }
 
+.floating-batch-actions .copy-link-control[data-compact],
+.floating-batch-actions .copy-link-control[data-compact] .copy-link-caret {
+  height: 36px;
+}
+
 .copy-link-main {
   border-top-right-radius: 0 !important;
   border-bottom-right-radius: 0 !important;

@@ -37,6 +37,16 @@ test('desktop administrator completes upload, management, alias, settings, theme
   const thumbnail = page.getByRole('img', { name: imageName })
   await expect(thumbnail).toBeVisible()
   await expect(thumbnail).toHaveAttribute('src', /\/api\/v1\/images\/.+\/thumbnail/)
+  const imageCheckbox = page.getByRole('checkbox', { name: `选择图片 ${imageName}` })
+  await imageCheckbox.check()
+  const [batchCopyButtonBox, batchFormatButtonBox] = await Promise.all([
+    page.locator('.floating-batch-toolbar .copy-link-main').boundingBox(),
+    page.locator('.floating-batch-toolbar .copy-link-caret').boundingBox(),
+  ])
+  expect(batchCopyButtonBox).not.toBeNull()
+  expect(batchFormatButtonBox).not.toBeNull()
+  expect(batchFormatButtonBox!.height).toBe(batchCopyButtonBox!.height)
+  await imageCheckbox.uncheck()
   await page.locator('article').filter({ hasText: imageName }).click()
   await expect(page.getByRole('heading', { name: imageName })).toBeVisible()
   await expect(page).toHaveURL(/\/admin\/images\/[^/]+$/)
