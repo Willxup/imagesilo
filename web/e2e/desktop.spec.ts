@@ -46,6 +46,17 @@ test('desktop administrator completes upload, management, alias, settings, theme
   expect(batchCopyButtonBox).not.toBeNull()
   expect(batchFormatButtonBox).not.toBeNull()
   expect(batchFormatButtonBox!.height).toBe(batchCopyButtonBox!.height)
+  await page.locator('.floating-batch-toolbar .copy-link-caret').click()
+  const batchFormatMenu = page.locator('.floating-batch-toolbar .copy-format-menu')
+  await expect(batchFormatMenu).toBeVisible()
+  await page.waitForTimeout(200)
+  const [batchToolbarBox, batchFormatMenuBox] = await Promise.all([
+    page.locator('.floating-batch-toolbar').boundingBox(),
+    batchFormatMenu.boundingBox(),
+  ])
+  expect(batchToolbarBox).not.toBeNull()
+  expect(batchFormatMenuBox).not.toBeNull()
+  expect(batchFormatMenuBox!.y + batchFormatMenuBox!.height).toBeLessThanOrEqual(batchToolbarBox!.y)
   await imageCheckbox.uncheck()
   await page.locator('article').filter({ hasText: imageName }).click()
   await expect(page.getByRole('heading', { name: imageName })).toBeVisible()
