@@ -1,5 +1,5 @@
 import { createPortal } from 'react-dom'
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 
 import { Icon } from './icon'
 
@@ -11,6 +11,7 @@ type ModalProps = {
   children?: ReactNode
   footer?: ReactNode
   size?: 'sm' | 'md' | 'lg'
+  rootClassName?: string
   closeLabel: string
 }
 
@@ -21,6 +22,10 @@ const sizeClasses = {
 }
 
 const modalStack: string[] = []
+// Overlapping exits share the original background state, regardless of close order.
+const backgroundLocks = new Map<HTMLElement, { count: number; inert: boolean; ariaHidden: string | null }>()
+let originalOverflow = ''
+let originalFocus: HTMLElement | null = null
 const focusableSelector = [
   'a[href]',
   'button:not([disabled])',
@@ -30,7 +35,7 @@ const focusableSelector = [
   '[tabindex]:not([tabindex="-1"])',
 ].join(',')
 
-export function Modal({ open, onClose, title, description, children, footer, size = 'md', closeLabel }: ModalProps) {
+export function Modal({ open, onClose, title, description, children, footer, size = 'md', closeLabel, rootClassName = '' }: ModalProps) {
   const titleId = useId()
   const descriptionId = useId()
   const modalId = useId()
@@ -41,7 +46,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     onCloseRef.current = onClose
     openRef.current = open
   }, [onClose, open])
@@ -57,26 +62,29 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     const timer = window.setTimeout(() => {
       setMounted(false)
       setClosing(false)
-    }, 180)
+    }, window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 180)
     return () => window.clearTimeout(timer)
   }, [mounted, open])
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!mounted) return
-    modalStack.push(modalId)
     const previousFocus = document.activeElement as HTMLElement | null
-    const previousOverflow = document.body.style.overflow
+    if (modalStack.length === 0) {
+      originalOverflow = document.body.style.overflow
+      originalFocus = previousFocus
+    }
+    modalStack.push(modalId)
     document.body.style.overflow = 'hidden'
     const background = Array.from(document.body.children)
-      .filter((element) => element !== rootRef.current)
-      .map((element) => ({
-        element: element as HTMLElement,
-        inert: Boolean((element as HTMLElement).inert),
-        ariaHidden: element.getAttribute('aria-hidden'),
-      }))
-    for (const item of background) {
-      item.element.inert = true
-      item.element.setAttribute('aria-hidden', 'true')
+      .filter((element) => element !== rootRef.current) as HTMLElement[]
+    for (const element of background) {
+      const lock = backgroundLocks.get(element) ?? {
+        count: 0, inert: Boolean(element.inert), ariaHidden: element.getAttribute('aria-hidden'),
+      }
+      lock.count += 1
+      backgroundLocks.set(element, lock)
+      element.inert = true
+      element.setAttribute('aria-hidden', 'true')
     }
     const timer = window.setTimeout(() => {
       const candidates = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
@@ -113,16 +121,25 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       window.clearTimeout(timer)
+      const wasTop = modalStack.at(-1) === modalId
       const stackIndex = modalStack.lastIndexOf(modalId)
       if (stackIndex >= 0) modalStack.splice(stackIndex, 1)
-      document.body.style.overflow = previousOverflow
       document.removeEventListener('keydown', handleKeyDown)
-      for (const item of background) {
-        item.element.inert = item.inert
-        if (item.ariaHidden === null) item.element.removeAttribute('aria-hidden')
-        else item.element.setAttribute('aria-hidden', item.ariaHidden)
+      for (const element of background) {
+        const lock = backgroundLocks.get(element)
+        if (!lock || --lock.count > 0) continue
+        element.inert = lock.inert
+        if (lock.ariaHidden === null) element.removeAttribute('aria-hidden')
+        else element.setAttribute('aria-hidden', lock.ariaHidden)
+        backgroundLocks.delete(element)
       }
-      previousFocus?.focus()
+      if (modalStack.length === 0) {
+        document.body.style.overflow = originalOverflow
+        if (originalFocus?.isConnected) originalFocus.focus()
+        originalFocus = null
+      } else if (wasTop && previousFocus?.isConnected) {
+        previousFocus.focus()
+      }
     }
   }, [modalId, mounted])
 
@@ -131,7 +148,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return createPortal(
     <div
       ref={rootRef}
-      className="ui-modal-root"
+      className={`ui-modal-root ${rootClassName}`}
       data-state={closing || !open ? 'closed' : 'open'}
       role="presentation"
       onMouseDown={(event) => {
