@@ -4,21 +4,21 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg border border-transparent text-sm font-medium whitespace-nowrap transition-all outline-none select-none focus-visible:ring-4 focus-visible:ring-brand-500/12 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[10px] border border-transparent text-sm font-medium whitespace-nowrap outline-none select-none focus-visible:ring-4 focus-visible:ring-brand-500/12 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "[background:var(--silo-gradient)] text-white shadow-theme-xs hover:opacity-90",
-        brandSolid: "bg-brand-500 text-white shadow-theme-xs hover:bg-brand-600",
+        default: "[background:var(--silo-gradient)] text-white hover:opacity-90",
+        brandSolid: "[background-color:var(--accent)] [color:var(--accent-foreground)] hover:opacity-90",
         outline:
-          "border-gray-300 bg-white text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:border-gray-600 dark:hover:bg-gray-700 dark:hover:text-white",
+          "[border-color:var(--tail-border)] [background-color:var(--tail-surface)] [color:var(--tail-text)] hover:[background-color:var(--tail-surface-soft)]",
         secondary:
-          "border-gray-200 bg-gray-100 text-gray-700 hover:bg-gray-200 dark:border-gray-800 dark:bg-white/[0.03] dark:text-gray-300 dark:hover:bg-white/[0.06]",
+          "[background-color:var(--tail-surface-soft)] [color:var(--tail-text)] hover:[background-color:var(--tail-brand-soft)]",
         ghost:
-          "text-gray-500 hover:bg-gray-100 hover:text-gray-700 dark:text-gray-300 dark:hover:bg-gray-800 dark:hover:text-white",
+          "[color:var(--tail-text-soft)] hover:[background-color:var(--tail-surface-soft)] hover:[color:var(--tail-text)]",
         destructive:
-          "bg-error-500 text-white shadow-theme-xs hover:bg-error-600 focus-visible:ring-error-500/15",
-        link: "h-auto border-0 p-0 text-brand-500 shadow-none hover:text-brand-600 hover:underline",
+          "[background-color:var(--color-danger)] text-white hover:opacity-90 focus-visible:ring-error-500/15",
+        link: "h-auto border-0 p-0 [color:var(--accent)] shadow-none hover:underline",
       },
       size: {
         default: "h-10 px-4",

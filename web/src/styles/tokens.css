@@ -1,0 +1,188 @@
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+@theme {
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Segoe UI Variable", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", "Microsoft YaHei", Arial, sans-serif;
+
+  --text-theme-xs: 12px;
+  --text-theme-xs--line-height: 18px;
+  --text-theme-sm: 14px;
+  --text-theme-sm--line-height: 20px;
+  --text-theme-xl: 20px;
+  --text-theme-xl--line-height: 30px;
+  --text-title-sm: 30px;
+  --text-title-sm--line-height: 38px;
+  --text-title-md: 36px;
+  --text-title-md--line-height: 44px;
+
+  --color-brand-25: #f4f8ff;
+  --color-brand-50: #edf4ff;
+  --color-brand-100: #dbe8ff;
+  --color-brand-200: #bdd3ff;
+  --color-brand-300: #8fb4ff;
+  --color-brand-400: #5d8dff;
+  --color-brand-500: #2563eb;
+  --color-brand-600: #1d4ed8;
+  --color-brand-700: #1e40af;
+  --color-brand-800: #1e3a8a;
+  --color-brand-900: #172554;
+  --color-brand-950: #0b1739;
+
+  --color-gray-25: #fcfcfd;
+  --color-gray-50: #f9fafb;
+  --color-gray-100: #f2f4f7;
+  --color-gray-200: #e4e7ec;
+  --color-gray-300: #d0d5dd;
+  --color-gray-400: #98a2b3;
+  --color-gray-500: #667085;
+  --color-gray-600: #475467;
+  --color-gray-700: #344054;
+  --color-gray-800: #1d2939;
+  --color-gray-900: #101828;
+  --color-gray-950: #0c111d;
+  --color-gray-dark: #1a2231;
+
+  --color-success-50: #ecfdf3;
+  --color-success-500: #12b76a;
+  --color-success-600: #039855;
+  --color-error-50: #fef3f2;
+  --color-error-500: #f04438;
+  --color-error-600: #d92d20;
+  --color-warning-50: #fffaeb;
+  --color-warning-500: #f79009;
+  --color-blue-light-50: #f0f9ff;
+  --color-blue-light-500: #0ba5ec;
+
+  --color-background: #f9fafb;
+  --color-foreground: #101828;
+  --color-card: #ffffff;
+  --color-card-foreground: #1d2939;
+  --color-primary: #2563eb;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #f2f4f7;
+  --color-secondary-foreground: #344054;
+  --color-muted: #f2f4f7;
+  --color-muted-foreground: #667085;
+  --color-border: #e4e7ec;
+  --color-input: #d0d5dd;
+  --color-ring: #2563eb;
+  --color-destructive: #d92d20;
+
+  --color-canvas: #f9fafb;
+  --color-panel: #ffffff;
+  --color-ink: #101828;
+  --color-line: #e4e7ec;
+  --color-accent-soft: #edf4ff;
+  --color-cyan: #08a7c5;
+  --color-green: #12b76a;
+  --color-danger: #d92d20;
+  --color-danger-soft: #fef3f2;
+
+  --shadow-theme-xs: 0 1px 2px 0 rgba(16, 24, 40, 0.05);
+  --shadow-theme-sm: 0 1px 3px 0 rgba(16, 24, 40, 0.1), 0 1px 2px 0 rgba(16, 24, 40, 0.06);
+  --shadow-theme-md: 0 4px 8px -2px rgba(16, 24, 40, 0.1), 0 2px 4px -2px rgba(16, 24, 40, 0.06);
+  --shadow-theme-lg: 0 12px 16px -4px rgba(16, 24, 40, 0.08), 0 4px 6px -2px rgba(16, 24, 40, 0.03);
+}
+
+:root {
+  color-scheme: light;
+  --tail-page: #f2f4f4;
+  --tail-surface: #ffffff;
+  --tail-card: #ffffff;
+  --tail-surface-soft: #f7f9f9;
+  --tail-text: #17262d;
+  --tail-text-soft: #5e6e75;
+  --tail-border: #e3e9e9;
+  --tail-border-strong: #c7d1d3;
+  --tail-brand-soft: #eaf1ff;
+  --silo-gradient: linear-gradient(135deg, #2563eb, #08a7c5 55%, #12b76a);
+  --accent: #2466e8;
+  --accent-foreground: #ffffff;
+  --success: #07795f;
+  --control-border: #c7d4d7;
+  --control-hover: #edf3f4;
+  --control-pressed: #e2ebed;
+  --control-text: #344c56;
+  --control-shadow: 0 1px 2px #16354008, inset 0 1px 0 #ffffffb3;
+  --overlay-shadow: 0 12px 36px #112e3b1c, 0 2px 6px #112e3b08;
+  --layer-menu: 120;
+  --layer-toast: 150;
+  --layer-modal: 200;
+  --layer-select: 240;
+  --silo-ease: cubic-bezier(.22, 1, .36, 1);
+  --motion-fast: 140ms;
+  --motion-normal: 220ms;
+  --motion-reveal: 340ms;
+  --color-background: var(--tail-page);
+  --color-foreground: var(--tail-text);
+  --color-card: var(--tail-card);
+  --color-card-foreground: var(--tail-text);
+  --color-primary: var(--accent);
+  --color-primary-foreground: var(--accent-foreground);
+  --color-secondary: var(--tail-surface-soft);
+  --color-secondary-foreground: var(--tail-text);
+  --color-muted: var(--tail-surface-soft);
+  --color-muted-foreground: var(--tail-text-soft);
+  --color-border: var(--tail-border);
+  --color-input: var(--tail-border-strong);
+  --color-ring: var(--accent);
+  --color-canvas: var(--tail-page);
+  --color-panel: var(--tail-card);
+  --color-ink: var(--tail-text);
+  --color-line: var(--tail-border);
+  --color-accent-soft: var(--tail-brand-soft);
+  --color-cyan: #087f9f;
+  --color-green: var(--success);
+  --color-danger: #bf3544;
+  --color-danger-soft: #fff1f2;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --tail-page: #101719;
+  --tail-surface: #19252c;
+  --tail-card: #19252c;
+  --tail-surface-soft: #213039;
+  --tail-text: #e6edef;
+  --tail-text-soft: #a1b0b7;
+  --tail-border: #2c3a41;
+  --tail-border-strong: #48606a;
+  --tail-brand-soft: #283d56;
+  --accent: #80abff;
+  --accent-foreground: #10223c;
+  --success: #5ec6a7;
+  --control-border: #435762;
+  --control-hover: #2b3c46;
+  --control-pressed: #344a56;
+  --control-text: #d2dfe5;
+  --control-shadow: 0 1px 2px #00000018, inset 0 1px 0 #ffffff05;
+  --overlay-shadow: 0 16px 40px #00000040, 0 2px 6px #00000020;
+  --color-danger: #ff8790;
+  --color-danger-soft: #42292e;
+}
+
+* { box-sizing: border-box; border-color: var(--tail-border); }
+html { scrollbar-gutter: stable; min-width: 320px; min-height: 100%; background: var(--tail-page); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI Variable', 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif; font-size: 16px; }
+body { min-width: 320px; min-height: 100vh; margin: 0; background: var(--tail-page); color: var(--tail-text); font-size: 14px; }
+button, input, select, textarea { font: inherit; }
+button, a, summary { -webkit-tap-highlight-color: transparent; touch-action: manipulation; }
+button:not(:disabled), [role="button"]:not(:disabled), summary { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+::selection { background: color-mix(in srgb, var(--accent) 25%, transparent); }
+[data-slot="button"] { font-size: 14px; font-weight: 550; transition: background-color var(--motion-fast), border-color var(--motion-fast), color var(--motion-fast), box-shadow var(--motion-fast), opacity var(--motion-fast); }
+[data-slot="button"]:active:not(:disabled) { transition-duration: 70ms; }
+[data-slot="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+[data-slot="card"], .surface-panel { border-color: var(--tail-border); background: var(--tail-card); color: var(--tail-text); box-shadow: none; }
+input[type="checkbox"] { accent-color: var(--accent); }
+.sr-only[type="file"] { position: absolute !important; width: 1px !important; height: 1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap; }
+[data-sonner-toaster] { --width: min(340px, calc(100vw - 32px)) !important; z-index: var(--layer-toast) !important; }
+[data-sonner-toaster] [data-sonner-toast] { border: 1px solid var(--tail-border) !important; border-left: 3px solid var(--accent) !important; border-radius: 12px !important; background: var(--tail-surface) !important; color: var(--tail-text) !important; box-shadow: 0 15px 35px #11273625 !important; }
+[data-sonner-toaster] [data-sonner-toast][data-type="success"] { border-left-color: var(--success) !important; }
+[data-sonner-toaster] [data-sonner-toast][data-type="error"] { border-left-color: var(--color-danger) !important; }
+[data-sonner-toaster] [data-description] { color: var(--tail-text-soft) !important; }
+.brand-logo-surface { display: inline-flex; align-items: center; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.brand-logo-dark { display: none; }
+.brand-logo-dark-composite { position: relative; aspect-ratio: 1377 / 385; overflow: hidden; }
+.brand-logo-dark-composite img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
+.brand-logo-dark-wordmark { clip-path: inset(0 0 0 24%); filter: invert(1); }
+:root[data-theme="dark"] .brand-logo-light { display: none; }
+:root[data-theme="dark"] .brand-logo-dark { display: inline-block; }
