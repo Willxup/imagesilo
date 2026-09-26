@@ -19,7 +19,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RouterProvider router={router} />
-        <Toaster closeButton expand richColors duration={4000} position="top-right" visibleToasts={4} toastOptions={{ className: 'imagesilo-toast' }} />
+        <Toaster closeButton richColors duration={4000} position="top-right" visibleToasts={2} toastOptions={{ className: 'imagesilo-toast' }} />
       </AuthProvider>
     </QueryClientProvider>
   )
