@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 
 import { cn } from '../../lib/utils'
 import { Icon } from './icon'
@@ -35,6 +35,8 @@ export function DatePicker({
   className,
 }: DatePickerProps) {
   const rootRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const returnFocus = () => rootRef.current?.querySelector<HTMLButtonElement>('.ui-date-trigger')?.focus()
   const selected = parseDate(value)
   const minimum = parseDate(min ?? '')
   const [open, setOpen] = useState(false)
@@ -46,7 +48,7 @@ export function DatePicker({
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setOpen(false)
+      if (event.key === 'Escape') { setOpen(false); returnFocus() }
     }
     document.addEventListener('pointerdown', closeOutside)
     document.addEventListener('keydown', closeOnEscape)
@@ -54,6 +56,28 @@ export function DatePicker({
       document.removeEventListener('pointerdown', closeOutside)
       document.removeEventListener('keydown', closeOnEscape)
     }
+  }, [open])
+
+  useLayoutEffect(() => {
+    if (!open) return
+    const position = () => {
+      const root = rootRef.current
+      const panel = panelRef.current
+      if (!root || !panel) return
+      panel.style.maxHeight = ''
+      const rect = root.getBoundingClientRect()
+      const x = Math.max(12, Math.min(rect.left, window.innerWidth - panel.offsetWidth - 12))
+      const above = Math.max(0, rect.top - 20)
+      const below = Math.max(0, window.innerHeight - rect.bottom - 20)
+      const opensAbove = below < panel.offsetHeight && above > below
+      panel.style.left = `${x - rect.left}px`
+      panel.style.top = opensAbove ? 'auto' : 'calc(100% + 8px)'
+      panel.style.bottom = opensAbove ? 'calc(100% + 8px)' : 'auto'
+      panel.style.maxHeight = `${Math.max(44, opensAbove ? above : below)}px`
+    }
+    position()
+    window.addEventListener('resize', position)
+    return () => window.removeEventListener('resize', position)
   }, [open])
 
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth])
@@ -67,6 +91,7 @@ export function DatePicker({
     onChange(toDateValue(date))
     setVisibleMonth(startOfMonth(date))
     setOpen(false)
+    returnFocus()
   }
 
   function showPicker() {
@@ -92,7 +117,7 @@ export function DatePicker({
         <Icon name="chevronDown" />
       </button>
       {open ? (
-        <div className="ui-date-popover" role="dialog" aria-label={ariaLabel}>
+        <div ref={panelRef} className="ui-date-popover" role="dialog" aria-label={ariaLabel}>
           <div className="ui-date-header">
             <button type="button" aria-label={previousMonthLabel} onClick={() => setVisibleMonth((month) => addMonths(month, -1))}><Icon name="chevronLeft" /></button>
             <strong>{monthFormatter.format(visibleMonth)}</strong>
@@ -124,7 +149,7 @@ export function DatePicker({
           </div>
           <div className="ui-date-footer">
             <button type="button" onClick={() => selectDate(new Date())} disabled={Boolean(minimum && startOfDay(new Date()) < startOfDay(minimum))}>{todayLabel}</button>
-            <button type="button" onClick={() => { onChange(''); setOpen(false) }} disabled={!value}>{clearLabel}</button>
+            <button type="button" onClick={() => { onChange(''); setOpen(false); returnFocus() }} disabled={!value}>{clearLabel}</button>
           </div>
         </div>
       ) : null}
