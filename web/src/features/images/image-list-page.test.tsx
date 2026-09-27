@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
@@ -58,15 +58,14 @@ describe('ImageListPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ImageListPage />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
       </QueryClientProvider>,
     )
     const preview = await screen.findByRole('img', { name: 'sample.jpg' })
     expect(preview).toHaveAttribute('src', image.thumbnailUrl)
     expect(preview).not.toHaveAttribute('src', image.standardUrl)
 
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }))
     fireEvent.change(screen.getByLabelText('搜索'), { target: { value: 'legacy/sample' } })
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
     await waitFor(() => {
@@ -84,13 +83,12 @@ describe('ImageListPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ImageListPage />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
       </QueryClientProvider>,
     )
     await screen.findByRole('img', { name: 'sample.jpg' })
 
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }))
     const advanced = screen.getByRole('button', { name: '高级筛选' })
     fireEvent.click(advanced)
     expect(advanced).toHaveAttribute('aria-expanded', 'true')
@@ -115,9 +113,7 @@ describe('ImageListPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ImageListPage />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
       </QueryClientProvider>,
     )
 
@@ -140,9 +136,7 @@ describe('ImageListPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <MemoryRouter>
-          <ImageListPage />
-        </MemoryRouter>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
       </QueryClientProvider>,
     )
 
