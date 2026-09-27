@@ -54,7 +54,7 @@ describe('SettingsPage', () => {
         </AuthContext.Provider>
       </QueryClientProvider>,
     )
-    expect(await screen.findByText('管理员资料')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: '管理员资料' })).toBeInTheDocument()
     expect(screen.queryByText('系统概览')).not.toBeInTheDocument()
     expect(await screen.findByLabelText('启用同格式压缩')).not.toBeChecked()
     expect(screen.getByLabelText('将 JPEG 和 PNG 转为 WebP')).not.toBeChecked()

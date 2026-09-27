@@ -57,6 +57,7 @@ describe('MigrationImagePage', () => {
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: '打开迁移图片 /i/2026/08/旧图.jpg' })).toHaveAttribute('href', image.standardUrl)
 
+    fireEvent.click(screen.getByRole('button', { name: '筛选' }))
     fireEvent.change(screen.getByLabelText('搜索'), { target: { value: '2026/08' } })
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
     await waitFor(() => {

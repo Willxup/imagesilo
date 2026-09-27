@@ -1,3 +1,4 @@
+import { PreviewImage } from '../../components/ui/preview-image'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -6,7 +7,6 @@ import { toast } from 'sonner'
 
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
-import { Card } from '../../components/ui/card'
 import { Checkbox } from '../../components/ui/checkbox'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { CopyLinkControl } from '../../components/ui/copy-link-control'
@@ -137,10 +137,11 @@ export function MigrationImagePage() {
     <section className={selected.size > 0 ? 'has-floating-batch' : ''}>
       <div className="page-heading-row">
         <div>
+          <p className="page-kicker">{t('migrations.eyebrow')}</p>
           <h1 className="page-title">{t('migrations.title')}</h1>
           <p className="page-description">{t('migrations.description')}</p>
         </div>
-        <div className="library-toolbar">
+        <div className="library-tools">
           <Button
             className="filter-toggle"
             size="xs"
@@ -204,7 +205,8 @@ export function MigrationImagePage() {
         </p>
       ) : null}
 
-      <form className={`filter-panel mt-5 ${filtersOpen ? 'is-open' : ''}`} key={filters} onSubmit={applyFilters}>
+      <form className={`filter-panel mt-5 ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} key={filters} onSubmit={applyFilters}>
+        <div className="filter-panel-inner">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <Icon name="filter" className="h-4 w-4 text-cyan" />
           {t('images.filters')}
@@ -235,6 +237,7 @@ export function MigrationImagePage() {
             <Icon name="refresh" />
             {t('images.resetFilters')}
           </Button>
+        </div>
         </div>
       </form>
 
@@ -338,10 +341,9 @@ function MigrationImageCard({
 }) {
   const { t } = useTranslation()
   return (
-    <article>
-      <Card size="sm" className={list ? 'image-card gap-0 py-0 sm:flex-row' : 'image-card gap-0 py-0'}>
+    <article className={`image-card-clickable migration-tile ${list ? 'is-list' : ''} ${selected ? 'is-selected' : ''}`}>
         <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'}>
-          <img
+          <PreviewImage
             className={list ? 'aspect-video h-full w-full object-contain' : 'aspect-[4/3] h-full w-full object-cover'}
             src={image.standardUrl}
             alt={image.originalName}
@@ -353,7 +355,7 @@ function MigrationImageCard({
             </label>
           ) : null}
         </div>
-        <div className="min-w-0 flex-1 p-4">
+        <div className="image-card-info">
           <div className="image-card-title-row">
             <h2 className="truncate text-sm font-semibold text-ink" title={image.originalName}>
               {image.originalName}
@@ -369,7 +371,7 @@ function MigrationImageCard({
           <p className="mt-1 text-xs text-muted-foreground">
             {image.extension.replace('.', '').toUpperCase()} · {formatBytes(image.storedSize)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{new Date(image.modifiedAt).toLocaleString()}</p>
+          {list ? <p className="mt-1 text-xs text-muted-foreground">{new Date(image.modifiedAt).toLocaleString()}</p> : null}
           <div className="image-card-actions migration-image-actions mt-3">
             <CopyLinkControl image={image} compact />
             <Button asChild size="xs" variant="outline">
@@ -385,7 +387,6 @@ function MigrationImageCard({
             ) : null}
           </div>
         </div>
-      </Card>
     </article>
   )
 }

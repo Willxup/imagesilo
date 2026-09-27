@@ -144,6 +144,7 @@ export function SettingsPage() {
 
   return (
     <section>
+      <p className="page-kicker">{t('settings.eyebrow')}</p>
       <h1 className="page-title">{t('settings.title')}</h1>
       <p className="page-description">{t('settings.description')}</p>
       {settingsQuery.isError ? (
@@ -151,6 +152,15 @@ export function SettingsPage() {
           {t('settings.loadFailed')}
         </p>
       ) : null}
+
+      <div className="settings-layout">
+      <nav className="settings-section-nav" aria-label={t('settings.sectionNav')}>
+        <a href="#settings-profile">{t('settings.profile')}</a>
+        <a href="#settings-defaults">{t('settings.defaultsSection')}</a>
+        <a href="#settings-security">{t('settings.securitySection')}</a>
+      </nav>
+      <div className="settings-content">
+      <section className="settings-section" id="settings-profile">
 
       {session ? (
         <form key={`${session.displayName}:${session.email}`} noValidate onSubmit={updateProfile}>
@@ -174,7 +184,9 @@ export function SettingsPage() {
           </ComponentCard>
         </form>
       ) : null}
+      </section>
 
+      <section className="settings-section" id="settings-defaults">
       <ComponentCard className="mt-6" title={t('settings.defaultVisibility')} description={t('settings.defaultVisibilityHelp')}>
         {settingsQuery.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
         {settingsQuery.data ? (
@@ -266,7 +278,9 @@ export function SettingsPage() {
           </ComponentCard>
         </form>
       ) : null}
+      </section>
 
+      <section className="settings-section" id="settings-security">
       <form noValidate onSubmit={changePassword}>
         <ComponentCard className="mt-6" title={t('settings.changePassword')}>
           <div className="grid gap-4 sm:grid-cols-2">
@@ -304,6 +318,9 @@ export function SettingsPage() {
           </Button>
         </ComponentCard>
       </form>
+      </section>
+      </div>
+      </div>
     </section>
   )
 }
