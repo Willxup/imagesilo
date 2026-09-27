@@ -41,7 +41,14 @@
     "lightweight": "Lightweight runtime",
     "selfHosted": "Self-hosted boundary",
     "directDelivery": "Fast direct delivery",
-    "signInDescription": "Enter your ImageSilo administration console."
+    "signInDescription": "Enter your ImageSilo administration console.",
+    "storyEyebrow": "YOUR IMAGES, YOUR SPACE",
+    "storyTitleFirst": "Keep the moment.",
+    "storyTitleSecond": "Share it freely.",
+    "storyDescription": "From collecting to sharing, keep your images in a space you control.",
+    "welcome": "Welcome back.",
+    "formDescription": "Sign in to keep organizing your images and ideas.",
+    "brandFooter": "Lightweight self-hosting · original files and direct links"
   },
   "setup": {
     "title": "Set up ImageSilo",
@@ -56,9 +63,12 @@
     "failed": "Setup failed. Check the fields or confirm that this instance has not already been initialized."
   },
   "nav": {
+    "account": "Account menu",
+    "more": "More",
+    "allPages": "All pages",
     "primary": "Primary navigation",
     "console": "IMAGE CONSOLE",
-    "workspace": "Workspace",
+    "workspace": "Images",
     "systemGroup": "Management",
     "signedInAs": "Signed in as",
     "statusOnline": "System online · lightweight runtime",
@@ -68,20 +78,31 @@
     "searchDescription": "Find an image by filename, path, UUID, or SHA-256.",
     "searchHint": "Press Command / Ctrl + K from any page",
     "upload": "Upload images",
-    "images": "Image management",
-    "migrations": "Migration management",
-    "aliases": "Path mappings",
+    "images": "Image library",
+    "migrations": "Migration files",
+    "aliases": "Path aliases",
     "apiTokens": "API tokens",
     "settings": "Settings",
-    "system": "System"
+    "system": "System status",
+    "collapse": "Collapse navigation",
+    "expand": "Expand navigation",
+    "compact": {
+      "upload": "Upload",
+      "images": "Library",
+      "migrations": "Migrations",
+      "aliases": "Aliases",
+      "apiTokens": "Tokens",
+      "settings": "Settings",
+      "system": "System"
+    }
   },
   "upload": {
-    "eyebrow": "INGEST / 01",
+    "eyebrow": "YOUR IMAGE SPACE",
     "title": "Upload images",
-    "description": "Drop, choose, or paste JPEG, PNG, WebP, and animated GIF files.",
+    "description": "Keep a new image, then share it in a moment.",
     "chooseFiles": "Choose image files",
-    "dropOrPaste": "Drop images here or paste an image from the clipboard",
-    "dropHelp": "You can also use the file picker below. Unsupported formats are not added.",
+    "dropOrPaste": "Drop your images here",
+    "dropHelp": "Drag files in or paste an image from your clipboard.",
     "runtime": "Up to {{concurrency}} files are processed at once; each batch can contain {{count}} files.",
     "concurrency": "Concurrency",
     "batch": "Batch limit",
@@ -93,7 +114,7 @@
     "copyCompleted": "Copy all successful links",
     "copyCompletedFormat": "Copy {{format}} for {{count}} successful images",
     "completedLinks": "{{count}} images uploaded successfully. Copy all links at once.",
-    "empty": "No files are queued.",
+    "empty": "Your selected images will appear here.",
     "progress": "Upload progress {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · saved {{percent}}%",
     "status": {
@@ -102,13 +123,17 @@
       "complete": "Complete",
       "failed": "Failed",
       "canceled": "Canceled"
-    }
+    },
+    "options": "UPLOAD OPTIONS",
+    "optionsTitle": "Save it your way",
+    "visibilityHelp": "Public images can be opened with their link. Private images require authorization.",
+    "queueTitle": "Upload queue"
   },
   "images": {
-    "eyebrow": "LIBRARY / 02",
-    "detailEyebrow": "ASSET DETAIL",
-    "title": "Image management",
-    "description": "Search, filter, and manage paginated images. Lists always load thumbnails only.",
+    "eyebrow": "YOUR IMAGE SPACE",
+    "detailEyebrow": "IMAGE DETAIL",
+    "title": "Image library",
+    "description": "Keep every image close, easy to find and ready to share.",
     "empty": "No images match the current filters.",
     "failed": "Unable to load images.",
     "viewMode": "View mode",
@@ -197,7 +222,16 @@
     "addAlias": "Add historical path",
     "aliasSaving": "Adding…",
     "aliasCreateFailed": "Unable to add the historical path. Check its format or conflicts.",
-    "noAliases": "This image has no historical path aliases."
+    "noAliases": "This image has no historical path aliases.",
+    "allImages": "All images",
+    "uploadAction": "Upload images",
+    "loadedCount": "{{count}} images loaded",
+    "clearFilters": "Clear filters",
+    "emptyLibrary": "Your library is ready for its first image.",
+    "emptyFiltered": "No images match these filters.",
+    "retryLoad": "Try again",
+    "activeFilterCount": "{{count}} active filters",
+    "allImagesCompact": "All"
   },
   "visibility": {
     "public": "Public",
@@ -229,10 +263,11 @@
     "batchSuccess": "Permanently deleted {{count}} migration images.",
     "batchPartial": "Deleted {{success}} images; {{failed}} deletions or directory cleanups did not fully succeed.",
     "deleteFailed": "Unable to delete migration images. Check the mutation setting, mount mode, and directory permissions.",
-    "selectionLimit": "Each batch can contain at most 100 migration images."
+    "selectionLimit": "Each batch can contain at most 100 migration images.",
+    "eyebrow": "EXISTING IMAGES"
   },
   "aliases": {
-    "eyebrow": "ROUTES / 03",
+    "eyebrow": "OLD PATHS, NEW HOME",
     "title": "Historical path aliases",
     "description": "Upload an image and bind its old URL. Old paths return image bytes directly without redirects.",
     "create": "Create alias",
@@ -254,7 +289,7 @@
     "deleteFailed": "Unable to delete the alias."
   },
   "apiTokens": {
-    "eyebrow": "ACCESS / 04",
+    "eyebrow": "ACCESS & PERMISSIONS",
     "title": "API tokens",
     "description": "Create scoped Bearer tokens. Plaintext is shown once and never stored by ImageSilo.",
     "name": "Token name",
@@ -282,10 +317,16 @@
       "active": "Active",
       "expired": "Expired",
       "revoked": "Revoked"
+    },
+    "scopeDescription": {
+      "upload": "Upload images",
+      "readPrivate": "Read private images",
+      "delete": "Delete images",
+      "writeAlias": "Write path aliases"
     }
   },
   "settings": {
-    "eyebrow": "CONFIG / 05",
+    "eyebrow": "YOUR PREFERENCES",
     "title": "Settings",
     "description": "Manage the administrator profile, visibility defaults, image processing, and password.",
     "profile": "Administrator profile",
@@ -338,7 +379,13 @@
     "conversionWebpQuality": "Converted WebP quality",
     "conversionWebpLossless": "Lossless WebP conversion",
     "saveProcessing": "Save processing settings",
-    "processingFailed": "Unable to update image processing settings."
+    "processingFailed": "Unable to update image processing settings.",
+    "sectionNav": "Settings sections",
+    "defaultsSection": "Uploads and processing",
+    "securitySection": "Account security",
+    "runtimeResources": "Runtime resources",
+    "indexHealth": "Data and indexes",
+    "maintenanceHistory": "Recent maintenance"
   },
   "validation": {
     "required": "This field is required.",
@@ -383,7 +430,7 @@
     "rebuildComplete": "In-memory cache rebuilt"
   },
   "system": {
-    "eyebrow": "STATUS / 06",
+    "eyebrow": "SPACE HEALTH",
     "title": "System status",
     "description": "Review lightweight resource, persistent data, in-memory index, and recent maintenance state."
   }

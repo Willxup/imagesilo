@@ -1,7 +1,8 @@
-import { Suspense, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { Suspense, useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router-dom'
 
+import { preloadAdminPage } from '../../app/page-loaders'
 import { useAuth } from '../../features/auth/auth-context'
 import { writeLocalStorage } from '../../lib/browser-storage'
 import { AppFooter } from '../app-footer'
@@ -19,10 +20,10 @@ const workspaceNavigation: { icon: IconName; key: string; to: string }[] = [
   { icon: 'images', key: 'images', to: '/admin/images' },
   { icon: 'server', key: 'migrations', to: '/admin/migrations' },
   { icon: 'history', key: 'aliases', to: '/admin/aliases' },
-  { icon: 'key', key: 'apiTokens', to: '/admin/api-tokens' },
 ]
 
 const systemNavigation: { icon: IconName; key: string; to: string }[] = [
+  { icon: 'key', key: 'apiTokens', to: '/admin/api-tokens' },
   { icon: 'settings', key: 'settings', to: '/admin/settings' },
   { icon: 'activity', key: 'system', to: '/admin/system' },
 ]
@@ -32,22 +33,35 @@ export function AdminLayout() {
   const { session, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
+  const navigationType = useNavigationType()
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'))
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [sidebarExpanded, setSidebarExpanded] = useState(true)
-  const [sidebarHovered, setSidebarHovered] = useState(false)
+  const [mobile, setMobile] = useState(() => window.matchMedia('(max-width: 1023px)').matches)
   const [searchOpen, setSearchOpen] = useState(false)
   const [searchTerm, setSearchTerm] = useState('')
-  const [headerSearchTerm, setHeaderSearchTerm] = useState('')
   const [languageOpen, setLanguageOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
-  const sidebarWide = sidebarExpanded || sidebarHovered
+  const navigationItems = [...workspaceNavigation, ...systemNavigation]
+  const currentIndex = navigationItems.findIndex((item) => location.pathname.startsWith(item.to))
+  const currentItem = navigationItems[currentIndex]
+  const dockIndex = mobile ? Math.min(Math.max(currentIndex, 0), 2) : Math.max(currentIndex, 0)
   const initials = useMemo(() => (session?.displayName || session?.email || 'IS').slice(0, 2).toUpperCase(), [session?.displayName, session?.email])
+
+  useEffect(() => {
+    const query = window.matchMedia('(max-width: 1023px)')
+    const update = () => {
+      setMobile(query.matches)
+      if (!query.matches) setMobileOpen(false)
+    }
+    query.addEventListener('change', update)
+    return () => query.removeEventListener('change', update)
+  }, [])
 
   useEffect(() => {
     function openSearch(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'k') {
         event.preventDefault()
+        setMobileOpen(false)
         setSearchOpen(true)
       }
     }
@@ -60,6 +74,11 @@ export function AdminLayout() {
     setProfileOpen(false)
     setLanguageOpen(false)
   }, [location.pathname])
+
+  // A fresh page starts at its heading; POP keeps the library's keyed restoration.
+  useLayoutEffect(() => {
+    if (navigationType !== 'POP') window.scrollTo({ top: 0, left: 0, behavior: 'instant' })
+  }, [location.pathname, navigationType])
 
   async function signOut() {
     await logout()
@@ -79,11 +98,6 @@ export function AdminLayout() {
     setLanguageOpen(false)
   }
 
-  function toggleSidebar() {
-    if (window.matchMedia('(max-width: 1023px)').matches) setMobileOpen((current) => !current)
-    else setSidebarExpanded((current) => !current)
-  }
-
   function navigateToSearch(query: string) {
     navigate(query ? `/admin/images?q=${encodeURIComponent(query)}` : '/admin/images')
   }
@@ -96,74 +110,22 @@ export function AdminLayout() {
     setSearchTerm('')
   }
 
-  function searchFromHeader(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault()
-    navigateToSearch(headerSearchTerm.trim())
-  }
-
   return (
-    <div className="tail-admin-shell" data-sidebar-wide={sidebarWide ? 'true' : 'false'}>
-      <button
-        aria-label={t('common.close')}
-        className={`tail-sidebar-backdrop ${mobileOpen ? 'is-open' : ''}`}
-        type="button"
-        onClick={() => setMobileOpen(false)}
-      />
-
-      <aside
-        className={`tail-sidebar ${mobileOpen ? 'is-mobile-open' : ''}`}
-        data-wide={sidebarWide ? 'true' : 'false'}
-        onMouseEnter={() => !sidebarExpanded && setSidebarHovered(true)}
-        onMouseLeave={() => setSidebarHovered(false)}
-      >
-        <div className="tail-sidebar-brand">
-          <a href={repositoryURL} target="_blank" rel="noreferrer" aria-label={t('nav.openRepository')}>
-            {sidebarWide || mobileOpen ? (
-              <BrandLogo imageClassName="h-10 w-auto" />
-            ) : (
-              <img className="h-9 w-9 object-contain" src="/brand/imagesilo-mark.png" alt="ImageSilo" />
-            )}
-          </a>
-          <button className="tail-sidebar-mobile-close" type="button" aria-label={t('common.close')} onClick={() => setMobileOpen(false)}>
-            <Icon name="x" className="h-5 w-5" />
-          </button>
-        </div>
-        <nav className="tail-sidebar-nav" aria-label={t('nav.primary')}>
-          <SidebarGroup label={t('nav.workspace')} items={workspaceNavigation} wide={sidebarWide || mobileOpen} onNavigate={() => setMobileOpen(false)} />
-          <SidebarGroup label={t('nav.systemGroup')} items={systemNavigation} wide={sidebarWide || mobileOpen} onNavigate={() => setMobileOpen(false)} />
-        </nav>
-      </aside>
-
+    <div className="tail-admin-shell">
       <div className="tail-main-frame">
         <header className="tail-header">
           <div className="tail-header-inner">
             <div className="tail-header-primary">
-              <button className="tail-header-square" type="button" aria-label={t('common.menu')} onClick={toggleSidebar}>
-                <Icon name={mobileOpen ? 'x' : 'menu'} className="h-5 w-5" />
-              </button>
-              <a className="tail-mobile-logo" href={repositoryURL} target="_blank" rel="noreferrer" aria-label={t('nav.openRepository')}>
+              <a className="tail-shell-logo" href={repositoryURL} target="_blank" rel="noreferrer" aria-label={t('nav.openRepository')}>
                 <BrandLogo imageClassName="h-8 w-auto" />
               </a>
-              <form className="tail-header-search" role="search" onSubmit={searchFromHeader}>
-                <button className="tail-header-search-submit" type="submit" aria-label={t('images.search')}>
-                  <Icon name="search" className="tail-header-search-icon" />
-                </button>
-                <input
-                  aria-label={t('nav.globalSearch')}
-                  placeholder={t('images.searchPlaceholder')}
-                  value={headerSearchTerm}
-                  onChange={(event) => setHeaderSearchTerm(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key !== 'Enter') return
-                    event.preventDefault()
-                    navigateToSearch(event.currentTarget.value.trim())
-                  }}
-                />
-                <kbd>⌘ K</kbd>
-              </form>
+              <span className="tail-header-context">{t(`nav.${currentItem?.key ?? 'workspace'}`)}</span>
             </div>
 
             <div className="tail-header-actions">
+              <button className="tail-search-trigger" type="button" aria-label={t('nav.globalSearch')} onClick={() => setSearchOpen(true)}>
+                <Icon name="search" /><span>{t('images.search')}</span><kbd>⌘ K</kbd>
+              </button>
               <button
                 className="tail-header-circle"
                 type="button"
@@ -205,7 +167,7 @@ export function AdminLayout() {
                 rootClassName="tail-account-menu"
                 className="tail-account-dropdown"
                 trigger={
-                  <button className="tail-profile-trigger" type="button" aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
+                  <button className="tail-profile-trigger" type="button" aria-label={t('nav.account')} aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
                     <span className="tail-profile-avatar">{initials}</span>
                     <span className="tail-profile-text">
                       <strong>{session?.displayName || 'ImageSilo'}</strong>
@@ -241,19 +203,60 @@ export function AdminLayout() {
         <main className="tail-content">
           <Suspense
             fallback={
-              <div className="tail-loading flex items-center gap-2" role="status">
-                <Icon name="loader" className="animate-spin" />
-                {location.pathname === '/admin/migrations' ? t('migrations.scanning') : t('common.loading')}
+              <div className="route-placeholder" role="status" aria-busy="true">
+                <div className="route-placeholder-label"><Icon name="loader" className="animate-spin" />{location.pathname === '/admin/migrations' ? t('migrations.scanning') : t('common.loading')}</div>
+                <div className="route-placeholder-content" aria-hidden="true"><div /><span /><span /><span /></div>
               </div>
             }
           >
-            <div className={`page-transition${location.pathname.startsWith('/admin/images/') ? ' is-detail' : ''}`} key={location.pathname}>
+            <div className={`page-transition${location.pathname.startsWith('/admin/images/') ? ' is-detail' : ''}`} data-navigation={navigationType} key={location.pathname}>
               <Outlet />
             </div>
           </Suspense>
         </main>
         <AppFooter />
       </div>
+
+      <nav
+        className="workspace-dock"
+        aria-label={t('nav.primary')}
+        style={{ '--dock-count': mobile ? 3 : navigationItems.length, '--dock-index': dockIndex } as CSSProperties}
+      >
+        <span className="workspace-dock-indicator" aria-hidden="true" />
+        {(mobile ? navigationItems.slice(0, 2) : navigationItems).map((item) => (
+          <NavigationLink key={item.to} item={item} className="workspace-dock-link" compactLabel={mobile} />
+        ))}
+        {mobile ? (
+          <button
+            type="button"
+            className={`workspace-dock-link${currentIndex > 1 ? ' active' : ''}`}
+            aria-label={t('common.menu')}
+            aria-haspopup="dialog"
+            aria-expanded={mobileOpen}
+            aria-current={currentIndex > 1 ? 'page' : undefined}
+            onClick={() => setMobileOpen(true)}
+          >
+            <Icon name={currentIndex > 1 ? currentItem.icon : 'menu'} />
+            <span>{currentIndex > 1 ? t(`nav.compact.${currentItem.key}`) : t('nav.more')}</span>
+            <Icon name="chevronDown" className="dock-more-chevron" />
+          </button>
+        ) : null}
+      </nav>
+
+      <Modal
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        title={t('nav.allPages')}
+        closeLabel={t('common.close')}
+        rootClassName="navigation-sheet"
+        size="md"
+      >
+        <nav className="navigation-sheet-grid" aria-label={t('nav.primary')}>
+          {navigationItems.map((item) => (
+            <NavigationLink key={item.to} item={item} className="navigation-sheet-link" onNavigate={() => setMobileOpen(false)} />
+          ))}
+        </nav>
+      </Modal>
 
       <Modal
         open={searchOpen}
@@ -286,35 +289,25 @@ export function AdminLayout() {
   )
 }
 
-function SidebarGroup({
-  label,
-  items,
-  wide,
-  onNavigate,
-}: {
-  label: string
-  items: { icon: IconName; key: string; to: string }[]
-  wide: boolean
-  onNavigate: () => void
+function NavigationLink({ item, className, onNavigate, compactLabel = false }: {
+  item: { icon: IconName; key: string; to: string }
+  className: string
+  onNavigate?: () => void
+  compactLabel?: boolean
 }) {
   const { t } = useTranslation()
   return (
-    <section className="tail-nav-group">
-      <h2>{wide ? label : '•••'}</h2>
-      <div className="tail-nav-list">
-        {items.map((item) => (
-          <NavLink
-            className={({ isActive }) => `tail-nav-link${isActive ? ' active' : ''}`}
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            title={!wide ? t(`nav.${item.key}`) : undefined}
-          >
-            <Icon name={item.icon} className="h-6 w-6" />
-            {wide ? <span>{t(`nav.${item.key}`)}</span> : null}
-          </NavLink>
-        ))}
-      </div>
-    </section>
+    <NavLink
+      className={({ isActive }) => `${className}${isActive ? ' active' : ''}`}
+      to={item.to}
+      onPointerEnter={() => preloadAdminPage(item.to)}
+      onFocus={() => preloadAdminPage(item.to)}
+      onPointerDown={() => preloadAdminPage(item.to)}
+      onClick={onNavigate}
+      aria-label={t(`nav.${item.key}`)}
+    >
+      <Icon name={item.icon} />
+      <span>{t(`nav.${compactLabel ? 'compact.' : ''}${item.key}`)}</span>
+    </NavLink>
   )
 }

@@ -41,7 +41,14 @@
     "lightweight": "轻量运行",
     "selfHosted": "自托管边界",
     "directDelivery": "高速直链",
-    "signInDescription": "进入你的 ImageSilo 管理控制台。"
+    "signInDescription": "进入你的 ImageSilo 管理控制台。",
+    "storyEyebrow": "你的图片，自在安放",
+    "storyTitleFirst": "留住画面。",
+    "storyTitleSecond": "自在分享。",
+    "storyDescription": "从收藏到分享，简单而从容。你的图片，始终在你自己的空间。",
+    "welcome": "欢迎回来。",
+    "formDescription": "登录，继续整理你的图片与灵感。",
+    "brandFooter": "轻量自托管 · 原图与直链"
   },
   "setup": {
     "title": "首次初始化 ImageSilo",
@@ -56,9 +63,12 @@
     "failed": "初始化失败，请检查填写内容或确认当前实例尚未初始化。"
   },
   "nav": {
+    "account": "账户菜单",
+    "more": "更多",
+    "allPages": "页面导航",
     "primary": "主要导航",
     "console": "IMAGE CONSOLE",
-    "workspace": "工作区",
+    "workspace": "图片",
     "systemGroup": "管理",
     "signedInAs": "当前管理员",
     "statusOnline": "系统在线 · 轻量运行",
@@ -68,20 +78,31 @@
     "searchDescription": "按文件名、路径、UUID 或 SHA-256 快速定位图片。",
     "searchHint": "在任意页面按 Command / Ctrl + K 打开",
     "upload": "上传图片",
-    "images": "图片管理",
-    "migrations": "迁移管理",
+    "images": "图片库",
+    "migrations": "迁移文件",
     "aliases": "路径映射",
     "apiTokens": "API Token",
     "settings": "设置",
-    "system": "系统"
+    "system": "系统状态",
+    "collapse": "收起导航",
+    "expand": "展开导航",
+    "compact": {
+      "upload": "上传图片",
+      "images": "图片库",
+      "migrations": "迁移文件",
+      "aliases": "路径映射",
+      "apiTokens": "API Token",
+      "settings": "设置",
+      "system": "系统状态"
+    }
   },
   "upload": {
-    "eyebrow": "INGEST / 01",
+    "eyebrow": "我的图片空间",
     "title": "上传图片",
-    "description": "拖放、选择或粘贴 JPEG、PNG、WebP 和动态 GIF。",
+    "description": "留住灵感，从一张图片开始。",
     "chooseFiles": "选择图片文件",
-    "dropOrPaste": "拖放图片到这里，或直接粘贴剪贴板图片",
-    "dropHelp": "也可以使用下面的文件选择器；不支持的格式不会加入队列。",
+    "dropOrPaste": "把图片放到这里",
+    "dropHelp": "拖入文件，或直接粘贴剪贴板中的图片。",
     "runtime": "最多同时处理 {{concurrency}} 个文件；每批最多选择 {{count}} 个文件。",
     "concurrency": "处理并发",
     "batch": "批次上限",
@@ -93,7 +114,7 @@
     "copyCompleted": "复制全部成功链接",
     "copyCompletedFormat": "复制 {{count}} 张成功图片的{{format}}",
     "completedLinks": "{{count}} 张图片已上传成功，可一次复制全部链接。",
-    "empty": "还没有待上传文件。",
+    "empty": "选好图片后，它们会出现在这里。",
     "progress": "上传进度 {{percent}}%",
     "result": "{{format}} · {{before}} → {{after}} · 节省 {{percent}}%",
     "status": {
@@ -102,13 +123,17 @@
       "complete": "已完成",
       "failed": "失败",
       "canceled": "已取消"
-    }
+    },
+    "options": "上传选项",
+    "optionsTitle": "按你的方式保存",
+    "visibilityHelp": "公开图片可通过链接直接访问；私密图片需要授权。",
+    "queueTitle": "上传队列"
   },
   "images": {
-    "eyebrow": "LIBRARY / 02",
-    "detailEyebrow": "ASSET DETAIL",
-    "title": "图片管理",
-    "description": "分页搜索、筛选和管理图片；列表始终只加载缩略图。",
+    "eyebrow": "我的图片空间",
+    "detailEyebrow": "图片详情",
+    "title": "图片库",
+    "description": "收好每一张图片，随时找到，轻松分享。",
     "empty": "没有符合条件的图片。",
     "failed": "图片列表加载失败。",
     "viewMode": "视图方式",
@@ -197,7 +222,16 @@
     "addAlias": "添加历史路径",
     "aliasSaving": "正在添加…",
     "aliasCreateFailed": "历史路径添加失败，请检查路径格式或冲突。",
-    "noAliases": "这张图片没有历史路径映射。"
+    "noAliases": "这张图片没有历史路径映射。",
+    "allImages": "全部图片",
+    "uploadAction": "上传图片",
+    "loadedCount": "已加载 {{count}} 张图片",
+    "clearFilters": "清除筛选",
+    "emptyLibrary": "图片库已准备好，上传第一张图片吧。",
+    "emptyFiltered": "没有符合当前筛选条件的图片。",
+    "retryLoad": "重试加载",
+    "activeFilterCount": "已启用 {{count}} 项筛选",
+    "allImagesCompact": "全部图片"
   },
   "visibility": {
     "public": "公开",
@@ -229,10 +263,11 @@
     "batchSuccess": "已永久删除 {{count}} 张迁移图片。",
     "batchPartial": "已删除 {{success}} 张，{{failed}} 张删除或目录清理未完全成功。",
     "deleteFailed": "迁移图片删除失败，请检查删除开关、挂载方式和目录权限。",
-    "selectionLimit": "每批最多选择 100 张迁移图片。"
+    "selectionLimit": "每批最多选择 100 张迁移图片。",
+    "eyebrow": "整理已有图片"
   },
   "aliases": {
-    "eyebrow": "ROUTES / 03",
+    "eyebrow": "连接旧地址与新图片",
     "title": "历史路径映射",
     "description": "上传图片并绑定旧 URL；访问旧路径时直接返回图片，不进行跳转。",
     "create": "创建映射",
@@ -254,7 +289,7 @@
     "deleteFailed": "映射删除失败。"
   },
   "apiTokens": {
-    "eyebrow": "ACCESS / 04",
+    "eyebrow": "访问与授权",
     "title": "API Token",
     "description": "创建带 Scope 的 Bearer Token。明文只显示一次，ImageSilo 不会保存。",
     "name": "Token 名称",
@@ -282,10 +317,16 @@
       "active": "有效",
       "expired": "已过期",
       "revoked": "已吊销"
+    },
+    "scopeDescription": {
+      "upload": "上传图片",
+      "readPrivate": "读取私密图片",
+      "delete": "删除图片",
+      "writeAlias": "写入路径映射"
     }
   },
   "settings": {
-    "eyebrow": "CONFIG / 05",
+    "eyebrow": "空间管理",
     "title": "设置",
     "description": "管理管理员资料、默认可见性、图片处理策略和密码。",
     "profile": "管理员资料",
@@ -338,7 +379,13 @@
     "conversionWebpQuality": "转换后 WebP 质量",
     "conversionWebpLossless": "WebP 无损转换",
     "saveProcessing": "保存处理设置",
-    "processingFailed": "图片处理设置更新失败。"
+    "processingFailed": "图片处理设置更新失败。",
+    "sectionNav": "设置分区",
+    "defaultsSection": "上传与处理",
+    "securitySection": "账号安全",
+    "runtimeResources": "运行资源",
+    "indexHealth": "数据与索引",
+    "maintenanceHistory": "最近维护"
   },
   "validation": {
     "required": "此项为必填项。",
@@ -383,7 +430,7 @@
     "rebuildComplete": "内存缓存已重建"
   },
   "system": {
-    "eyebrow": "STATUS / 06",
+    "eyebrow": "空间运行概览",
     "title": "系统状态",
     "description": "查看轻量资源、持久化数据、内存索引和最近维护结果。"
   }
