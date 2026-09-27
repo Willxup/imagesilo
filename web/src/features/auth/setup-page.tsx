@@ -3,17 +3,20 @@ import { useTranslation } from 'react-i18next'
 import { Navigate, useNavigate } from 'react-router-dom'
 
 import { BrandLogo } from '../../components/brand-logo'
+import { AppFooter } from '../../components/app-footer'
 import { Button } from '../../components/ui/button'
 import { Checkbox } from '../../components/ui/checkbox'
+import { DropdownItem, DropdownMenu } from '../../components/ui/dropdown-menu'
 import { Icon } from '../../components/ui/icon'
 import { Input } from '../../components/ui/input'
 import { Select } from '../../components/ui/select'
 import { apiRequest } from '../../lib/api-client'
 import type { AdminSession, SetupRequest, Visibility } from '../../lib/api-types'
+import { writeLocalStorage } from '../../lib/browser-storage'
 import { useAuth } from './auth-context'
 
 export function SetupPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { session, setupStatus, refresh, refreshSetup } = useAuth()
   const [pending, setPending] = useState(false)
@@ -21,6 +24,8 @@ export function SetupPage() {
   const [visibility, setVisibility] = useState<Visibility>('public')
   const [compressionEnabled, setCompressionEnabled] = useState(false)
   const [conversionEnabled, setConversionEnabled] = useState(false)
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'))
+  const [languageOpen, setLanguageOpen] = useState(false)
 
   if (session) return <Navigate to="/admin/upload" replace />
   if (setupStatus?.initialized) return <Navigate to="/admin/login" replace />
@@ -64,11 +69,23 @@ export function SetupPage() {
   }
 
   return (
-    <main className="setup-page">
-      <section className="setup-card">
-        <div className="setup-brand">
-          <BrandLogo imageClassName="h-10 w-auto" />
+    <div className="setup-page login-page">
+      <div className="login-layout setup-layout">
+      <section className="login-brand-panel">
+        <BrandLogo imageClassName="h-11 w-auto" />
+        <div className="login-story"><p className="page-kicker">{t('auth.storyEyebrow')}</p><h2>{t('auth.storyTitleFirst')}<br /><span>{t('auth.storyTitleSecond')}</span></h2><p>{t('auth.storyDescription')}</p></div>
+        <div className="login-art" aria-hidden="true"><div className="login-plane plane-green" /><div className="login-plane plane-cyan" /><div className="login-plane plane-blue"><div className="plane-window" /></div></div>
+        <p className="login-brand-footer">{t('auth.brandFooter')}</p>
+      </section>
+      <div className="login-panel">
+        <div className="login-toolbar">
+          <Button size="icon-sm" variant="outline" type="button" aria-label={theme === 'light' ? t('preferences.dark') : t('preferences.light')} onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = next; writeLocalStorage('imagesilo_theme', next); setTheme(next) }}><Icon name={theme === 'light' ? 'moon' : 'sun'} /></Button>
+          <DropdownMenu open={languageOpen} onOpenChange={setLanguageOpen} trigger={<Button size="sm" variant="outline" type="button" onClick={() => setLanguageOpen((value) => !value)}><Icon name="languages" />{i18n.language === 'zh-CN' ? '中文' : 'EN'}<Icon name="chevronDown" /></Button>}>
+            <DropdownItem active={i18n.language === 'en-US'} onClick={() => { writeLocalStorage('imagesilo_language', 'en-US'); void i18n.changeLanguage('en-US'); setLanguageOpen(false) }}>English</DropdownItem>
+            <DropdownItem active={i18n.language === 'zh-CN'} onClick={() => { writeLocalStorage('imagesilo_language', 'zh-CN'); void i18n.changeLanguage('zh-CN'); setLanguageOpen(false) }}>简体中文</DropdownItem>
+          </DropdownMenu>
         </div>
+      <main className="setup-card">
         <div className="setup-heading">
           <span className="setup-icon">
             <Icon name="wand" />
@@ -135,7 +152,10 @@ export function SetupPage() {
             {pending ? t('common.working') : t('setup.finish')}
           </Button>
         </form>
-      </section>
-    </main>
+      </main>
+      <AppFooter />
+      </div>
+      </div>
+    </div>
   )
 }

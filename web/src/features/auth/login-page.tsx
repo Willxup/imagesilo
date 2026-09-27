@@ -67,6 +67,18 @@ export function LoginPage() {
 
   return (
     <div className="login-page text-ink">
+      <div className="login-layout">
+      <section className="login-brand-panel">
+        <BrandLogo imageClassName="h-11 w-auto" />
+        <div className="login-story">
+          <p className="page-kicker">{t('auth.storyEyebrow')}</p>
+          <h2>{t('auth.storyTitleFirst')}<br /><span>{t('auth.storyTitleSecond')}</span></h2>
+          <p>{t('auth.storyDescription')}</p>
+        </div>
+        <div className="login-art" aria-hidden="true"><div className="login-plane plane-green" /><div className="login-plane plane-cyan" /><div className="login-plane plane-blue"><div className="plane-window" /></div></div>
+        <p className="login-brand-footer">{t('auth.brandFooter')}</p>
+      </section>
+      <div className="login-panel">
       <div className="login-toolbar">
         <Button
           size="icon-sm"
@@ -101,9 +113,9 @@ export function LoginPage() {
         <div className="login-shell">
           <div className="login-form-wrap">
             <form className="login-form" onSubmit={submit}>
-              <BrandLogo imageClassName="h-10 w-auto" />
-              <h1 className="login-form-title">{t('auth.signIn')}</h1>
-              <p className="login-form-copy">{t('auth.signInDescription')}</p>
+              <p className="page-kicker">IMAGESILO</p>
+              <h1 className="login-form-title">{t('auth.welcome')}</h1>
+              <p className="login-form-copy">{t('auth.formDescription')}</p>
 
               <label className="field-label" htmlFor="email">
                 {t('auth.email')}
@@ -122,7 +134,7 @@ export function LoginPage() {
               </div>
 
               {error ? <p id="login-error" role="alert" className="mt-4 rounded-xl border border-danger/20 bg-danger-soft px-4 py-3 text-sm text-danger">{error}</p> : null}
-              <Button type="submit" disabled={formState.isSubmitting} className="mt-5 w-full bg-[var(--silo-gradient)] hover:opacity-90">
+              <Button type="submit" disabled={formState.isSubmitting} className="mt-5 w-full">
                 <span className="login-submit-label">{formState.isSubmitting ? t('common.working') : t('auth.signIn')}</span>
                 <Icon name="arrowRight" />
               </Button>
@@ -131,6 +143,8 @@ export function LoginPage() {
         </div>
       </main>
       <AppFooter />
+      </div>
+      </div>
     </div>
   )
 }
