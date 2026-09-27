@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '../../components/ui/button'
 import { Card } from '../../components/ui/card'
-import { ComponentCard } from '../../components/ui/component-card'
 import { CopyLinkControl, CopyLinksControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
 import { Select } from '../../components/ui/select'
@@ -19,6 +18,7 @@ type UploadStatus = 'queued' | 'uploading' | 'complete' | 'failed' | 'canceled'
 type UploadItem = {
   id: string
   file: File
+  previewUrl: string
   status: UploadStatus
   progress: number
   result?: Image
@@ -37,11 +37,23 @@ export function UploadPage() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const previewUrls = useRef(new Set<string>())
   const completedImages = useMemo(() => items.flatMap((item) => (item.result ? [item.result] : [])), [items])
 
   useEffect(() => {
     writeLocalStorage(visibilityStorageKey, visibility)
   }, [visibility])
+
+  useEffect(() => () => {
+    for (const url of previewUrls.current) URL.revokeObjectURL(url)
+    previewUrls.current.clear()
+  }, [])
+
+  function clearQueue() {
+    for (const url of previewUrls.current) URL.revokeObjectURL(url)
+    previewUrls.current.clear()
+    setItems([])
+  }
 
   function addFiles(files: File[]) {
     const supported = files.filter(isSupportedImageFile)
@@ -52,15 +64,21 @@ export function UploadPage() {
     }
     if (supported.length !== files.length) setError(t('upload.unsupported'))
     else setError('')
-    setItems((current) => [
-      ...current,
-      ...supported.map((file) => ({
+    const additions = supported.map((file) => ({
         id: crypto.randomUUID(),
         file,
+        previewUrl: makePreviewUrl(file),
         status: 'queued' as UploadStatus,
         progress: 0,
-      })),
-    ])
+      }))
+    setItems((current) => [...current, ...additions])
+  }
+
+  function makePreviewUrl(file: File) {
+    if (typeof URL.createObjectURL !== 'function') return ''
+    const url = URL.createObjectURL(file)
+    previewUrls.current.add(url)
+    return url
   }
 
   function chooseFiles(files: FileList | null) {
@@ -145,24 +163,13 @@ export function UploadPage() {
     <section onPaste={paste}>
       <div className="page-heading-row">
         <div>
+          <p className="page-kicker">{t('upload.eyebrow')}</p>
           <h1 className="page-title">{t('upload.title')}</h1>
           <p className="page-description">{t('upload.description')}</p>
         </div>
-        <div className="runtime-chips" aria-hidden="true">
-          <span className="runtime-chip">
-            <Icon name="zap" />
-            <span>{t('upload.concurrency')}</span>
-            <strong>{systemQuery.data?.processingConcurrency ?? 1}</strong>
-          </span>
-          <span className="runtime-chip">
-            <Icon name="images" />
-            <span>{t('upload.batch')}</span>
-            <strong>{systemQuery.data?.maxBatchCount ?? 20}</strong>
-          </span>
-        </div>
       </div>
       <form onSubmit={(event) => void submit(event)}>
-        <ComponentCard className="upload-panel mt-8" title={t('upload.chooseFiles')}>
+        <div className="upload-studio mt-8">
           <label
             className={`upload-dropzone ${dragActive ? 'is-dragging' : ''}`}
             htmlFor="upload-files"
@@ -182,15 +189,14 @@ export function UploadPage() {
             onDrop={drop}
           >
             <div className="upload-dropzone-content">
-              <div className="upload-icon">
-                <Icon name="cloudUpload" className="h-8 w-8" />
-              </div>
-              <h2 className="text-xl font-semibold tracking-tight">{t('upload.dropOrPaste')}</h2>
-              <p className="mt-3 text-sm leading-6 text-muted-foreground">{t('upload.dropHelp')}</p>
+              <div className="fold-art" aria-hidden="true"><span /><span /><span /></div>
+              <h2>{t('upload.dropOrPaste')}</h2>
+              <p>{t('upload.dropHelp')}</p>
               <span className="upload-dropzone-action">
-                <Icon name="image" />
+                <Icon name="plus" />
                 {t('upload.chooseFiles')}
               </span>
+              <small className="upload-formats">JPG · PNG · WEBP · GIF</small>
             </div>
           </label>
           <input
@@ -205,11 +211,11 @@ export function UploadPage() {
               event.target.value = ''
             }}
           />
-          <div className="upload-controls">
-            <label className="block min-w-0 flex-1 font-medium" htmlFor="upload-visibility">
-              <span className="text-sm text-muted-foreground">{t('upload.visibility')}</span>
+          <aside className="upload-options">
+            <div><p className="section-kicker">{t('upload.options')}</p><h2>{t('upload.optionsTitle')}</h2></div>
+            <label className="field-group" htmlFor="upload-visibility">
+              <span>{t('upload.visibility')}</span>
               <Select
-                className="mt-1.5 max-w-sm"
                 id="upload-visibility"
                 ariaLabel={t('upload.visibility')}
                 value={visibility}
@@ -221,24 +227,16 @@ export function UploadPage() {
                 ]}
               />
             </label>
-            <div className="flex flex-wrap gap-3">
-              <Button className="standard-action-button" type="submit" disabled={items.length === 0 || uploading}>
+            <p className="upload-option-hint">{t('upload.visibilityHelp')}</p>
+            <dl className="upload-limits"><dt>{t('upload.batch')}</dt><dd>{systemQuery.data?.maxBatchCount ?? 20}</dd><dt>{t('upload.concurrency')}</dt><dd>{systemQuery.data?.processingConcurrency ?? 1}</dd></dl>
+            <div className="upload-option-actions">
+              <Button className="standard-action-button" type="submit" disabled={items.length === 0 || uploading || items.every((item) => item.status === 'complete')}>
                 <Icon name="upload" />
                 {uploading ? t('common.working') : t('upload.uploadCount', { count: items.filter((item) => item.status !== 'complete').length })}
               </Button>
-              <Button
-                className="standard-action-button"
-                variant="outline"
-                type="button"
-                disabled={uploading || items.length === 0}
-                onClick={() => setItems([])}
-              >
-                <Icon name="x" />
-                {t('common.clear')}
-              </Button>
             </div>
-          </div>
-        </ComponentCard>
+          </aside>
+        </div>
       </form>
       {error ? <p className="mt-5 rounded-xl bg-danger-soft px-4 py-3 text-danger">{error}</p> : null}
       {!uploading && items.length > 1 && completedImages.length > 0 ? (
@@ -251,17 +249,9 @@ export function UploadPage() {
           />
         </Card>
       ) : null}
-      {items.length === 0 ? (
-        <div className="empty-state">
-          <div>
-            <span className="empty-state-icon">
-              <Icon name="image" />
-            </span>
-            <p>{t('upload.empty')}</p>
-          </div>
-        </div>
-      ) : null}
-      <div className="upload-queue mt-6 grid gap-3">
+      <div className="queue-heading"><h2>{t('upload.queueTitle')} {items.length > 0 ? <span>· {items.length}</span> : null}</h2><Button variant="ghost" type="button" disabled={uploading || items.length === 0} onClick={clearQueue}>{t('common.clear')}</Button></div>
+      {items.length === 0 ? <p className="queue-empty"><Icon name="image" />{t('upload.empty')}</p> : null}
+      <div className="upload-queue">
         {items.map((item) => (
           <UploadRow item={item} key={item.id} uploading={uploading} onCancel={() => item.controller?.abort()} onRetry={() => void retry(item)} />
         ))}
@@ -273,13 +263,10 @@ export function UploadPage() {
 function UploadRow({ item, uploading, onCancel, onRetry }: { item: UploadItem; uploading: boolean; onCancel: () => void; onRetry: () => void }) {
   const { t } = useTranslation()
   return (
-    <article>
-      <Card size="sm" className="overflow-visible p-4">
+    <article className="upload-row" data-status={item.status}>
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="nav-icon-wrap text-cyan">
-              <Icon name={item.status === 'complete' ? 'check' : 'image'} />
-            </span>
+            {item.previewUrl ? <img decoding="async" className="upload-row-preview" src={item.previewUrl} alt="" /> : <span className="upload-row-preview upload-row-fallback"><Icon name="image" /></span>}
             <div className="min-w-0">
               <p className="truncate font-medium">{item.file.name}</p>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -302,8 +289,8 @@ function UploadRow({ item, uploading, onCancel, onRetry }: { item: UploadItem; u
             ) : null}
           </div>
         </div>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-canvas" aria-label={t('upload.progress', { percent: item.progress })}>
-          <div className="h-full bg-primary transition-all" style={{ width: `${item.progress}%` }} />
+        <div className="upload-progress" role="progressbar" aria-valuenow={item.progress} aria-valuemin={0} aria-valuemax={100} aria-label={t('upload.progress', { percent: item.progress })}>
+          <div className="upload-progress-fill" style={{ transform: `scaleX(${Math.max(0, Math.min(100, item.progress)) / 100})` }} />
         </div>
         {item.result ? <UploadResult image={item.result} /> : null}
         {item.error ? (
@@ -311,7 +298,6 @@ function UploadRow({ item, uploading, onCancel, onRetry }: { item: UploadItem; u
             {item.error}
           </p>
         ) : null}
-      </Card>
     </article>
   )
 }

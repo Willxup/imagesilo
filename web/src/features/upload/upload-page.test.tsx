@@ -36,7 +36,7 @@ describe('UploadPage', () => {
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'dropped.jpg', { type: 'image/jpeg' })
-    const dropZone = await screen.findByText('拖放图片到这里，或直接粘贴剪贴板图片')
+    const dropZone = await screen.findByText('把图片放到这里')
     fireEvent.drop(dropZone.parentElement!, { dataTransfer: { files: [file] } })
     expect(await screen.findByText('dropped.jpg')).toBeInTheDocument()
     expect(screen.getByText(/在浏览器中排队/)).toBeInTheDocument()
@@ -53,6 +53,21 @@ describe('UploadPage', () => {
     const input = await screen.findByLabelText('选择图片文件')
     fireEvent.change(input, { target: { files: [file] } })
     expect(await screen.findByText('camera.JPG')).toBeInTheDocument()
+  })
+
+  it('shows a local preview and revokes it when the queue is cleared', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-test')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={queryClient}><UploadPage /></QueryClientProvider>)
+    const file = new File(['jpeg'], 'preview.jpg', { type: 'image/jpeg' })
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [file] } })
+    const row = (await screen.findByText('preview.jpg')).closest('article')!
+    expect(row.querySelector('img')).toHaveAttribute('src', 'blob:preview-test')
+    fireEvent.click(screen.getByRole('button', { name: '清除' }))
+    expect(revoke).toHaveBeenCalledWith('blob:preview-test')
+    create.mockRestore()
+    revoke.mockRestore()
   })
 
   it('keeps the structured server reason on a failed upload row', async () => {
@@ -128,7 +143,7 @@ describe('UploadPage', () => {
     })
 
     fireEvent.click(screen.getAllByRole('button', { name: /选择链接格式/ })[0])
-    fireEvent.click(screen.getByRole('button', { name: '复制 Markdown' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '复制 Markdown' }))
     fireEvent.click(screen.getByRole('button', { name: '复制 2 张成功图片的MD' }))
     await waitFor(() => {
       expect(writeText).toHaveBeenLastCalledWith(
