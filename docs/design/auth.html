@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ImageSilo · 登录与初始化设计</title><link rel="stylesheet" href="study.css"><link rel="stylesheet" href="auth.css"></head>
+<body class="auth-study">
+  <div class="auth-layout">
+    <section class="auth-brand-panel">
+      <a class="brand" href="index.html"><img class="wordmark light-wordmark" src="../../assets/brand/imagesilo-logo.png" alt="ImageSilo"><img class="wordmark dark-wordmark" src="../../assets/brand/imagesilo-logo-dark.svg" alt="ImageSilo"></a>
+      <div class="auth-story"><span class="eyebrow">你的图片，自在安放。</span><h1>留住画面。<br><span>自在分享。</span></h1><p>从收藏到分享，简单而从容。<br>你的图片，始终在你自己的空间。</p></div>
+      <div class="auth-art" aria-hidden="true"><div class="auth-plane plane-green"></div><div class="auth-plane plane-cyan"></div><div class="auth-plane plane-blue"><div class="plane-window plane-landscape"></div><span class="plane-dot"></span><span class="plane-caption">a moment, kept.</span></div><span class="art-cross">+</span><span class="art-coordinate">01 — YOUR VISUAL SPACE</span></div>
+      <div class="auth-brand-footer"><span class="auth-small-mark"></span><span>轻量自托管 · 原图与直链</span></div>
+    </section>
+    <section class="auth-panel">
+      <div class="auth-preferences"><button id="auth-theme" aria-label="切换深浅主题"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l2 2m10 10 2 2M5 19l2-2M17 7l2-2"/></svg></button><button id="auth-language">简体中文 <span>⌄</span></button></div>
+      <main class="auth-form-area" id="auth-form-area"></main>
+      <footer class="auth-footer">© 2026 ImageSilo <span>·</span> License <span>·</span> v0.2.7</footer>
+    </section>
+  </div>
+  <nav class="review-bar" aria-label="认证页面设计"><span class="review-label">设计研究 <em>不连接实际账号</em></span><div class="direction-switch"><button class="active" id="show-login">登录</button><button id="show-setup">初始化</button></div><a class="review-notes" href="index.html">查看工作区 ↗</a></nav>
+  <script>
+    const formArea=document.querySelector('#auth-form-area');let setup=false,english=false;
+    function renderAuth(){
+      const title=setup?'欢迎使用 ImageSilo':english?'Welcome back.':'欢迎回来。';
+      formArea.innerHTML=`<span class="auth-form-eyebrow">${setup?'开始你的图片空间':'IMAGESILO'}</span><h2>${title}</h2><p class="auth-form-description">${setup?'创建管理员账号，开启属于你的图片空间。':english?'Sign in to your personal image space.':'登录，继续整理你的图片与灵感。'}</p><form id="demo-auth-form">${setup?`<label>启动令牌<input class="field" placeholder="isb_…" required><small>使用首次启动日志中的 Bootstrap Token</small></label><div class="setup-divider"><span>管理员账号</span></div><label>显示名称<input class="field" value="ImageSilo" required></label>`:''}<label>${english?'Email address':'管理员邮箱'}<input class="field" type="email" placeholder="you@example.com" autocomplete="off" required></label><label>${english?'Password':'密码'}<input class="field" type="password" placeholder="${setup?'至少 12 个字符':english?'Enter your password':'输入你的密码'}" autocomplete="off" ${setup?'minlength="12"':''} required></label>${setup?`<label>确认密码<input class="field" type="password" placeholder="再次输入密码" required></label><div class="setup-divider"><span>上传默认行为</span></div><label>默认可见性<select class="field"><option>公开</option><option>私密</option></select></label><label class="auth-check"><input type="checkbox"><span>启用同格式压缩<small>仅在文件变小时保存压缩结果</small></span></label><label class="auth-check"><input type="checkbox"><span>自动转换为 WebP<small>适用于 JPEG 和 PNG，可稍后调整</small></span></label>`:''}<p class="auth-message" role="status" hidden></p><button class="button primary auth-submit" type="submit"><span>${setup?'创建空间':english?'Sign in':'登录'}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12h16m-6-6 6 6-6 6"/></svg></button></form><p class="auth-form-note">${setup?'这是设计原型，不会创建实际账号。':english?'Your images. Your space.':'你的图片，始终由你掌控。'}</p>`;
+      document.querySelector('.auth-study').classList.toggle('setup-study',setup);
+      document.querySelector('#show-login').classList.toggle('active',!setup);document.querySelector('#show-setup').classList.toggle('active',setup);
+      document.querySelector('#demo-auth-form').addEventListener('submit',event=>{event.preventDefault();const message=document.querySelector('.auth-message');message.hidden=false;message.textContent=english?'Design preview only. No account was accessed.':'这里只演示表单反馈，没有登录或创建实际账号。'});
+    }
+    document.querySelector('#show-login').addEventListener('click',()=>{setup=false;renderAuth();scrollTo(0,0)});
+    document.querySelector('#show-setup').addEventListener('click',()=>{setup=true;renderAuth();scrollTo(0,0)});
+    document.querySelector('#auth-theme').addEventListener('click',()=>document.body.classList.toggle('dark'));
+    document.querySelector('#auth-language').addEventListener('click',event=>{english=!english;event.currentTarget.innerHTML=english?'English <span>⌄</span>':'简体中文 <span>⌄</span>';renderAuth()});
+    renderAuth();
+  </script>
+</body>
+</html>
