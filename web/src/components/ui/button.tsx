@@ -4,20 +4,17 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[10px] border border-transparent text-sm font-medium whitespace-nowrap outline-none select-none focus-visible:ring-4 focus-visible:ring-brand-500/12 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
+  "group/button inline-flex shrink-0 items-center justify-center gap-1.5 rounded-[10px] border text-sm font-medium whitespace-nowrap outline-none select-none focus-visible:ring-4 focus-visible:ring-brand-500/12 disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4",
   {
     variants: {
       variant: {
-        default: "[background:var(--silo-gradient)] text-white hover:opacity-90",
-        brandSolid: "[background-color:var(--accent)] [color:var(--accent-foreground)] hover:opacity-90",
-        outline:
-          "[border-color:var(--tail-border)] [background-color:var(--tail-surface)] [color:var(--tail-text)] hover:[background-color:var(--tail-surface-soft)]",
-        secondary:
-          "[background-color:var(--tail-surface-soft)] [color:var(--tail-text)] hover:[background-color:var(--tail-brand-soft)]",
-        ghost:
-          "[color:var(--tail-text-soft)] hover:[background-color:var(--tail-surface-soft)] hover:[color:var(--tail-text)]",
+        default: "border-transparent [background:var(--silo-gradient)] text-white hover:opacity-90",
+        brandSolid: "border-transparent [background-color:var(--accent)] [color:var(--accent-foreground)] hover:opacity-90",
+        outline: "",
+        secondary: "",
+        ghost: "border-transparent",
         destructive:
-          "[background-color:var(--color-danger)] text-white hover:opacity-90 focus-visible:ring-error-500/15",
+          "[background-color:var(--color-destructive)] text-white hover:opacity-90 focus-visible:ring-error-500/15",
         link: "h-auto border-0 p-0 [color:var(--accent)] shadow-none hover:underline",
       },
       size: {
