@@ -124,7 +124,7 @@ export function CopyLinksControl({
             type="button"
             title={t(`images.linkFormat.${format}`)}
             aria-label={`${t('images.chooseLinkFormat')}: ${t(`images.linkFormat.${format}`)}`}
-            aria-expanded={open}
+            aria-haspopup="menu" aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
             <Icon name={formatIcons[format]} className="copy-format-icon" />

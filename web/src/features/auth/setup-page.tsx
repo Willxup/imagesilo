@@ -80,7 +80,7 @@ export function SetupPage() {
       <div className="login-panel">
         <div className="login-toolbar">
           <Button size="icon-sm" variant="outline" type="button" aria-label={theme === 'light' ? t('preferences.dark') : t('preferences.light')} onClick={() => { const next = theme === 'light' ? 'dark' : 'light'; document.documentElement.dataset.theme = next; writeLocalStorage('imagesilo_theme', next); setTheme(next) }}><Icon name={theme === 'light' ? 'moon' : 'sun'} /></Button>
-          <DropdownMenu open={languageOpen} onOpenChange={setLanguageOpen} trigger={<Button size="sm" variant="outline" type="button" onClick={() => setLanguageOpen((value) => !value)}><Icon name="languages" />{i18n.language === 'zh-CN' ? '中文' : 'EN'}<Icon name="chevronDown" /></Button>}>
+          <DropdownMenu open={languageOpen} onOpenChange={setLanguageOpen} trigger={<Button size="sm" variant="outline" type="button" aria-haspopup="menu" aria-expanded={languageOpen} onClick={() => setLanguageOpen((value) => !value)}><Icon name="languages" />{i18n.language === 'zh-CN' ? '中文' : 'EN'}<Icon name="chevronDown" /></Button>}>
             <DropdownItem active={i18n.language === 'en-US'} onClick={() => { writeLocalStorage('imagesilo_language', 'en-US'); void i18n.changeLanguage('en-US'); setLanguageOpen(false) }}>English</DropdownItem>
             <DropdownItem active={i18n.language === 'zh-CN'} onClick={() => { writeLocalStorage('imagesilo_language', 'zh-CN'); void i18n.changeLanguage('zh-CN'); setLanguageOpen(false) }}>简体中文</DropdownItem>
           </DropdownMenu>

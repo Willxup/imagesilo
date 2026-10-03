@@ -93,7 +93,7 @@ export function LoginPage() {
           open={languageOpen}
           onOpenChange={setLanguageOpen}
           trigger={
-            <Button size="sm" variant="outline" type="button" onClick={() => setLanguageOpen((value) => !value)}>
+            <Button size="sm" variant="outline" type="button" aria-haspopup="menu" aria-expanded={languageOpen} onClick={() => setLanguageOpen((value) => !value)}>
               <Icon name="languages" />
               {i18n.language === 'zh-CN' ? '中文' : 'EN'}
               <Icon name="chevronDown" />

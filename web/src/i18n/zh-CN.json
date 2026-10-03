@@ -89,11 +89,11 @@
     "compact": {
       "upload": "上传图片",
       "images": "图片库",
-      "migrations": "迁移文件",
-      "aliases": "路径映射",
-      "apiTokens": "API Token",
+      "migrations": "迁移",
+      "aliases": "映射",
+      "apiTokens": "Token",
       "settings": "设置",
-      "system": "系统状态"
+      "system": "系统"
     }
   },
   "upload": {

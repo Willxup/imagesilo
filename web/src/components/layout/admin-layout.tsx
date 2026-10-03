@@ -119,7 +119,7 @@ export function AdminLayout() {
               <a className="tail-shell-logo" href={repositoryURL} target="_blank" rel="noreferrer" aria-label={t('nav.openRepository')}>
                 <BrandLogo imageClassName="h-8 w-auto" />
               </a>
-              <span className="tail-header-context">{t(`nav.${currentItem?.key ?? 'workspace'}`)}</span>
+              <span className="tail-header-context">{currentItem ? t(`nav.${currentItem.key}`) : 'ImageSilo'}</span>
             </div>
 
             <div className="tail-header-actions">
@@ -144,7 +144,7 @@ export function AdminLayout() {
                     className="tail-language-trigger"
                     type="button"
                     aria-label={t('preferences.language')}
-                    onClick={() => setLanguageOpen((value) => !value)}
+                    aria-haspopup="menu" aria-expanded={languageOpen} onClick={() => setLanguageOpen((value) => !value)}
                   >
                     <Icon name="languages" />
                     <span>{i18n.language === 'zh-CN' ? '中文' : 'EN'}</span>
@@ -167,7 +167,7 @@ export function AdminLayout() {
                 rootClassName="tail-account-menu"
                 className="tail-account-dropdown"
                 trigger={
-                  <button className="tail-profile-trigger" type="button" aria-label={t('nav.account')} aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
+                  <button className="tail-profile-trigger" type="button" aria-label={t('nav.account')} aria-haspopup="menu" aria-expanded={profileOpen} onClick={() => setProfileOpen((value) => !value)}>
                     <span className="tail-profile-avatar">{initials}</span>
                     <span className="tail-profile-text">
                       <strong>{session?.displayName || 'ImageSilo'}</strong>
@@ -222,7 +222,7 @@ export function AdminLayout() {
         aria-label={t('nav.primary')}
         style={{ '--dock-count': mobile ? 3 : navigationItems.length, '--dock-index': dockIndex } as CSSProperties}
       >
-        <span className="workspace-dock-indicator" aria-hidden="true" />
+        <span className="workspace-dock-indicator" aria-hidden="true" style={{ opacity: currentIndex < 0 ? 0 : 1 }} />
         {(mobile ? navigationItems.slice(0, 2) : navigationItems).map((item) => (
           <NavigationLink key={item.to} item={item} className="workspace-dock-link" compactLabel={mobile} />
         ))}
@@ -230,7 +230,7 @@ export function AdminLayout() {
           <button
             type="button"
             className={`workspace-dock-link${currentIndex > 1 ? ' active' : ''}`}
-            aria-label={t('common.menu')}
+            aria-label={`${currentIndex > 1 ? t(`nav.compact.${currentItem.key}`) : t('nav.more')}, ${t('common.menu')}`}
             aria-haspopup="dialog"
             aria-expanded={mobileOpen}
             aria-current={currentIndex > 1 ? 'page' : undefined}
