@@ -49,6 +49,13 @@ export function UploadPage() {
     previewUrls.current.clear()
   }, [])
 
+  useEffect(() => {
+    const retained = new Set(items.map((item) => item.previewUrl))
+    for (const url of previewUrls.current) {
+      if (!retained.has(url)) { URL.revokeObjectURL(url); previewUrls.current.delete(url) }
+    }
+  }, [items])
+
   function clearQueue() {
     for (const url of previewUrls.current) URL.revokeObjectURL(url)
     previewUrls.current.clear()
@@ -58,7 +65,7 @@ export function UploadPage() {
   function addFiles(files: File[]) {
     const supported = files.filter(isSupportedImageFile)
     const maxBatchCount = systemQuery.data?.maxBatchCount ?? 20
-    if (items.length + supported.length > maxBatchCount) {
+    if (items.filter((item) => item.status !== 'complete').length + supported.length > maxBatchCount) {
       setError(t('upload.tooMany', { count: maxBatchCount }))
       return
     }
@@ -108,7 +115,7 @@ export function UploadPage() {
     if (visibility !== 'default') body.append('visibility', visibility)
     try {
       const image = await uploadForm<Image>('/api/v1/images', body, (progress) => updateItem(source.id, { progress }), controller.signal)
-      updateItem(source.id, { status: 'complete', progress: 100, result: image, controller: undefined, error: undefined })
+      updateItem(source.id, { status: 'complete', progress: 100, result: image, previewUrl: image.thumbnailUrl, controller: undefined, error: undefined })
       return true
     } catch (uploadError) {
       updateItem(source.id, {
@@ -128,7 +135,7 @@ export function UploadPage() {
     setError('')
     let nextIndex = 0
     let completed = 0
-    const concurrency = Math.min(systemQuery.data?.processingConcurrency ?? 1, queue.length)
+    const concurrency = Math.max(1, Math.min(systemQuery.data?.processingConcurrency ?? 1, queue.length))
     async function worker() {
       while (nextIndex < queue.length) {
         const item = queue[nextIndex]

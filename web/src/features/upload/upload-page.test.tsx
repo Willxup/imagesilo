@@ -157,4 +157,24 @@ describe('UploadPage', () => {
     fireEvent.click(rowFormatButton)
     expect(rowFormatButton.closest('.ui-dropdown-root')?.querySelector('.ui-dropdown-panel')).toHaveClass('is-left')
   })
+  it('releases completed previews and lets another full batch be queued', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:completed')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.mocked(apiRequest).mockResolvedValue({ processingConcurrency: 1, maxBatchCount: 1 } as SystemInfo)
+    vi.mocked(uploadForm).mockResolvedValue({ id: 'done', originalName: 'done.jpg', standardUrl: '/image/done', thumbnailUrl: '/thumbnail/done' })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><UploadPage /></QueryClientProvider>)
+    try {
+      await waitFor(() => expect(client.getQueryData(['system'])).toBeTruthy())
+      const input = screen.getByLabelText('选择图片文件')
+      fireEvent.change(input, { target: { files: [new File(['jpg'], 'done.jpg', { type: 'image/jpeg' })] } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 1 个文件/ }))
+      await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:completed'))
+      expect(screen.getByText('done.jpg').closest('article')?.querySelector('img')).toHaveAttribute('src', '/thumbnail/done')
+      fireEvent.change(input, { target: { files: [new File(['jpg'], 'next.jpg', { type: 'image/jpeg' })] } })
+      expect(screen.getByText('next.jpg')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /上传 1 个文件/ })).toBeEnabled()
+    } finally { view.unmount(); create.mockRestore(); revoke.mockRestore() }
+  })
+
 })
