@@ -62,13 +62,13 @@ for (const viewport of [{ width: 320, height: 640 }, { width: 844, height: 390 }
     await page.setViewportSize(viewport)
     const dock = page.locator('.workspace-dock')
     for (const [label, path] of [['迁移文件', 'migrations'], ['路径映射', 'aliases'], ['API Token', 'api-tokens'], ['设置', 'settings'], ['系统状态', 'system']]) {
-      await page.getByRole('button', { name: '打开菜单', exact: true }).click()
+      await page.getByRole('button', { name: /打开菜单/ }).click()
       const dialog = page.getByRole('dialog', { name: '页面导航' })
       await expect(dialog).toBeVisible()
       await dialog.getByRole('link', { name: label, exact: true }).click()
       await expect(page).toHaveURL(new RegExp(`/admin/${path}$`))
       await expect(dialog).not.toBeVisible()
-      await expect(dock.getByRole('button', { name: '打开菜单' })).toContainText(label)
+      await expect(dock.getByRole('button', { name: '打开菜单' })).toContainText(({ migrations: '迁移', aliases: '映射', 'api-tokens': 'Token', settings: '设置', system: '系统' } as Record<string, string>)[path])
       const box = (await dock.boundingBox())!
       expect(box.x).toBeGreaterThanOrEqual(0)
       expect(box.x + box.width).toBeLessThanOrEqual(viewport.width)

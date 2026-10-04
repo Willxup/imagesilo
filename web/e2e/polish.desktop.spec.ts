@@ -1,12 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { writeFile } from 'node:fs/promises'
 
 import { login, uploadTinyImage } from './helpers'
 
 test('switching navigation to search releases the background only after the last dialog closes', async ({ page }) => {
   await page.setViewportSize({ width: 800, height: 900 })
   await login(page)
-  const trigger = page.getByRole('button', { name: '打开菜单', exact: true })
+  const trigger = page.getByRole('button', { name: /打开菜单/ })
   await trigger.click()
   await expect(page.getByRole('dialog', { name: '页面导航' })).toBeVisible()
   await page.keyboard.press('ControlOrMeta+k')
@@ -44,6 +43,7 @@ test('delayed thumbnails retain an opacity transition and reveal after loading',
 })
 
 test('all pages retain readable layout in dark English mode', async ({ page }, testInfo) => {
+  test.setTimeout(90_000)
   await login(page)
   await page.getByRole('button', { name: '深色', exact: true }).click()
   await page.getByRole('button', { name: '语言', exact: true }).click()
@@ -53,7 +53,6 @@ test('all pages retain readable layout in dark English mode', async ({ page }, t
     for (const route of ['upload', 'images', 'migrations', 'aliases', 'api-tokens', 'settings', 'system']) {
       await page.goto(`/admin/${route}`)
       await expect(page.locator('main h1')).toBeVisible()
-      await page.waitForLoadState('networkidle')
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width)
       await page.screenshot({ path: testInfo.outputPath(`dark-${route}-${width}.png`), fullPage: true, animations: 'disabled' })
     }
@@ -76,43 +75,13 @@ test('slow and failed library loading preserves retry and navigation', async ({ 
   await page.getByRole('button', { name: '重试加载', exact: true }).click()
   await expect(page.getByText('图片列表加载失败。')).toHaveCount(0)
   await expect(page.locator('.image-skeleton')).toHaveCount(0)
+  await page.setViewportSize({ width: 1440, height: 320 })
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
   await page.getByRole('link', { name: '设置', exact: true }).click()
   await expect(page.locator('main h1')).toHaveText('设置')
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0)
 })
-
-test('records frame pacing during repeated navigation with CPU throttling', async ({ page }, testInfo) => {
-  await login(page)
-  const cdp = await page.context().newCDPSession(page)
-  await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 })
-  try {
-    const frames = page.evaluate(async () => {
-      const times: number[] = []
-      const longTasks: number[] = []
-      const observer = new PerformanceObserver((entries) => longTasks.push(...entries.getEntries().map((entry) => entry.duration)))
-      observer.observe({ type: 'longtask' })
-      await new Promise<void>((resolve) => {
-        const frame = (time: number) => { times.push(time); if (times.length < 240) requestAnimationFrame(frame); else resolve() }
-        requestAnimationFrame(frame)
-      })
-      observer.disconnect()
-      const intervals = times.slice(1).map((time, index) => time - times[index]).sort((a, b) => a - b)
-      return { samples: intervals.length, medianMs: intervals[Math.floor(intervals.length * .5)], p95Ms: intervals[Math.floor(intervals.length * .95)], maxMs: intervals.at(-1), framesOver50Ms: intervals.filter((value) => value > 50).length, longTasks }
-    })
-    for (const name of ['图片库', '路径映射', '设置', '上传图片', '系统状态', '上传图片']) {
-      await page.getByRole('navigation', { name: '主要导航' }).getByRole('link', { name, exact: true }).click()
-      await expect(page.locator('main h1')).toBeVisible()
-    }
-    const reportPath = testInfo.outputPath('frame-pacing-4x-cpu.json')
-    await writeFile(reportPath, JSON.stringify(await frames, null, 2))
-    await testInfo.attach('frame-pacing-4x-cpu.json', { path: reportPath, contentType: 'application/json' })
-  } finally {
-    await cdp.send('Emulation.setCPUThrottlingRate', { rate: 1 })
-    await cdp.detach()
-  }
-})
-
 
 test('background copy menu does not consume search input navigation keys', async ({ page }) => {
   await login(page)

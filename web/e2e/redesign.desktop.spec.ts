@@ -34,7 +34,7 @@ for (const width of [375, 768, 1024, 1440]) {
 test('mobile navigation contains focus, closes with Escape, and restores the trigger', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await login(page)
-  const trigger = page.getByRole('button', { name: '打开菜单', exact: true })
+  const trigger = page.getByRole('button', { name: /打开菜单/ })
   await trigger.focus()
   await trigger.press('Enter')
   const navigation = page.getByRole('dialog', { name: '页面导航' }).getByRole('navigation', { name: '主要导航' })
@@ -94,7 +94,7 @@ test('detail opens at the top and returns to the same filtered library position'
     expect(response.ok()).toBe(true)
   }
   await page.goto('/admin/images?q=redesign-position-')
-  const image = page.getByRole('link', { name: /^redesign-position-\d+\.webp$/ }).last()
+  const image = page.locator('.image-card-link').last()
   await image.scrollIntoViewIfNeeded()
   const imageName = await image.getAttribute('aria-label')
   const position = await page.evaluate(() => window.scrollY)

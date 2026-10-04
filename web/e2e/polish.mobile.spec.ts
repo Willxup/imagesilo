@@ -79,7 +79,7 @@ test('touch controls, copy feedback and overlays stay usable on narrow and short
     await expectInsideViewport(menu, viewport.width, viewport.height)
     await menu.getByRole('menuitem', { name: '复制 HTML', exact: true }).click()
     await card.getByRole('checkbox').uncheck()
-    await page.getByRole('button', { name: '打开菜单', exact: true }).click()
+    await page.getByRole('button', { name: /打开菜单/ }).click()
     const sheet = page.getByRole('dialog', { name: '页面导航' })
     await expectInsideViewport(sheet, viewport.width, viewport.height)
     const layerOrder = await page.evaluate(() => {

@@ -17,8 +17,9 @@ test('bottom navigation stays fixed and its indicator follows rapid navigation a
   await expect(page).toHaveURL(/\/admin\/settings$/)
   const expectIndicator = async () => {
     await expect.poll(async () => {
-      const active = (await dock.locator('[aria-current="page"]').boundingBox())!
-      const indicator = (await dock.locator('.workspace-dock-indicator').boundingBox())!
+      const active = await dock.locator('[aria-current="page"]').boundingBox()
+      const indicator = await dock.locator('.workspace-dock-indicator').boundingBox()
+      if (!active || !indicator) return Number.POSITIVE_INFINITY
       return Math.abs(indicator.x - active.x) + Math.abs(indicator.width - active.width)
     }).toBeLessThan(3)
   }
@@ -26,8 +27,11 @@ test('bottom navigation stays fixed and its indicator follows rapid navigation a
   await page.goBack()
   await expect(page).toHaveURL(/\/admin\/aliases$/)
   await expectIndicator()
+  await page.setViewportSize({ width: 1440, height: 320 })
+  const beforeScroll = await dock.boundingBox()
   await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight))
-  expect(await dock.boundingBox()).toEqual(before)
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0)
+  expect(await dock.boundingBox()).toEqual(beforeScroll)
   await page.emulateMedia({ reducedMotion: 'reduce' })
   const duration = await dock.locator('.workspace-dock-indicator').evaluate((el) => parseFloat(getComputedStyle(el).transitionDuration))
   expect(duration).toBeLessThanOrEqual(.001)

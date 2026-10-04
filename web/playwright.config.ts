@@ -32,7 +32,7 @@ export default defineConfig({
   projects: [
     {
       name: 'desktop-chromium',
-      testMatch: /desktop\.spec\.ts/,
+      testMatch: process.env.IMAGESILO_PROFILE === '1' ? /frame-pacing\.diagnostic\.ts/ : /desktop\.spec\.ts/,
       use: { ...devices['Desktop Chrome'] },
     },
     {
