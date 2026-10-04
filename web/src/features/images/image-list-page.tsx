@@ -1,8 +1,8 @@
 import { PreviewImage } from '../../components/ui/preview-image'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useLayoutEffect, useMemo, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams, useViewTransitionState } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams, useViewTransitionState } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { preloadAdminPage } from '../../app/page-loaders'
@@ -25,7 +25,14 @@ type ViewMode = 'grid' | 'list'
 const viewModeStorageKey = 'imagesilo_image_view_mode'
 const filtersOpenStorageKey = 'imagesilo_image_filters_open'
 const advancedFiltersOpenStorageKey = 'imagesilo_image_advanced_filters_open'
-const scrollPositions = new Map<string, number>()
+const scrollPositions = new Map<string, { top: number; count: number }>()
+
+function rememberScroll(key: string, count: number) {
+  scrollPositions.delete(key)
+  scrollPositions.set(key, { top: window.scrollY, count })
+  // Bound abandoned detail visits without changing browser history entries.
+  while (scrollPositions.size > 20) scrollPositions.delete(scrollPositions.keys().next().value!)
+}
 
 export function ImageListPage() {
   const { t, i18n } = useTranslation()
@@ -33,6 +40,8 @@ export function ImageListPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const formRef = useRef<HTMLFormElement>(null)
+  const filterToggleRef = useRef<HTMLButtonElement>(null)
   const searchKey = searchParams.toString()
   const filters = useMemo(() => normalizedFilterQuery(new URLSearchParams(searchKey)), [searchKey])
   const filterValues = useMemo(() => new URLSearchParams(filters), [filters])
@@ -127,14 +136,19 @@ export function ImageListPage() {
     writeLocalStorage(viewModeStorageKey, viewMode)
   }, [viewMode])
 
+  const { isSuccess, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query
   useLayoutEffect(() => {
-    if (!query.isSuccess || !scrollPositions.has(location.key)) return
+    if (!isSuccess || !scrollPositions.has(location.key)) return
     // Restore before the browser captures the return transition, not one frame later.
     const target = scrollPositions.get(location.key)
     if (target === undefined) return
-    window.scrollTo({ top: target, behavior: 'instant' })
+    if (images.length < target.count && hasNextPage && !isFetchNextPageError) {
+      if (!isFetchingNextPage) void fetchNextPage()
+      return
+    }
+    window.scrollTo({ top: target.top, behavior: 'instant' })
     scrollPositions.delete(location.key)
-  }, [query.isSuccess, location.key])
+  }, [isSuccess, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, images.length, location.key])
 
   function setVisibilityFilter(value: string) {
     const next = new URLSearchParams(searchParams)
@@ -148,6 +162,8 @@ export function ImageListPage() {
     if (failures.length > 0) toast.warning(t('toast.batchPartial', { success: result.items.length - failures.length, failed: failures.length }), { id })
     else toast.success(t('toast.batchSuccess', { count: result.items.length }), { id })
   }
+
+  useEffect(() => { formRef.current?.reset() }, [filters])
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -164,10 +180,14 @@ export function ImageListPage() {
     for (const name of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']) append(parameters, name, form.get(name))
     setSelected(new Set())
     setSearchParams(parameters, { replace: true })
-    if (window.matchMedia?.('(max-width: 720px)').matches) setFiltersOpen(false)
+    if (window.matchMedia?.('(max-width: 720px)').matches) {
+      setFiltersOpen(false)
+      filterToggleRef.current?.focus()
+    }
   }
 
   function resetFilters() {
+    formRef.current?.reset()
     setSelected(new Set())
     setCreatedFrom('')
     setCreatedTo('')
@@ -203,6 +223,7 @@ export function ImageListPage() {
         </div>
         <div className="library-tools">
           <Button
+            ref={filterToggleRef}
             className="filter-toggle"
             size="xs"
             variant="outline"
@@ -240,7 +261,7 @@ export function ImageListPage() {
         </div>
       </div>
 
-      <form className={`filter-panel ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} key={filters} onSubmit={applyFilters}>
+      <form className={`filter-panel ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} ref={formRef} onSubmit={applyFilters}>
         <div className="filter-panel-inner">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <Icon name="filter" className="h-4 w-4 text-cyan" />
@@ -372,7 +393,7 @@ export function ImageListPage() {
             returnTo={`${location.pathname}${location.search}`}
             onSelect={() => toggleSelected(image.id)}
             onVisibility={(visibility) => visibilityMutation.mutate({ id: image.id, visibility })}
-            onOpen={() => { scrollPositions.set(location.key, window.scrollY) }}
+            onOpen={() => { rememberScroll(location.key, images.length) }}
           />
         ))}
       </div>
@@ -480,20 +501,12 @@ function ImageCard({
   onOpen: () => void
 }) {
   const { t } = useTranslation()
-  const navigate = useNavigate()
   const transitioning = useViewTransitionState(`/admin/images/${image.id}`)
-  const open = () => { onOpen(); navigate(`/admin/images/${image.id}`, { state: { fromImageList: true, returnTo, preview: { url: image.standardUrl, name: image.originalName } }, viewTransition: true }) }
-  const stop = (event: MouseEvent) => event.stopPropagation()
-  const keyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.target !== event.currentTarget) return
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      open()
-    }
-  }
+  const linkState = { fromImageList: true, returnTo, preview: { url: image.standardUrl, name: image.originalName } }
   return (
-    <article className={`image-card-clickable ${list ? 'is-list' : ''} ${selected ? 'is-selected' : ''}`} role="link" tabIndex={0} onPointerEnter={() => preloadAdminPage(`/admin/images/${image.id}`)} onFocus={() => preloadAdminPage(`/admin/images/${image.id}`)} onClick={open} onKeyDown={keyDown} aria-label={image.originalName}>
-        <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'} style={{ '--image-ratio': `${image.width} / ${image.height}` } as CSSProperties}>
+    <article className={`image-card-clickable ${list ? 'is-list' : ''} ${selected ? 'is-selected' : ''}`} onPointerEnter={() => preloadAdminPage(`/admin/images/${image.id}`)} onFocus={() => preloadAdminPage(`/admin/images/${image.id}`)}>
+        <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'} style={{ '--image-ratio': image.width > 0 && image.height > 0 ? `${image.width} / ${image.height}` : '4 / 3' } as CSSProperties}>
+          <Link className="image-card-link" to={`/admin/images/${image.id}`} state={linkState} viewTransition onClick={onOpen} aria-label={image.originalName}>
           <PreviewImage
             className={list ? 'aspect-video h-full w-full object-cover' : 'aspect-[4/3] h-full w-full object-cover'}
             src={image.thumbnailUrl}
@@ -501,14 +514,15 @@ function ImageCard({
             loading="lazy"
             style={{ viewTransitionName: transitioning ? `image-${image.id}` : 'none' }}
           />
-          <label className="image-select" onClick={stop}>
+          </Link>
+          <label className="image-select">
             <Checkbox checked={selected} disabled={disabled} onChange={onSelect} aria-label={t('images.selectImage', { name: image.originalName })} />
           </label>
         </div>
         <div className="image-card-info">
           <div className="image-card-title-row">
             <h2 className="truncate text-sm font-semibold text-ink" title={image.originalName}>
-              {image.originalName}
+              <Link to={`/admin/images/${image.id}`} state={linkState} viewTransition onClick={onOpen}>{image.originalName}</Link>
             </h2>
             <Badge className="image-visibility-badge border-cyan/25 bg-cyan/8 text-cyan" variant="outline">
               <Icon name={image.visibility === 'public' ? 'visibility' : 'lock'} />
@@ -519,7 +533,7 @@ function ImageCard({
             {image.width} × {image.height} · {image.extension} · {formatBytes(image.storedSize)}
           </p>
           <p className={`image-card-date mt-1 text-xs text-muted-foreground${list ? '' : ' grid-date'}`}>{new Date(image.createdAt).toLocaleString()}</p>
-          <div className="image-card-actions mt-3" onClick={stop}>
+          <div className="image-card-actions mt-3">
             <Button
               size="xs"
               variant="outline"

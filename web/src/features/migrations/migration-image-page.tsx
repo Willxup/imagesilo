@@ -1,6 +1,6 @@
 import { PreviewImage } from '../../components/ui/preview-image'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -27,6 +27,8 @@ export function MigrationImagePage() {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
   const [searchParams, setSearchParams] = useSearchParams()
+  const formRef = useRef<HTMLFormElement>(null)
+  const filterToggleRef = useRef<HTMLButtonElement>(null)
   const searchKey = searchParams.toString()
   const filters = useMemo(() => normalizedFilterQuery(new URLSearchParams(searchKey)), [searchKey])
   const filterValues = useMemo(() => new URLSearchParams(filters), [filters])
@@ -97,6 +99,8 @@ export function MigrationImagePage() {
     writeLocalStorage(viewModeStorageKey, viewMode)
   }, [viewMode])
 
+  useEffect(() => { formRef.current?.reset() }, [filters])
+
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     const form = new FormData(event.currentTarget)
@@ -107,10 +111,14 @@ export function MigrationImagePage() {
     appendMiB(parameters, 'maxBytes', form.get('maxMiB'))
     setSelected(new Set())
     setSearchParams(parameters, { replace: true })
-    if (window.matchMedia?.('(max-width: 720px)').matches) setFiltersOpen(false)
+    if (window.matchMedia?.('(max-width: 720px)').matches) {
+      setFiltersOpen(false)
+      filterToggleRef.current?.focus()
+    }
   }
 
   function resetFilters() {
+    formRef.current?.reset()
     setSelected(new Set())
     setSearchParams(new URLSearchParams(), { replace: true })
   }
@@ -143,6 +151,7 @@ export function MigrationImagePage() {
         </div>
         <div className="library-tools">
           <Button
+            ref={filterToggleRef}
             className="filter-toggle"
             size="xs"
             variant="outline"
@@ -205,7 +214,7 @@ export function MigrationImagePage() {
         </p>
       ) : null}
 
-      <form className={`filter-panel mt-5 ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} key={filters} onSubmit={applyFilters}>
+      <form className={`filter-panel mt-5 ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} ref={formRef} onSubmit={applyFilters}>
         <div className="filter-panel-inner">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <Icon name="filter" className="h-4 w-4 text-cyan" />

@@ -93,7 +93,7 @@ export function ImageDetailPage() {
       <Button size="sm" variant="ghost" type="button" onClick={returnToList}><Icon name="chevronLeft" />{t('images.back')}</Button>
       <div className="image-detail-layout mt-5" role="status" aria-label={t('common.loading')}>
         <div className="image-detail-preview"><div className="image-detail-stage">{preview?.url ? <img decoding="async" src={preview.url} alt={preview.name ?? ''} style={{ viewTransitionName: `image-${imageId}` }} /> : <Icon name="loader" className="animate-spin" />}</div></div>
-        <aside className="image-detail-summary"><p className="page-kicker">{t('images.detailEyebrow')}</p><h1 className="page-title">{preview?.name}</h1><p className="page-description">{t('common.loading')}</p></aside>
+        <aside className="image-detail-summary"><p className="page-kicker">{t('images.detailEyebrow')}</p><h1 className="page-title">{preview?.name ?? t('images.detailEyebrow')}</h1><p className="page-description">{t('common.loading')}</p></aside>
       </div>
     </section>
   }
