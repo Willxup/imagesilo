@@ -56,6 +56,8 @@ describe('Modal', () => {
     last.focus()
     fireEvent.keyDown(document, { key: 'Tab' })
     expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
+    fireEvent.keyDown(document, { key: 'Tab', shiftKey: true })
+    expect(last).toHaveFocus()
     fireEvent.keyDown(document, { key: 'Escape' })
     expect(close).toHaveBeenCalledOnce()
 

@@ -43,6 +43,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   const rootRef = useRef<HTMLDivElement>(null)
   const onCloseRef = useRef(onClose)
   const openRef = useRef(open)
+  const backdropPress = useRef<{ x: number; y: number } | null>(null)
   const [mounted, setMounted] = useState(open)
   const [closing, setClosing] = useState(false)
 
@@ -151,8 +152,17 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       className={`ui-modal-root ${rootClassName}`}
       data-state={closing || !open ? 'closed' : 'open'}
       role="presentation"
-      onMouseDown={(event) => {
-        if (open && modalStack.at(-1) === modalId && event.target === event.currentTarget) onCloseRef.current()
+      onPointerDown={(event) => {
+        const root = event.currentTarget
+        const rect = root.getBoundingClientRect()
+        const inContent = event.clientX < rect.left + root.clientWidth && event.clientY < rect.top + root.clientHeight
+        backdropPress.current = event.target === root && inContent && event.button === 0 ? { x: event.clientX, y: event.clientY } : null
+      }}
+      onPointerCancel={() => { backdropPress.current = null }}
+      onClick={(event) => {
+        const press = backdropPress.current
+        backdropPress.current = null
+        if (open && modalStack.at(-1) === modalId && event.target === event.currentTarget && press && Math.hypot(event.clientX - press.x, event.clientY - press.y) < 8) onCloseRef.current()
       }}
     >
       <div

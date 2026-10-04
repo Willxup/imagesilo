@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -39,4 +39,20 @@ describe('DropdownMenu', () => {
     expect(trigger).toHaveFocus()
     expect(document.querySelector('.ui-dropdown-panel')).toHaveAttribute('data-state', 'closed')
   })
+  it('supports arrow/home/end navigation and closes on keyboard focus leaving', () => {
+    render(<><button>Outside</button><MenuHarness /></>)
+    const trigger = screen.getByRole('button', { name: 'Formats' })
+    fireEvent.click(trigger)
+    fireEvent.keyDown(trigger, { key: 'ArrowDown' })
+    expect(screen.getByRole('menuitem', { name: 'Direct' })).toHaveFocus()
+    fireEvent.keyDown(document.activeElement!, { key: 'End' })
+    expect(screen.getByRole('menuitem', { name: 'Markdown' })).toHaveFocus()
+    fireEvent.keyDown(document.activeElement!, { key: 'Home' })
+    expect(screen.getByRole('menuitem', { name: 'Direct' })).toHaveFocus()
+    act(() => screen.getByRole('button', { name: 'Outside' }).focus())
+    expect(document.querySelector('.ui-dropdown-panel')).toHaveAttribute('data-state', 'closed')
+    fireEvent.keyDown(document.activeElement!, { key: 'Escape' })
+    expect(screen.getByRole('button', { name: 'Outside' })).toHaveFocus()
+  })
+
 })

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from 'react'
 
 import { cn } from '../../lib/utils'
 import { Icon } from './icon'
@@ -40,20 +40,29 @@ export function DatePicker({
   const selected = parseDate(value)
   const minimum = parseDate(min ?? '')
   const [open, setOpen] = useState(false)
+  const [focusedDate, setFocusedDate] = useState(() => toDateValue(selected ?? new Date()))
+  const focusDay = useRef(false)
   const [visibleMonth, setVisibleMonth] = useState(() => startOfMonth(selected ?? new Date()))
 
   useEffect(() => {
     if (!open) return
-    const closeOutside = (event: PointerEvent) => {
+    const closeOutside = (event: Event) => {
       if (!rootRef.current?.contains(event.target as Node)) setOpen(false)
     }
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setOpen(false); returnFocus() }
+      if (event.key === 'Escape' && rootRef.current?.contains(event.target as Node)) {
+        event.preventDefault()
+        event.stopPropagation()
+        setOpen(false)
+        returnFocus()
+      }
     }
     document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('focusin', closeOutside)
     document.addEventListener('keydown', closeOnEscape)
     return () => {
       document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('focusin', closeOutside)
       document.removeEventListener('keydown', closeOnEscape)
     }
   }, [open])
@@ -76,9 +85,50 @@ export function DatePicker({
       panel.style.maxHeight = `${Math.max(44, opensAbove ? above : below)}px`
     }
     position()
+    const onScroll = (event: Event) => {
+      if (!panelRef.current?.contains(event.target as Node)) position()
+    }
     window.addEventListener('resize', position)
-    return () => window.removeEventListener('resize', position)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [open])
+
+  useLayoutEffect(() => {
+    if (open && focusDay.current) {
+      panelRef.current?.querySelector<HTMLButtonElement>(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true })
+      focusDay.current = false
+    }
+  }, [open, focusedDate, visibleMonth])
+
+  function moveFocus(date: Date) {
+    const next = minimum && startOfDay(date) < startOfDay(minimum) ? minimum : date
+    focusDay.current = true
+    setFocusedDate(toDateValue(next))
+    setVisibleMonth(startOfMonth(next))
+  }
+
+  function navigateDate(event: ReactKeyboardEvent<HTMLButtonElement>, date: Date) {
+    const offsets: Record<string, number> = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -7, ArrowDown: 7, Home: -date.getDay(), End: 6 - date.getDay() }
+    if (event.key in offsets) {
+      event.preventDefault()
+      moveFocus(new Date(date.getFullYear(), date.getMonth(), date.getDate() + offsets[event.key]))
+    } else if (event.key === 'PageUp' || event.key === 'PageDown') {
+      event.preventDefault()
+      const month = addMonths(date, (event.key === 'PageUp' ? -1 : 1) * (event.shiftKey ? 12 : 1))
+      const lastDay = new Date(month.getFullYear(), month.getMonth() + 1, 0).getDate()
+      moveFocus(new Date(month.getFullYear(), month.getMonth(), Math.min(date.getDate(), lastDay)))
+    }
+  }
+
+  function changeMonth(amount: number) {
+    const month = addMonths(visibleMonth, amount)
+    const firstEnabled = minimum && startOfDay(month) < startOfDay(minimum) ? minimum : month
+    setVisibleMonth(month)
+    setFocusedDate(toDateValue(firstEnabled))
+  }
 
   const days = useMemo(() => calendarDays(visibleMonth), [visibleMonth])
   const weekdays = useMemo(() => weekdayLabels(locale), [locale])
@@ -95,7 +145,7 @@ export function DatePicker({
   }
 
   function showPicker() {
-    setVisibleMonth(startOfMonth(selected ?? new Date()))
+    if (!open) moveFocus(selected ?? new Date())
     setOpen((current) => !current)
   }
 
@@ -119,9 +169,9 @@ export function DatePicker({
       {open ? (
         <div ref={panelRef} className="ui-date-popover" role="dialog" aria-label={ariaLabel}>
           <div className="ui-date-header">
-            <button type="button" aria-label={previousMonthLabel} onClick={() => setVisibleMonth((month) => addMonths(month, -1))}><Icon name="chevronLeft" /></button>
-            <strong>{monthFormatter.format(visibleMonth)}</strong>
-            <button type="button" aria-label={nextMonthLabel} onClick={() => setVisibleMonth((month) => addMonths(month, 1))}><Icon name="chevronRight" /></button>
+            <button type="button" aria-label={previousMonthLabel} disabled={Boolean(minimum && startOfMonth(minimum) >= visibleMonth)} onClick={() => changeMonth(-1)}><Icon name="chevronLeft" /></button>
+            <strong aria-live="polite">{monthFormatter.format(visibleMonth)}</strong>
+            <button type="button" aria-label={nextMonthLabel} onClick={() => changeMonth(1)}><Icon name="chevronRight" /></button>
           </div>
           <div className="ui-date-weekdays" aria-hidden="true">
             {weekdays.map((weekday, index) => <span key={`${weekday}-${index}`}>{weekday}</span>)}
@@ -136,6 +186,10 @@ export function DatePicker({
                   type="button"
                   aria-label={accessibleFormatter.format(date)}
                   aria-pressed={dateValue === value}
+                  data-date={dateValue}
+                  tabIndex={dateValue === focusedDate ? 0 : -1}
+                  onKeyDown={(event) => navigateDate(event, date)}
+                  onFocus={() => setFocusedDate(dateValue)}
                   disabled={disabled}
                   data-outside={date.getMonth() !== visibleMonth.getMonth() || undefined}
                   data-selected={dateValue === value || undefined}

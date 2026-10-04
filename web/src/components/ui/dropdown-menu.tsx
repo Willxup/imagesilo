@@ -55,8 +55,15 @@ export function DropdownMenu({ open, onOpenChange, trigger, children, className 
       panel.style.setProperty('--menu-enter-y', opensAbove ? '4px' : '-4px')
     }
     position()
+    const onScroll = (event: Event) => {
+      if (!panelRef.current?.contains(event.target as Node)) position()
+    }
     window.addEventListener('resize', position)
-    return () => window.removeEventListener('resize', position)
+    window.addEventListener('scroll', onScroll, true)
+    return () => {
+      window.removeEventListener('resize', position)
+      window.removeEventListener('scroll', onScroll, true)
+    }
   }, [align, mounted, open])
 
   useEffect(() => {
@@ -82,12 +89,14 @@ export function DropdownMenu({ open, onOpenChange, trigger, children, className 
       items[next]?.focus()
     }
     document.addEventListener('pointerdown', handleOutside)
+    document.addEventListener('focusin', handleOutside)
     document.addEventListener('mousedown', handleOutside)
     document.addEventListener('touchstart', handleOutside)
     document.addEventListener('click', handleOutside)
     document.addEventListener('keydown', handleKeyDown)
     return () => {
       document.removeEventListener('pointerdown', handleOutside)
+      document.removeEventListener('focusin', handleOutside)
       document.removeEventListener('mousedown', handleOutside)
       document.removeEventListener('touchstart', handleOutside)
       document.removeEventListener('click', handleOutside)
