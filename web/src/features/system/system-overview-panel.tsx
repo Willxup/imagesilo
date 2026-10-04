@@ -32,18 +32,19 @@ export function SystemOverviewPanel() {
       <div className="system-overview-header">
         <div><h2 className="text-xl font-semibold">{t('settings.overview')}</h2><p className="mt-2 text-xs leading-[18px] text-muted-foreground">{t('settings.overviewHelp')}</p></div>
         <div className="flex flex-wrap gap-2">
+          <Button className="standard-action-button" variant="outline" type="button" disabled={rebuild.isPending} onClick={() => setRebuildOpen(true)}><Icon name={rebuild.isPending ? 'loader' : 'refresh'} className={rebuild.isPending ? 'animate-spin' : ''} />{rebuild.isPending ? t('common.working') : t('settings.rebuildIndexes')}</Button>
           <Button className="standard-action-button" variant="outline" type="button" disabled={inspection.isPending} onClick={() => inspection.mutate()}><Icon name={inspection.isPending ? 'loader' : 'search'} className={inspection.isPending ? 'animate-spin' : ''} />{inspection.isPending ? t('common.working') : t('settings.inspectNow')}</Button>
         </div>
       </div>
       {query.isLoading ? <p className="mt-4 text-muted-foreground">{t('common.loading')}</p> : null}
       {query.isError ? <p className="mt-4 text-danger">{t('settings.overviewFailed')}</p> : null}
-      {query.data ? <Overview value={query.data} onRebuild={() => setRebuildOpen(true)} rebuilding={rebuild.isPending} /> : null}
+      {query.data ? <Overview value={query.data} /> : null}
       <ConfirmDialog open={rebuildOpen} onOpenChange={setRebuildOpen} title={t('settings.rebuildTitle')} description={t('settings.confirmRebuild')} confirmLabel={t('settings.rebuildIndexes')} cancelLabel={t('common.cancel')} closeLabel={t('common.close')} destructive pending={rebuild.isPending} onConfirm={() => rebuild.mutate()} />
     </section>
   )
 }
 
-function Overview({ value, onRebuild, rebuilding }: { value: SystemOverview; onRebuild: () => void; rebuilding: boolean }) {
+function Overview({ value }: { value: SystemOverview }) {
   const { t } = useTranslation()
   const maintenance = [
     { label: t('settings.lastInspection'), at: value.lastInspection?.checkedAt, summary: value.lastInspection ? t('settings.inspectionSummary', value.lastInspection) : t('settings.notRun') },
@@ -53,9 +54,9 @@ function Overview({ value, onRebuild, rebuilding }: { value: SystemOverview; onR
   return (
     <div>
       <div className="system-metrics">
-        <div className="system-metric"><label>{t('settings.imageCount')}</label><strong>{value.imageCount}</strong></div>
-        <div className="system-metric"><label>{t('settings.storageUsed')}</label><strong>{formatBytes(value.storedBytes)}</strong></div>
-        <div className="system-metric"><label>{t('settings.migrationStorageUsed')}</label><strong>{formatBytes(value.migrationStoredBytes)}</strong></div>
+        <div className="system-metric"><span className="system-metric-label">{t('settings.imageCount')}</span><strong>{value.imageCount}</strong></div>
+        <div className="system-metric"><span className="system-metric-label">{t('settings.storageUsed')}</span><strong>{formatBytes(value.storedBytes)}</strong></div>
+        <div className="system-metric"><span className="system-metric-label">{t('settings.migrationStorageUsed')}</span><strong>{formatBytes(value.migrationStoredBytes)}</strong></div>
       </div>
       <div className="system-detail-grid">
         <section className="system-detail-panel"><h3>{t('settings.runtimeResources')}</h3><dl>
@@ -71,7 +72,6 @@ function Overview({ value, onRebuild, rebuilding }: { value: SystemOverview; onR
             <div><p className={value.indexConsistent ? 'text-green' : 'text-danger'}>{value.indexConsistent ? t('settings.indexConsistent') : t('settings.indexDifferent')}</p><p className="mt-1 text-xs leading-[18px] text-muted-foreground">{t('settings.indexCounts', value.indexes)}</p></div>
           </div>
           {value.missingImageCount > 0 ? <div className="mt-4 rounded-xl bg-danger-soft p-4 text-sm text-danger" role="alert"><p className="font-medium">{t('settings.missingImages', { count: value.missingImageCount })}</p>{value.missingImageIds.length > 0 ? <code className="mt-2 block break-all text-xs">{value.missingImageIds.join(', ')}</code> : null}</div> : null}
-          <Button className="mt-5" variant="outline" type="button" disabled={rebuilding} onClick={onRebuild}><Icon name={rebuilding ? 'loader' : 'refresh'} className={rebuilding ? 'animate-spin' : ''} />{rebuilding ? t('common.working') : t('settings.rebuildIndexes')}</Button>
         </section>
       </div>
       <section className="system-timeline"><h3>{t('settings.maintenanceHistory')}</h3>
