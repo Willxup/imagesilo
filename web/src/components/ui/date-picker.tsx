@@ -98,7 +98,17 @@ export function DatePicker({
 
   useLayoutEffect(() => {
     if (open && focusDay.current) {
-      panelRef.current?.querySelector<HTMLButtonElement>(`[data-date="${focusedDate}"]`)?.focus({ preventScroll: true })
+      const panel = panelRef.current
+      const day = panel?.querySelector<HTMLButtonElement>(`[data-date="${focusedDate}"]`)
+      day?.focus({ preventScroll: true })
+      if (panel && day) {
+        // Reveal keyboard focus within the calendar without moving the page behind it.
+        const top = panel.getBoundingClientRect().top + panel.clientTop
+        const bottom = top + panel.clientHeight
+        const rect = day.getBoundingClientRect()
+        if (rect.top < top) panel.scrollTop += rect.top - top
+        else if (rect.bottom > bottom) panel.scrollTop += rect.bottom - bottom
+      }
       focusDay.current = false
     }
   }, [open, focusedDate, visibleMonth])
@@ -157,7 +167,7 @@ export function DatePicker({
         className="ui-date-trigger"
         data-placeholder={!selected || undefined}
         type="button"
-        aria-label={ariaLabel}
+        aria-label={`${ariaLabel}: ${selected ? dateFormatter.format(selected) : placeholder}`}
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={showPicker}

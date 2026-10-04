@@ -17,3 +17,12 @@ it('keeps setup input while switching language and exposes the language menu sta
   expect(screen.getByDisplayValue('setup@example.com')).toBeInTheDocument()
   expect(screen.getByRole('button', { name: 'EN' })).toHaveAttribute('aria-expanded', 'false')
 })
+
+it('announces setup validation errors', async () => {
+  await i18n.changeLanguage('zh-CN')
+  const { container } = render(<MemoryRouter><SetupPage /></MemoryRouter>)
+  fireEvent.change(container.querySelector('input[name="password"]')!, { target: { value: 'password-one' } })
+  fireEvent.change(container.querySelector('input[name="confirmPassword"]')!, { target: { value: 'password-two' } })
+  fireEvent.submit(container.querySelector('form')!)
+  expect(screen.getByRole('alert')).toHaveTextContent(i18n.t('setup.passwordMismatch'))
+})

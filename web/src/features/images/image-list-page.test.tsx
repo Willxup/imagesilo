@@ -94,7 +94,7 @@ describe('ImageListPage', () => {
     expect(advanced).toHaveAttribute('aria-expanded', 'true')
     expect(advanced).toHaveAttribute('data-open', 'true')
 
-    fireEvent.click(screen.getByRole('button', { name: '开始日期' }))
+    fireEvent.click(screen.getByRole('button', { name: /^开始日期:/ }))
     fireEvent.click(screen.getByRole('button', { name: '今天' }))
     fireEvent.click(screen.getByRole('button', { name: '应用筛选' }))
     await waitFor(() => {
