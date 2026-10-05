@@ -49,3 +49,80 @@ test('dark destructive controls keep readable contrast and overview errors retai
   await page.keyboard.press('Escape')
   await expect(dialog).toHaveCount(0)
 })
+
+
+test('short calendars reveal keyboard focus without scrolling the background page', async ({ page }) => {
+  await login(page)
+  await page.setViewportSize({ width: 844, height: 390 })
+  await page.goto('/admin/api-tokens')
+  await page.locator('.ui-date-trigger').click()
+  const calendar = page.locator('.ui-date-popover')
+  await expect(calendar).toBeVisible()
+  const pageScroll = await page.evaluate(() => window.scrollY)
+  for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp', 'ArrowUp', 'ArrowUp']) {
+    await page.keyboard.press(key)
+    await expect.poll(() => calendar.evaluate(panel => {
+      const day = document.activeElement
+      if (!(day instanceof HTMLElement) || !day.dataset.date) return false
+      const rect = day.getBoundingClientRect()
+      const top = panel.getBoundingClientRect().top + panel.clientTop
+      return rect.top >= top - 1 && rect.bottom <= top + panel.clientHeight + 1
+    })).toBe(true)
+    expect(await page.evaluate(() => window.scrollY)).toBe(pageScroll)
+  }
+})
+
+test('select entrance animates and respects reduced motion', async ({ page }) => {
+  await login(page)
+  const trigger = page.getByRole('combobox')
+  await trigger.click()
+  const panel = page.locator('.ui-select-content')
+  await expect(panel).toHaveCSS('animation-name', 'ui-menu-in')
+  await expect(panel).toHaveCSS('animation-duration', '0.14s')
+  await page.keyboard.press('Escape')
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await trigger.click()
+  expect(await panel.evaluate(el => parseFloat(getComputedStyle(el).animationDuration))).toBeLessThanOrEqual(.001)
+})
+
+
+test('token controls and long names fit narrow layouts and confirmation dialogs', async ({ page }) => {
+  const name = 'production_k8s_image_sync_worker_token'.repeat(2)
+  await login(page)
+  await page.route('**/api/v1/api-tokens', route => route.fulfill({ json: { items: [{ id: 'layout-test', name, tokenPrefix: 'test', scopes: ['images:upload'], status: 'active', expiresAt: null }] } }))
+  await page.setViewportSize({ width: 1024, height: 900 })
+  await page.goto('/admin/api-tokens')
+  const controls = page.locator('.token-expiry-controls')
+  await expect(controls).toBeVisible()
+  expect(await controls.evaluate(el => {
+    const bounds = el.getBoundingClientRect()
+    return Array.from(el.children).every(child => child.getBoundingClientRect().right <= bounds.right + 1)
+  })).toBe(true)
+  await page.setViewportSize({ width: 320, height: 800 })
+  await expect(page.getByText(name, { exact: true })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320)
+  await page.getByRole('button', { name: '吊销', exact: true }).click()
+  const description = page.locator('.ui-modal-header p')
+  await expect(description).toContainText(name)
+  expect(await description.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true)
+})
+
+test('reduced motion preserves the upload illustration on hover and drag', async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: 'reduce' })
+  await login(page)
+  const sheets = page.locator('.fold-art span')
+  const transforms = () => sheets.evaluateAll(elements => elements.map(el => getComputedStyle(el).transform))
+  const initial = await transforms()
+  await page.locator('.upload-dropzone').hover()
+  await expect.poll(transforms).toEqual(initial)
+  await page.mouse.move(0, 0)
+  const dataTransfer = await page.evaluateHandle(() => {
+    const transfer = new DataTransfer()
+    transfer.items.add(new File(['test'], 'motion-test.png', { type: 'image/png' }))
+    return transfer
+  })
+  await page.locator('.upload-dropzone').dispatchEvent('dragenter', { dataTransfer })
+  await dataTransfer.dispose()
+  await expect(page.locator('.upload-dropzone')).toHaveClass(/is-dragging/)
+  await expect.poll(transforms).toEqual(initial)
+})
