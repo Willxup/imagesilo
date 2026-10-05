@@ -14,7 +14,7 @@ import { formatBytes } from '../../lib/image-links'
 import type { DeleteImageResult, ImageAlias, ImageDetail, Visibility, WebPConversionResult } from '../../lib/api-types'
 
 export function ImageDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { imageId = '' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
@@ -115,7 +115,7 @@ export function ImageDetailPage() {
           <CopyLinkControl image={image} prominent />
           <Button size="sm" asChild variant="outline"><a href={image.standardUrl} target="_blank" rel="noreferrer"><Icon name="external" />{t('images.openImage')}</a></Button>
           </div>
-          <dl className="detail-core-info"><dt>{t('images.uploadedAt')}</dt><dd>{new Date(image.createdAt).toLocaleString()}</dd><dt>{t('images.uploadedVia')}</dt><dd>{t(`images.source.${image.uploadedVia}`)}</dd><dt>{t('images.storedSize')}</dt><dd>{formatBytes(image.storedSize)}</dd><dt>{t('images.format')}</dt><dd>{image.extension.toUpperCase()}</dd></dl>
+          <dl className="detail-core-info"><dt>{t('images.uploadedAt')}</dt><dd>{new Date(image.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</dd><dt>{t('images.uploadedVia')}</dt><dd>{t(`images.source.${image.uploadedVia}`)}</dd><dt>{t('images.storedSize')}</dt><dd>{formatBytes(image.storedSize)}</dd><dt>{t('images.format')}</dt><dd>{image.extension.toUpperCase()}</dd></dl>
         </aside>
       </div>
 

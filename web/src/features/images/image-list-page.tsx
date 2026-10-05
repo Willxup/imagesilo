@@ -500,7 +500,7 @@ function ImageCard({
   onVisibility: (value: Visibility) => void
   onOpen: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const transitioning = useViewTransitionState(`/admin/images/${image.id}`)
   const linkState = { fromImageList: true, returnTo, preview: { url: image.standardUrl, name: image.originalName } }
   return (
@@ -532,7 +532,7 @@ function ImageCard({
           <p className="mt-1 text-xs text-muted-foreground">
             {image.width} × {image.height} · {image.extension} · {formatBytes(image.storedSize)}
           </p>
-          <p className={`image-card-date mt-1 text-xs text-muted-foreground${list ? '' : ' grid-date'}`}>{new Date(image.createdAt).toLocaleString()}</p>
+          <p className={`image-card-date mt-1 text-xs text-muted-foreground${list ? '' : ' grid-date'}`}>{new Date(image.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</p>
           <div className="image-card-actions mt-3">
             <Button
               size="xs"

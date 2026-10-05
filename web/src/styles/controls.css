@@ -476,6 +476,7 @@
 }
 
 .ui-modal-header p {
+  overflow-wrap: anywhere;
   margin: 5px 0 0;
   color: var(--tail-text-soft);
   font-size: 12px;

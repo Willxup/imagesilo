@@ -170,12 +170,12 @@ export function ApiTokenPage() {
         {query.data?.items.map((token) => (
           <article className="surface-panel p-5" key={token.id}>
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0 [overflow-wrap:anywhere]">
                 <p className="font-semibold">{token.name}</p>
                 <p className="mt-1 font-mono text-sm text-muted-foreground">{token.tokenPrefix}…</p>
                 <p className="mt-2 text-sm text-muted-foreground">{token.scopes.join(', ')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {token.expiresAt ? t('apiTokens.expires', { value: new Date(token.expiresAt).toLocaleString() }) : t('apiTokens.neverExpires')}
+                  {token.expiresAt ? t('apiTokens.expires', { value: new Date(token.expiresAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language) }) : t('apiTokens.neverExpires')}
                 </p>
               </div>
               <div className="flex items-center gap-3">

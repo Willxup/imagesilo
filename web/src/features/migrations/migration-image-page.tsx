@@ -348,7 +348,7 @@ function MigrationImageCard({
   onSelect: () => void
   onDelete: () => void
 }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   return (
     <article className={`image-card-clickable migration-tile ${list ? 'is-list' : ''} ${selected ? 'is-selected' : ''}`}>
         <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'}>
@@ -380,7 +380,7 @@ function MigrationImageCard({
           <p className="mt-1 text-xs text-muted-foreground">
             {image.extension.replace('.', '').toUpperCase()} · {formatBytes(image.storedSize)}
           </p>
-          {list ? <p className="mt-1 text-xs text-muted-foreground">{new Date(image.modifiedAt).toLocaleString()}</p> : null}
+          {list ? <p className="mt-1 text-xs text-muted-foreground">{new Date(image.modifiedAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</p> : null}
           <div className="image-card-actions migration-image-actions mt-3">
             <CopyLinkControl image={image} compact />
             <Button asChild size="xs" variant="outline">

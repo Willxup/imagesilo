@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import i18n from '../../i18n/config'
 import { apiRequest } from '../../lib/api-client'
@@ -24,4 +24,15 @@ it('submits selected scopes and an optional date through the translated form', a
   expect(body.name).toBe('Test integration')
   expect(body.scopes).toEqual(['images:upload'])
   expect(Number.isNaN(Date.parse(body.expiresAt))).toBe(false)
+})
+
+it('formats token expiry using the selected app language', async () => {
+  const expiresAt = '2026-10-03T14:25:00Z'
+  vi.mocked(apiRequest).mockResolvedValue({ items: [{ id: 'locale-test', name: 'Locale test', tokenPrefix: 'test', scopes: ['images:upload'], status: 'active', expiresAt }] })
+  await i18n.changeLanguage('zh-CN')
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(<QueryClientProvider client={client}><ApiTokenPage /></QueryClientProvider>)
+  expect(await screen.findByText(i18n.t('apiTokens.expires', { value: new Date(expiresAt).toLocaleString('zh-CN') }))).toBeInTheDocument()
+  await act(async () => { await i18n.changeLanguage('en-US') })
+  expect(screen.getByText(i18n.t('apiTokens.expires', { value: new Date(expiresAt).toLocaleString('en-US') }))).toBeInTheDocument()
 })

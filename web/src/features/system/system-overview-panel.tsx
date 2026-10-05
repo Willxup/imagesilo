@@ -45,7 +45,7 @@ export function SystemOverviewPanel() {
 }
 
 function Overview({ value }: { value: SystemOverview }) {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const maintenance = [
     { label: t('settings.lastInspection'), at: value.lastInspection?.checkedAt, summary: value.lastInspection ? t('settings.inspectionSummary', value.lastInspection) : t('settings.notRun') },
     { label: t('settings.lastRebuild'), at: value.lastRebuild?.completedAt, summary: value.lastRebuild ? t('settings.rebuildSummary', value.lastRebuild) : t('settings.notRun') },
@@ -75,7 +75,7 @@ function Overview({ value }: { value: SystemOverview }) {
         </section>
       </div>
       <section className="system-timeline"><h3>{t('settings.maintenanceHistory')}</h3>
-        {maintenance.map((item) => <div className="system-timeline-row" key={item.label}><div><strong>{item.label} {item.at ? <time dateTime={item.at}>{new Date(item.at).toLocaleString()}</time> : null}</strong><p>{item.summary}</p></div></div>)}
+        {maintenance.map((item) => <div className="system-timeline-row" key={item.label}><div><strong>{item.label} {item.at ? <time dateTime={item.at}>{new Date(item.at).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</time> : null}</strong><p>{item.summary}</p></div></div>)}
       </section>
     </div>
   )
