@@ -2,6 +2,9 @@
 .page-transition { animation: page-enter 180ms var(--silo-ease); }
 .page-transition.is-detail, .page-transition[data-navigation="POP"] { animation: none; }
 
+/* Radix Select mounts on demand; retain its short entrance and reduced-motion fallback. */
+.ui-select-content { animation: ui-menu-in 140ms ease-out; }
+
 /* Transitions reverse from the current frame when an overlay is interrupted. */
 .ui-dropdown-panel { opacity: 1; transform: none; animation: none; transition: opacity 140ms ease-out, transform 140ms var(--silo-ease); }
 .ui-dropdown-panel[data-state="closed"] { opacity: 0; transform: translateY(var(--menu-enter-y, 3px)); pointer-events: none; }
@@ -45,5 +48,6 @@
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: .01ms !important; }
-  .image-card-clickable:hover .image-card-media, .image-card-clickable:hover .image-card-media img, .upload-dropzone:hover .fold-art span, .upload-dropzone.is-dragging .fold-art span { transform: none !important; }
+  .image-card-clickable:hover .image-card-media, .image-card-clickable:hover .image-card-media img { transform: none !important; }
+  .upload-dropzone:hover .fold-art span, .upload-dropzone.is-dragging .fold-art span { transform: rotate(-12deg) skewY(-7deg) !important; }
 }
