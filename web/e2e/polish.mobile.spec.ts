@@ -85,7 +85,7 @@ test('touch controls, copy feedback and overlays stay usable on narrow and short
     const layerOrder = await page.evaluate(() => {
       const toast = document.querySelector('[data-sonner-toaster]')!
       const modal = document.querySelector('.ui-modal-root')!
-      return Number(getComputedStyle(modal).zIndex) > Number(getComputedStyle(toast).zIndex)
+      return Number(getComputedStyle(toast).zIndex) > Number(getComputedStyle(modal).zIndex)
     })
     expect(layerOrder).toBe(true)
     await page.screenshot({ path: testInfo.outputPath(`navigation-${viewport.width}.png`), animations: 'disabled' })
