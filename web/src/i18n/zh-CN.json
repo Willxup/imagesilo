@@ -97,6 +97,10 @@
     }
   },
   "upload": {
+    "leaveTitle": "离开上传页面？",
+    "leaveDescription": "未完成的上传将停止，排队文件将被清除。已上传的图片会保留在图片库中。",
+    "leaveConfirm": "停止并离开",
+    "leaveCancel": "留在此页",
     "eyebrow": "我的图片空间",
     "title": "上传图片",
     "description": "留住灵感，从一张图片开始。",

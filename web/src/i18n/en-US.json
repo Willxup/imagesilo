@@ -97,6 +97,10 @@
     }
   },
   "upload": {
+    "leaveTitle": "Leave the upload page?",
+    "leaveDescription": "Unfinished uploads will stop and queued files will be cleared. Images already uploaded will remain in the library.",
+    "leaveConfirm": "Stop and leave",
+    "leaveCancel": "Stay here",
     "eyebrow": "YOUR IMAGE SPACE",
     "title": "Upload images",
     "description": "Keep a new image, then share it in a moment.",

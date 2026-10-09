@@ -1,8 +1,11 @@
+import { useState } from 'react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
+import { toast } from 'sonner'
 import { ApiError, apiRequest, uploadForm } from '../../lib/api-client'
 import type { SystemInfo } from '../../lib/api-types'
 import { UploadPage } from './upload-page'
@@ -32,7 +35,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'dropped.jpg', { type: 'image/jpeg' })
@@ -46,7 +49,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'camera.JPG', { type: '' })
@@ -59,7 +62,7 @@ describe('UploadPage', () => {
     const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-test')
     const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={queryClient}><UploadPage /></QueryClientProvider>)
+    render(<QueryClientProvider client={queryClient}><RoutedUploadPage /></QueryClientProvider>)
     const file = new File(['jpeg'], 'preview.jpg', { type: 'image/jpeg' })
     fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [file] } })
     const row = (await screen.findByText('preview.jpg')).closest('article')!
@@ -75,7 +78,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'large.jpg', { type: 'image/jpeg' })
@@ -119,7 +122,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
 
@@ -163,7 +166,7 @@ describe('UploadPage', () => {
     vi.mocked(apiRequest).mockResolvedValue({ processingConcurrency: 1, maxBatchCount: 1 } as SystemInfo)
     vi.mocked(uploadForm).mockResolvedValue({ id: 'done', originalName: 'done.jpg', standardUrl: '/image/done', thumbnailUrl: '/thumbnail/done' })
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const view = render(<QueryClientProvider client={client}><UploadPage /></QueryClientProvider>)
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
     try {
       await waitFor(() => expect(client.getQueryData(['system'])).toBeTruthy())
       const input = screen.getByLabelText('选择图片文件')
@@ -177,4 +180,61 @@ describe('UploadPage', () => {
     } finally { view.unmount(); create.mockRestore(); revoke.mockRestore() }
   })
 
+  it('keeps uploads when navigation is canceled and aborts the batch when leaving', async () => {
+    let signal: AbortSignal | undefined
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, nextSignal) => new Promise((_resolve, reject) => {
+      signal = nextSignal
+      nextSignal?.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const success = vi.spyOn(toast, 'success')
+    const warning = vi.spyOn(toast, 'warning')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = createMemoryRouter([{ path: '/upload', element: <UploadPage /> }, { path: '/images', element: <h1>Library destination</h1> }], { initialEntries: ['/upload'] })
+    render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
+    try {
+      fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [new File(['jpg'], 'first.jpg', { type: 'image/jpeg' }), new File(['jpg'], 'queued.jpg', { type: 'image/jpeg' })] } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+      await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(1))
+      const unload = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(unload)
+      expect(unload.defaultPrevented).toBe(true)
+      await act(async () => { await router.navigate('/images') })
+      fireEvent.click(await screen.findByRole('button', { name: '留在此页' }))
+      expect(router.state.location.pathname).toBe('/upload')
+      expect(signal?.aborted).toBe(false)
+      await act(async () => { await router.navigate('/images') })
+      fireEvent.click(await screen.findByRole('button', { name: '停止并离开' }))
+      await screen.findByRole('heading', { name: 'Library destination' })
+      await waitFor(() => expect(signal?.aborted).toBe(true))
+      expect(uploadForm).toHaveBeenCalledTimes(1)
+      expect(success).not.toHaveBeenCalled()
+      expect(warning).not.toHaveBeenCalled()
+      const after = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(after)
+      expect(after.defaultPrevented).toBe(false)
+    } finally { success.mockRestore(); warning.mockRestore() }
+  })
+
+  it('aborts in-flight requests on forced unmount without starting queued files', async () => {
+    let signal: AbortSignal | undefined
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, nextSignal) => new Promise((_resolve, reject) => {
+      signal = nextSignal
+      nextSignal?.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [new File(['jpg'], 'a.jpg', { type: 'image/jpeg' }), new File(['jpg'], 'b.jpg', { type: 'image/jpeg' })] } })
+    fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+    await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(1))
+    view.unmount()
+    await act(async () => { await Promise.resolve() })
+    expect(signal?.aborted).toBe(true)
+    expect(uploadForm).toHaveBeenCalledTimes(1)
+  })
+
 })
+
+function RoutedUploadPage() {
+  const [router] = useState(() => createMemoryRouter([{ path: '/', element: <UploadPage /> }]))
+  return <RouterProvider router={router} />
+}

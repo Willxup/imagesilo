@@ -2,8 +2,10 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
+import { useBlocker } from 'react-router-dom'
 
 import { Button } from '../../components/ui/button'
+import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { Card } from '../../components/ui/card'
 import { CopyLinkControl, CopyLinksControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
@@ -37,6 +39,10 @@ export function UploadPage() {
   const [error, setError] = useState('')
   const [uploading, setUploading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
+  const active = useRef(true)
+  const controllers = useRef(new Set<AbortController>())
+  const hasUnfinished = items.some((item) => item.status !== 'complete')
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => hasUnfinished && currentLocation.pathname !== nextLocation.pathname)
   const previewUrls = useRef(new Set<string>())
   const completedImages = useMemo(() => items.flatMap((item) => (item.result ? [item.result] : [])), [items])
 
@@ -44,10 +50,31 @@ export function UploadPage() {
     writeLocalStorage(visibilityStorageKey, visibility)
   }, [visibility])
 
-  useEffect(() => () => {
-    for (const url of previewUrls.current) URL.revokeObjectURL(url)
-    previewUrls.current.clear()
+  useEffect(() => {
+    active.current = true
+    const stop = () => {
+      active.current = false
+      for (const controller of controllers.current) controller.abort()
+      controllers.current.clear()
+      for (const url of previewUrls.current) URL.revokeObjectURL(url)
+      previewUrls.current.clear()
+    }
+    return stop
   }, [])
+
+  useEffect(() => {
+    if (!hasUnfinished) return
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [hasUnfinished])
+
+  function leaveUpload() {
+    active.current = false
+    for (const controller of controllers.current) controller.abort()
+    controllers.current.clear()
+    if (blocker.state === 'blocked') blocker.proceed()
+  }
 
   useEffect(() => {
     const retained = new Set(items.map((item) => item.previewUrl))
@@ -108,7 +135,9 @@ export function UploadPage() {
   }
 
   async function uploadOne(source: UploadItem) {
+    if (!active.current) return false
     const controller = new AbortController()
+    controllers.current.add(controller)
     updateItem(source.id, { status: 'uploading', progress: 0, result: undefined, controller, error: undefined })
     const body = new FormData()
     body.append('file', source.file)
@@ -124,20 +153,22 @@ export function UploadPage() {
         error: uploadError instanceof ApiError ? uploadError.message : uploadError instanceof Error ? uploadError.message : t('toast.uploadFailed'),
       })
       return false
+    } finally {
+      controllers.current.delete(controller)
     }
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault()
     const queue = items.filter((item) => item.status !== 'complete')
-    if (queue.length === 0) return
+    if (queue.length === 0 || uploading || !active.current) return
     setUploading(true)
     setError('')
     let nextIndex = 0
     let completed = 0
     const concurrency = Math.max(1, Math.min(systemQuery.data?.processingConcurrency ?? 1, queue.length))
     async function worker() {
-      while (nextIndex < queue.length) {
+      while (active.current && nextIndex < queue.length) {
         const item = queue[nextIndex]
         nextIndex += 1
         if (await uploadOne(item)) completed += 1
@@ -146,6 +177,7 @@ export function UploadPage() {
     await Promise.all(Array.from({ length: concurrency }, () => worker()))
     await queryClient.invalidateQueries({ queryKey: ['images'] })
     await queryClient.invalidateQueries({ queryKey: ['overview'] })
+    if (!active.current) return
     setUploading(false)
     if (completed === queue.length) toast.success(t('toast.uploadComplete', { count: completed }))
     else toast.warning(t('toast.uploadPartial', { success: completed, failed: queue.length - completed }))
@@ -157,17 +189,20 @@ export function UploadPage() {
     const succeeded = await uploadOne(item)
     await queryClient.invalidateQueries({ queryKey: ['images'] })
     await queryClient.invalidateQueries({ queryKey: ['overview'] })
+    if (!active.current) return
     setUploading(false)
     if (succeeded) toast.success(t('toast.uploadComplete', { count: 1 }))
     else toast.error(t('toast.uploadFailed'))
   }
 
   function updateItem(id: string, patch: Partial<UploadItem>) {
+    if (!active.current) return
     setItems((current) => current.map((item) => (item.id === id ? { ...item, ...patch } : item)))
   }
 
   return (
     <section onPaste={paste}>
+      <ConfirmDialog open={blocker.state === 'blocked'} onOpenChange={(open) => { if (!open && blocker.state === 'blocked') blocker.reset() }} title={t('upload.leaveTitle')} description={t('upload.leaveDescription')} confirmLabel={t('upload.leaveConfirm')} cancelLabel={t('upload.leaveCancel')} closeLabel={t('common.close')} destructive onConfirm={leaveUpload} />
       <div className="page-heading-row">
         <div>
           <p className="page-kicker">{t('upload.eyebrow')}</p>
