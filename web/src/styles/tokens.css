@@ -105,9 +105,10 @@
   --control-shadow: 0 1px 2px #16354008, inset 0 1px 0 #ffffffb3;
   --overlay-shadow: 0 12px 36px #112e3b1c, 0 2px 6px #112e3b08;
   --layer-menu: 120;
-  --layer-toast: 150;
   --layer-modal: 200;
   --layer-select: 240;
+  /* Operation failures must remain visible while their confirmation dialog is open. */
+  --layer-toast: 260;
   --silo-ease: cubic-bezier(.22, 1, .36, 1);
   --motion-fast: 140ms;
   --motion-normal: 220ms;

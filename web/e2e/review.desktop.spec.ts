@@ -126,3 +126,32 @@ test('reduced motion preserves the upload illustration on hover and drag', async
   await expect(page.locator('.upload-dropzone')).toHaveClass(/is-dragging/)
   await expect.poll(transforms).toEqual(initial)
 })
+
+
+for (const theme of ['light', 'dark'] as const) {
+  test(`failed modal actions keep error notifications above the overlay in ${theme} mode`, async ({ page }, testInfo) => {
+    await login(page)
+    if (theme === 'dark') await page.getByRole('button', { name: '深色', exact: true }).click()
+    await page.route('**/api/v1/maintenance/rebuild', route => route.fulfill({ status: 500, json: {} }))
+    await page.goto('/admin/system')
+    for (const viewport of [{ width: 393, height: 600 }, { width: 844, height: 390 }]) {
+      await page.setViewportSize(viewport)
+      await page.getByRole('button', { name: '重建缓存', exact: true }).click()
+      const dialog = page.getByRole('dialog')
+      const action = dialog.getByRole('button', { name: '重建缓存', exact: true })
+      await action.click()
+      const toast = page.locator('[data-sonner-toast][data-type="error"]')
+      await expect(toast).toContainText('维护操作失败')
+      await expect(action).toBeEnabled()
+      await expect(dialog).toBeVisible()
+      const toastLayer = await toast.evaluate(el => Number(getComputedStyle(el.closest('[data-sonner-toaster]')!).zIndex))
+      const modalLayer = await page.locator('.ui-modal-root').evaluate(el => Number(getComputedStyle(el).zIndex))
+      expect(toastLayer).toBeGreaterThan(modalLayer)
+      // Wait for the entrance to settle before retaining visual evidence.
+      await expect.poll(() => toast.evaluate(el => el.getBoundingClientRect().top)).toBeGreaterThanOrEqual(0)
+      await page.screenshot({ path: testInfo.outputPath(`modal-error-${theme}-${viewport.width}.png`) })
+      await page.keyboard.press('Escape')
+      await expect(dialog).toHaveCount(0)
+    }
+  })
+}
