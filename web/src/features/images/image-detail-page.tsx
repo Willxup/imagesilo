@@ -44,11 +44,14 @@ export function ImageDetailPage() {
   const deletion = useMutation({
     mutationFn: () => apiRequest<DeleteImageResult>(`/api/v1/images/${imageId}`, { method: 'DELETE' }),
     onMutate: () => toast.loading(t('common.working'), { id: 'detail-delete' }),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       toast.success(result.cleanupPending ? t('toast.imageDeletedCleanup') : t('toast.imageDeleted'), { id: 'detail-delete' })
-      void queryClient.invalidateQueries({ queryKey: ['images'] })
+      // Refresh cached lists before restoring their position, including shorter last pages.
+      await queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
       void queryClient.invalidateQueries({ queryKey: ['overview'] })
-      navigate('/admin/images', { replace: true })
+      const state = location.state as { fromImageList?: boolean; returnTo?: string } | null
+      if (state?.fromImageList) navigate(-1)
+      else navigate(state?.returnTo || '/admin/images', { replace: true })
     },
     onError: () => toast.error(t('toast.operationFailed'), { id: 'detail-delete' }),
   })
