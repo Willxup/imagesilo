@@ -70,6 +70,7 @@ func TestAliasValidationAndMissingTarget(t *testing.T) {
 		path, imageID, source string
 		wantErr               error
 	}{
+		{"/", aliasTestImageID, "test", delivery.ErrReservedAliasPath},
 		{"/api/v1/images", aliasTestImageID, "test", delivery.ErrReservedAliasPath},
 		{"/legacy/../image.jpg", aliasTestImageID, "test", delivery.ErrInvalidAliasPath},
 		{"/legacy/image.jpg", "not-a-uuid", "test", ErrInvalidImage},

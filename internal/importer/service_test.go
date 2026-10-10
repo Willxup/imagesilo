@@ -90,6 +90,25 @@ func TestBusyImportRejectsBeforeReadingRequestBytes(t *testing.T) {
 	}
 }
 
+func TestImportRejectsReservedRootWithoutLeavingFilesOrRows(t *testing.T) {
+	directory, db, service, index := prepareImportTest(t)
+	defer db.Close()
+	_, err := service.Import(context.Background(), bytes.NewReader(testWebP()), "root.webp", "/", Options{
+		Visibility: images.VisibilityPublic,
+	}, time.Now())
+	if !errors.Is(err, delivery.ErrReservedAliasPath) {
+		t.Fatalf("Import(root) error = %v, want ErrReservedAliasPath", err)
+	}
+	if countRows(t, db, "images") != 0 || countRows(t, db, "image_aliases") != 0 || index.Len() != 0 || index.AliasLen() != 0 {
+		t.Fatal("reserved root import left an image or alias")
+	}
+	for _, path := range []string{"images", filepath.Join("cache", "thumbnails"), "tmp"} {
+		if countFiles(t, filepath.Join(directory, path)) != 0 {
+			t.Fatalf("reserved root import left files in %s", path)
+		}
+	}
+}
+
 func prepareImportTest(t *testing.T) (string, *sql.DB, *Service, *delivery.Index) {
 	t.Helper()
 	directory := t.TempDir()
