@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useLayoutEffect, useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -19,6 +19,11 @@ export function ImageDetailPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
+  const currentEntry = useRef<string | null>(location.key)
+  useLayoutEffect(() => {
+    currentEntry.current = location.key
+    return () => { currentEntry.current = null }
+  }, [location.key])
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
   const [aliasPath, setAliasPath] = useState('')
@@ -49,6 +54,7 @@ export function ImageDetailPage() {
       // Refresh cached lists before restoring their position, including shorter last pages.
       await queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
       void queryClient.invalidateQueries({ queryKey: ['overview'] })
+      if (currentEntry.current !== location.key) return
       const state = location.state as { fromImageList?: boolean; returnTo?: string } | null
       if (state?.fromImageList) navigate(-1)
       else navigate(state?.returnTo || '/admin/images', { replace: true })
