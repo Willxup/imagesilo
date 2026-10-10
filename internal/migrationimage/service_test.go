@@ -76,6 +76,35 @@ func TestDeleteRequiresCapabilityAndCleansEmptyDirectories(t *testing.T) {
 	}
 }
 
+func TestSearchSkipsLiteralPercentNamesWithoutConfusingDeletion(t *testing.T) {
+	dataDirectory := prepareMigrationTestData(t)
+	imageBytes := migrationTestJPEG(t)
+	writeMigrationTestImage(t, dataDirectory, "images/photo%20one.jpg", imageBytes, time.Now())
+	writeMigrationTestImage(t, dataDirectory, "images/photo one.jpg", imageBytes, time.Now())
+	service := NewService(storage.NewFilesystem(dataDirectory), true)
+	page, err := service.Search(context.Background(), ListFilter{})
+	if err != nil || len(page.Items) != 1 || page.SkippedFiles != 1 {
+		t.Fatalf("Search() = %+v, %v, want one image and one skipped file", page, err)
+	}
+	listed := page.Items[0]
+	if listed.OriginalName != "photo one.jpg" || listed.Path != "/images/photo%20one.jpg" {
+		t.Fatalf("listed image = %+v", listed)
+	}
+	if _, err := service.Delete(context.Background(), listed.Path); err != nil {
+		t.Fatalf("Delete() error = %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDirectory, "migrations", "images", "photo one.jpg")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("selected file remains after deletion: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dataDirectory, "migrations", "images", "photo%20one.jpg")); err != nil {
+		t.Fatalf("literal-percent file was changed: %v", err)
+	}
+	remainingBytes, err := service.StoredBytes(context.Background())
+	if err != nil || remainingBytes != int64(len(imageBytes)) {
+		t.Fatalf("StoredBytes() after deletion = %d, %v", remainingBytes, err)
+	}
+}
+
 func TestSearchCachesUntilRefreshAndDeleteUpdatesSnapshot(t *testing.T) {
 	dataDirectory := prepareMigrationTestData(t)
 	base := time.Unix(1_800_000_000, 0).UTC()

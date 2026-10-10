@@ -238,7 +238,8 @@ func (s *Service) scanSnapshot(ctx context.Context) (*migrationSnapshot, error) 
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		canonicalPath, err := delivery.NormalizeAliasPath("/" + file.RelativePath)
+		encodedPath := (&url.URL{Path: "/" + file.RelativePath}).EscapedPath()
+		canonicalPath, err := delivery.NormalizeAliasPath(encodedPath)
 		if err != nil {
 			skipped++
 			continue
