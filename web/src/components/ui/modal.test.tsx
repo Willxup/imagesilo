@@ -64,4 +64,30 @@ describe('Modal', () => {
     view.unmount()
     expect(view.container.inert).toBe(false)
   })
+  it('keeps notifications accessible and includes their close action in the modal focus cycle', async () => {
+    const host = document.createElement('div')
+    host.id = 'imagesilo-notifications'
+    host.setAttribute('data-modal-notifications', '')
+    host.innerHTML = '<div data-sonner-toast><span role="alert">Operation failed</span><button>Dismiss notification</button></div>'
+    document.body.append(host)
+    const close = vi.fn()
+    const view = render(<Modal open onClose={close} title="Confirm" closeLabel="Close"><button>Retry</button></Modal>)
+    try {
+      const retry = screen.getByRole('button', { name: 'Retry' })
+      await waitFor(() => expect(retry).toHaveFocus())
+      expect(view.container.inert).toBe(true)
+      expect(host.inert).not.toBe(true)
+      expect(host).not.toHaveAttribute('aria-hidden')
+      expect(screen.getByRole('alert')).toHaveTextContent('Operation failed')
+      expect(screen.getByRole('dialog')).toHaveAttribute('aria-owns', host.id)
+      fireEvent.keyDown(retry, { key: 'Tab' })
+      const dismiss = screen.getByRole('button', { name: 'Dismiss notification' })
+      expect(dismiss).toHaveFocus()
+      fireEvent.keyDown(dismiss, { key: 'Escape' })
+      expect(close).not.toHaveBeenCalled()
+      fireEvent.keyDown(dismiss, { key: 'Tab' })
+      expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
+    } finally { view.unmount(); host.remove() }
+  })
+
 })

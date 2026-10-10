@@ -69,15 +69,18 @@ export function Modal({ open, onClose, title, description, children, footer, siz
 
   useLayoutEffect(() => {
     if (!mounted) return
+    const dialog = dialogRef.current
     const previousFocus = document.activeElement as HTMLElement | null
     if (modalStack.length === 0) {
       originalOverflow = document.body.style.overflow
       originalFocus = previousFocus
     }
+    document.querySelector('[aria-owns="imagesilo-notifications"]')?.removeAttribute('aria-owns')
+    dialog?.setAttribute('aria-owns', 'imagesilo-notifications')
     modalStack.push(modalId)
     document.body.style.overflow = 'hidden'
     const background = Array.from(document.body.children)
-      .filter((element) => element !== rootRef.current) as HTMLElement[]
+      .filter((element) => element !== rootRef.current && !element.hasAttribute('data-modal-notifications')) as HTMLElement[]
     for (const element of background) {
       const lock = backgroundLocks.get(element) ?? {
         count: 0, inert: Boolean(element.inert), ariaHidden: element.getAttribute('aria-hidden'),
@@ -97,27 +100,25 @@ export function Modal({ open, onClose, title, description, children, footer, siz
     }, 0)
     const handleKeyDown = (event: KeyboardEvent) => {
       if (modalStack.at(-1) !== modalId) return
+      if (event.target instanceof Element && event.target.closest('[data-modal-notifications]') && event.key === 'Escape') return
       if (event.key === 'Escape' && openRef.current) {
         event.preventDefault()
         onCloseRef.current()
         return
       }
       if (event.key !== 'Tab') return
-      const candidates = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])
+      // Notifications belong to the active dialog's accessible interaction region.
+      const notifications = Array.from(document.querySelectorAll<HTMLElement>('[data-modal-notifications] [data-sonner-toast]:not([data-removed="true"]) button:not([disabled])'))
+      const candidates = [...Array.from(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? []), ...notifications]
       if (candidates.length === 0) {
         event.preventDefault()
         dialogRef.current?.focus()
         return
       }
-      const first = candidates[0]
-      const last = candidates[candidates.length - 1]
-      if (event.shiftKey && (document.activeElement === first || !dialogRef.current?.contains(document.activeElement))) {
-        event.preventDefault()
-        last.focus()
-      } else if (!event.shiftKey && (document.activeElement === last || !dialogRef.current?.contains(document.activeElement))) {
-        event.preventDefault()
-        first.focus()
-      }
+      const index = candidates.indexOf(document.activeElement as HTMLElement)
+      const next = index < 0 ? (event.shiftKey ? candidates.length - 1 : 0) : (index + (event.shiftKey ? -1 : 1) + candidates.length) % candidates.length
+      event.preventDefault()
+      candidates[next].focus()
     }
     document.addEventListener('keydown', handleKeyDown)
     return () => {
@@ -126,6 +127,10 @@ export function Modal({ open, onClose, title, description, children, footer, siz
       const stackIndex = modalStack.lastIndexOf(modalId)
       if (stackIndex >= 0) modalStack.splice(stackIndex, 1)
       document.removeEventListener('keydown', handleKeyDown)
+      dialog?.removeAttribute('aria-owns')
+      if (wasTop && modalStack.length > 0) {
+        document.querySelector<HTMLElement>(`[data-modal-id="${modalStack.at(-1)}"]`)?.setAttribute('aria-owns', 'imagesilo-notifications')
+      }
       for (const element of background) {
         const lock = backgroundLocks.get(element)
         if (!lock || --lock.count > 0) continue
@@ -169,6 +174,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
         ref={dialogRef}
         className={`ui-modal-panel ${sizeClasses[size]}`}
         role="dialog"
+        data-modal-id={modalId}
         aria-modal="true"
         aria-labelledby={titleId}
         aria-describedby={description ? descriptionId : undefined}

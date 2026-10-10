@@ -150,6 +150,20 @@ for (const theme of ['light', 'dark'] as const) {
       // Wait for the entrance to settle before retaining visual evidence.
       await expect.poll(() => toast.evaluate(el => el.getBoundingClientRect().top)).toBeGreaterThanOrEqual(0)
       await page.screenshot({ path: testInfo.outputPath(`modal-error-${theme}-${viewport.width}.png`) })
+      expect(await toast.evaluate(el => Boolean(el.closest('[inert], [aria-hidden="true"]')))).toBe(false)
+      expect(await page.locator('body').ariaSnapshot()).toContain('维护操作失败')
+      await expect(page.locator('#root')).toHaveAttribute('inert', '')
+      const closeToast = toast.locator('[data-close-button]')
+      if (viewport.width === 393) {
+        await closeToast.click()
+      } else {
+        await action.focus()
+        await page.keyboard.press('Tab')
+        await expect(closeToast).toBeFocused()
+        await page.keyboard.press('Enter')
+      }
+      await expect(toast).toHaveCount(0)
+      await expect(dialog).toBeVisible()
       await page.keyboard.press('Escape')
       await expect(dialog).toHaveCount(0)
     }

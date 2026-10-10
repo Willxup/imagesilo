@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { createPortal } from 'react-dom'
 import { RouterProvider } from 'react-router-dom'
 import { Toaster } from 'sonner'
 
@@ -19,7 +20,9 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <RouterProvider router={router} />
-        <Toaster closeButton richColors duration={4000} position="top-right" visibleToasts={2} toastOptions={{ className: 'imagesilo-toast' }} />
+        {createPortal(<div id="imagesilo-notifications" data-modal-notifications>
+          <Toaster closeButton richColors duration={4000} position="top-right" visibleToasts={2} toastOptions={{ className: 'imagesilo-toast' }} />
+        </div>, document.body)}
       </AuthProvider>
     </QueryClientProvider>
   )
