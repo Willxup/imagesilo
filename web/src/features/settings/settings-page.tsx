@@ -370,6 +370,7 @@ function FieldError({ message }: { message: string }) {
 }
 
 function numberValue(raw: string, min: number, max: number) {
+  if (!raw.trim()) return null
   const value = Number(raw)
   return Number.isInteger(value) && value >= min && value <= max ? value : null
 }

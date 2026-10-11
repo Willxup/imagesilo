@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
@@ -80,5 +80,34 @@ describe('SettingsPage', () => {
       queryClient.setQueryData<AppSettings>(['settings'], (current) => (current ? { ...current, defaultVisibility: 'private', jpegQuality: 70 } : current))
     })
     expect(screen.getByLabelText('JPEG 质量')).toHaveValue(91)
+  })
+
+  it('rejects a blank PNG compression level while preserving a valid zero', async () => {
+    const loadSettings = vi.mocked(apiRequest).getMockImplementation()!
+    vi.mocked(apiRequest).mockImplementation(async (path, options) => {
+      if (path === '/api/v1/settings/processing') return JSON.parse(String(options?.body))
+      return loadSettings(path, options)
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <AuthContext.Provider value={{ session: null, setupStatus: { initialized: true }, isLoading: false, refresh: vi.fn(), refreshSetup: vi.fn(), logout: vi.fn() }}>
+          <SettingsPage />
+        </AuthContext.Provider>
+      </QueryClientProvider>,
+    )
+    const pngLevel = await screen.findByLabelText('PNG 压缩等级')
+    fireEvent.change(pngLevel, { target: { value: '' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存处理设置' }))
+    expect(pngLevel).toHaveAttribute('aria-invalid', 'true')
+    expect(vi.mocked(apiRequest).mock.calls.some(([path]) => path === '/api/v1/settings/processing')).toBe(false)
+
+    fireEvent.change(pngLevel, { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: '保存处理设置' }))
+    await waitFor(() => {
+      const request = vi.mocked(apiRequest).mock.calls.find(([path]) => path === '/api/v1/settings/processing')
+      expect(request).toBeDefined()
+      expect(JSON.parse(String(request?.[1]?.body)).pngCompressionLevel).toBe(0)
+    })
   })
 })
