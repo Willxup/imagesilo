@@ -200,7 +200,9 @@ export function ImageListPage() {
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
-      else next.add(id)
+      else if (next.size >= 100) {
+        toast.warning(t('images.selectionLimit'))
+      } else next.add(id)
       return next
     })
   }

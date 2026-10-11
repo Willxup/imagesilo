@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
+import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
@@ -46,7 +47,7 @@ const secondImage = {
 } as Image
 
 describe('ImageListPage', () => {
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
   beforeEach(() => {
     window.localStorage.clear()
@@ -128,6 +129,55 @@ describe('ImageListPage', () => {
       )
     })
   })
+
+  it('limits batch selection to 100 images across loaded pages while allowing replacements', async () => {
+    const items = Array.from({ length: 101 }, (_, index) => ({
+      ...image,
+      id: `019c1234-5678-7abc-8def-${String(index).padStart(12, '0')}`,
+      originalName: `batch-${index}.jpg`,
+    }))
+    vi.mocked(apiRequest).mockImplementation(async (path, options) => {
+      if (String(path).includes('batch-visibility')) {
+        const { imageIds } = JSON.parse(String(options?.body)) as { imageIds: string[] }
+        return { items: imageIds.map((imageId) => ({ imageId, status: 'updated' })) }
+      }
+      const offset = Number(new URL(String(path), 'http://imagesilo.test').searchParams.get('cursor') ?? 0)
+      return { items: items.slice(offset, offset + 24), nextCursor: offset + 24 < items.length ? String(offset + 24) : undefined }
+    })
+    const warning = vi.spyOn(toast, 'warning')
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole('checkbox', { name: '选择图片 batch-0.jpg' })
+    const loadMore = screen.getByRole('button', { name: '加载更多' })
+    for (let page = 1; page <= 4; page += 1) {
+      fireEvent.click(loadMore)
+      await waitFor(() => expect(document.querySelectorAll('.image-select input')).toHaveLength(Math.min((page + 1) * 24, 101)))
+    }
+    const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('.image-select input'))
+    act(() => { for (const checkbox of checkboxes) fireEvent.click(checkbox) })
+    expect(checkboxes.filter((checkbox) => checkbox.checked)).toHaveLength(100)
+    expect(checkboxes[100]).not.toBeChecked()
+    expect(warning).toHaveBeenCalledWith('每批最多选择 100 张图片。')
+
+    act(() => {
+      fireEvent.click(checkboxes[0])
+      fireEvent.click(checkboxes[100])
+    })
+    expect(checkboxes[100]).toBeChecked()
+    fireEvent.click(within(document.querySelector<HTMLElement>('.floating-batch-toolbar')!).getByRole('button', { name: '改为私密' }))
+    await waitFor(() => {
+      const request = vi.mocked(apiRequest).mock.calls.find(([path]) => String(path).includes('batch-visibility'))
+      expect(request).toBeDefined()
+      const { imageIds } = JSON.parse(String(request?.[1]?.body)) as { imageIds: string[] }
+      expect(imageIds).toHaveLength(100)
+      expect(imageIds).not.toContain(items[0].id)
+      expect(imageIds).toContain(items[100].id)
+    })
+  }, 15_000)
 
   it('restores and updates local library preferences', async () => {
     window.localStorage.setItem('imagesilo_image_view_mode', 'list')

@@ -177,6 +177,7 @@
     "deleteSelectionTitle": "Delete selected images",
     "deleteImageTitle": "Permanently delete image",
     "batchActions": "Batch actions",
+    "selectionLimit": "Each batch can contain at most 100 images.",
     "copyDirect": "Copy direct link",
     "details": "Details",
     "loadMore": "Load more",

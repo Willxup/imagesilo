@@ -177,6 +177,7 @@
     "deleteSelectionTitle": "删除选中图片",
     "deleteImageTitle": "永久删除图片",
     "batchActions": "批量操作",
+    "selectionLimit": "每批最多选择 100 张图片。",
     "copyDirect": "复制直链",
     "details": "详情",
     "loadMore": "加载更多",
