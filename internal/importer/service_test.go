@@ -109,6 +109,48 @@ func TestImportRejectsReservedRootWithoutLeavingFilesOrRows(t *testing.T) {
 	}
 }
 
+func TestImportCommitSharesAliasPathLock(t *testing.T) {
+	_, db, service, index := prepareImportTest(t)
+	defer db.Close()
+	options := Options{Visibility: images.VisibilityPublic}
+	anchor, err := service.Import(context.Background(), bytes.NewReader(testWebP()), "anchor.webp", "/legacy/anchor.webp", options, time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	const lockedPath = "/legacy/locked.webp"
+	release := service.barrier.BeginAliasChange(lockedPath)
+	defer func() {
+		if release != nil {
+			release()
+		}
+	}()
+	imported := make(chan error, 1)
+	go func() {
+		_, err := service.Import(context.Background(), bytes.NewReader(testWebP()), "locked.webp", lockedPath, options, time.Now())
+		imported <- err
+	}()
+	aliases := imagealias.NewService(imagealias.NewRepository(db), index, service.barrier)
+	if _, err := aliases.Create(context.Background(), "/legacy/unrelated.webp", anchor.Image.ID, "test", time.Now()); err != nil {
+		t.Fatalf("unrelated alias create failed: %v", err)
+	}
+	select {
+	case err := <-imported:
+		t.Fatalf("import passed an unfinished mutation of the same path: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	if countRows(t, db, "images") != 1 {
+		t.Fatal("import committed its database image while the alias path was locked")
+	}
+	release()
+	release = nil
+	if err := <-imported; err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := index.GetAlias(lockedPath); !ok || countRows(t, db, "images") != 2 {
+		t.Fatal("import did not publish its image and alias after the path lock was released")
+	}
+}
+
 func prepareImportTest(t *testing.T) (string, *sql.DB, *Service, *delivery.Index) {
 	t.Helper()
 	directory := t.TempDir()

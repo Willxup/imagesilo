@@ -34,7 +34,7 @@ type Service struct {
 	processor          processor.Engine
 	gate               *processor.Gate
 	barrier            *indexbarrier.Barrier
-	mutations          keyedLocker
+	mutations          indexbarrier.KeyedLocker
 	beforeMutationLock func(operation, imageID string)
 	afterContentUpdate func(imageID string)
 }

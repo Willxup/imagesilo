@@ -231,7 +231,7 @@ func (s *Service) ImportStaged(
 		}
 		thumbnailCommitted = true
 	}
-	releaseChange := s.barrier.BeginChange()
+	releaseChange := s.barrier.BeginAliasChange(alias.Path)
 	defer releaseChange()
 	if err := s.repository.Create(ctx, value, alias); err != nil {
 		return Result{}, err
