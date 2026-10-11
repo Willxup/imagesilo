@@ -41,4 +41,24 @@ describe('apiRequest', () => {
     expect(unauthorized).toHaveBeenCalledOnce()
     unsubscribe()
   })
+
+  it.each([
+    { code: 'invalid_credentials', notifications: 0 },
+    { code: 'invalid_session', notifications: 1 },
+  ])('keeps password validation separate from an expired session: $code', async ({ code, notifications }) => {
+    const unauthorized = vi.fn()
+    const unsubscribe = subscribeUnauthorized(unauthorized)
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ code, message: 'Password change failed' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+    try {
+      await expect(apiRequest('/api/v1/auth/password', { method: 'POST' })).rejects.toMatchObject({ status: 401, code })
+      expect(unauthorized).toHaveBeenCalledTimes(notifications)
+    } finally {
+      unsubscribe()
+    }
+  })
 })
