@@ -20,13 +20,8 @@ func validateDecode(path string, format Format, width, height int) (int, error) 
 	defer file.Close()
 	if format == FormatGIF {
 		decoded, err := gif.DecodeAll(file)
-		if err != nil || len(decoded.Image) == 0 {
+		if err != nil || len(decoded.Image) == 0 || decoded.Config.Width != width || decoded.Config.Height != height {
 			return 0, ErrInvalidImage
-		}
-		for _, frame := range decoded.Image {
-			if frame.Bounds().Dx() != width || frame.Bounds().Dy() != height {
-				return 0, ErrInvalidImage
-			}
 		}
 		return len(decoded.Image), nil
 	}

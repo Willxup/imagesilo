@@ -63,6 +63,29 @@ func TestInspectRejectsCorruptDisguisedAndExcessiveImages(t *testing.T) {
 	}
 }
 
+func TestInspectAcceptsGIFSubframesAndCountsFullCanvasPixels(t *testing.T) {
+	palette := color.Palette{color.Black, color.White}
+	var data bytes.Buffer
+	if err := gif.EncodeAll(&data, &gif.GIF{
+		Image: []*image.Paletted{
+			image.NewPaletted(image.Rect(0, 0, 2, 2), palette),
+			image.NewPaletted(image.Rect(1, 1, 3, 2), palette),
+		},
+		Delay:  []int{5, 5},
+		Config: image.Config{ColorModel: palette, Width: 4, Height: 3},
+	}); err != nil {
+		t.Fatalf("gif.EncodeAll() error = %v", err)
+	}
+	path := writeFixture(t, data.Bytes())
+	metadata, err := InspectFile(context.Background(), path, Limits{MaxBytes: 1 << 20, MaxTotalPixels: 24})
+	if err != nil || metadata.Format != FormatGIF || metadata.Width != 4 || metadata.Height != 3 || metadata.Frames != 2 {
+		t.Fatalf("InspectFile(subframes) = %+v, %v", metadata, err)
+	}
+	if _, err := InspectFile(context.Background(), path, Limits{MaxBytes: 1 << 20, MaxTotalPixels: 23}); err != ErrTooManyPixels {
+		t.Fatalf("subframe pixel limit error = %v, want ErrTooManyPixels", err)
+	}
+}
+
 func truncateFixture(data []byte, count int) []byte {
 	if count >= len(data) {
 		return nil
