@@ -31,6 +31,35 @@ for (const width of [375, 768, 1024, 1440]) {
   })
 }
 
+for (const theme of ['light', 'dark'] as const) {
+  test(`English migration tools fit the 768px viewport in ${theme} mode`, async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 900 })
+    await login(page)
+    await page.evaluate((theme) => {
+      localStorage.setItem('imagesilo_language', 'en-US')
+      localStorage.setItem('imagesilo_theme', theme)
+    }, theme)
+    await page.goto('/admin/migrations')
+    await expect(page.locator('main h1')).toHaveText('Migration management')
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await expectNoHorizontalOverflow(page)
+
+    const heading = page.locator('.page-heading-row')
+    const copy = heading.locator(':scope > div').first()
+    const tools = heading.locator(':scope > .library-tools')
+    const copyBounds = (await copy.boundingBox())!
+    const toolsBounds = (await tools.boundingBox())!
+    expect(toolsBounds.y).toBeGreaterThanOrEqual(copyBounds.y + copyBounds.height)
+    expect(Math.abs(toolsBounds.x - copyBounds.x)).toBeLessThanOrEqual(1)
+    for (const button of await tools.getByRole('button').all()) {
+      await expect(button).toBeVisible()
+      const bounds = (await button.boundingBox())!
+      expect(bounds.x).toBeGreaterThanOrEqual(0)
+      expect(bounds.x + bounds.width).toBeLessThanOrEqual(768)
+    }
+  })
+}
+
 test('mobile navigation contains focus, closes with Escape, and restores the trigger', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 })
   await login(page)
