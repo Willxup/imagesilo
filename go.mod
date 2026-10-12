@@ -2,7 +2,7 @@ module github.com/Willxup/imagesilo
 
 go 1.26.0
 
-toolchain go1.26.5
+toolchain go1.26.9
 
 require (
 	github.com/davidbyttow/govips/v2 v2.18.0
