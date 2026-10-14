@@ -98,6 +98,12 @@ func Build(ctx context.Context, db *sql.DB, filesystem *storage.Filesystem) (Sna
 		if err := aliasRows.Scan(&aliasPath, &imageID); err != nil {
 			return Snapshot{}, LoadResult{}, fmt.Errorf("scan delivery alias: %w", err)
 		}
+		// Earlier versions accepted root aliases, although the UI route shadows
+		// them. Keep those databases loadable without restoring root delivery.
+		if aliasPath == "/" {
+			result.SkippedAliasCount++
+			continue
+		}
 		normalized, err := NormalizeAliasPath(aliasPath)
 		if err != nil {
 			return Snapshot{}, LoadResult{}, fmt.Errorf("validate alias %q: %w", aliasPath, err)

@@ -58,6 +58,36 @@ func TestBuildRejectsReservedAliasStoredOutsideService(t *testing.T) {
 	}
 }
 
+func TestBuildSkipsLegacyRootAliasWithoutChangingStoredRows(t *testing.T) {
+	dataDirectory, db := prepareLoaderTest(t)
+	defer db.Close()
+	const imageID = "019c1234-5678-7abc-8def-0123456789ab"
+	insertDeliveryTestImage(t, db, imageID)
+	if err := os.WriteFile(filepath.Join(dataDirectory, "images", imageID), []byte("image"), 0o640); err != nil {
+		t.Fatalf("WriteFile() error = %v", err)
+	}
+	insertDeliveryTestAlias(t, db, "019c1234-5678-7abc-8def-0123456789ad", "/", imageID)
+	insertDeliveryTestAlias(t, db, "019c1234-5678-7abc-8def-0123456789ae", "/legacy/live.jpg", imageID)
+
+	snapshot, result, err := Build(context.Background(), db, storage.NewFilesystem(dataDirectory))
+	if err != nil {
+		t.Fatalf("Build() error = %v", err)
+	}
+	if len(result.LoadedIDs) != 1 || result.LoadedAliasCount != 1 || result.SkippedAliasCount != 1 {
+		t.Fatalf("Build() result = %+v", result)
+	}
+	if _, ok := snapshot.Aliases["/"]; ok || snapshot.Aliases["/legacy/live.jpg"] != imageID {
+		t.Fatalf("Build() aliases = %+v", snapshot.Aliases)
+	}
+	var rootAliases int
+	if err := db.QueryRow("SELECT COUNT(*) FROM image_aliases WHERE alias_path = '/'").Scan(&rootAliases); err != nil || rootAliases != 1 {
+		t.Fatalf("stored root aliases = %d, %v", rootAliases, err)
+	}
+	if _, err := NormalizeAliasPath("/"); !errors.Is(err, ErrReservedAliasPath) {
+		t.Fatalf("NormalizeAliasPath(root) error = %v, want ErrReservedAliasPath", err)
+	}
+}
+
 func TestBuildExcludesStoredFileWithUnexpectedSize(t *testing.T) {
 	dataDirectory, db := prepareLoaderTest(t)
 	defer db.Close()
