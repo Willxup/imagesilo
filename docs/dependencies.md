@@ -6,11 +6,13 @@
 
 | 组件 | 精确版本 | 官方来源 |
 |---|---:|---|
-| Go | 1.26.5 | `https://go.dev/dl/` |
+| Go | 1.26.10 | `https://go.dev/dl/` |
 | Node.js | 24.19.0 | `https://nodejs.org/dist/` |
 | TypeScript | 5.9.3 | `https://registry.npmjs.org/typescript/5.9.3` |
 | SQLite | 3.53.4 | `https://www.sqlite.org/download.html` |
 | libvips | 8.18.4 | `https://github.com/libvips/libvips/releases/tag/v8.18.4` |
+
+Go 最低版本为 1.26.10，以修复标准库 `crypto/x509` 的 [CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943)（[GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)）。`.go-version`、`go.mod` 与 Docker Go 构建镜像同步升级；历史 benchmark 中的工具链版本保留为测量记录。已发布的二进制和容器镜像需要重新构建并部署才能获得修复。
 
 本地编译使用 `github.com/mattn/go-sqlite3` 自带的 SQLite amalgamation；阶段 0 在下载模块后核对其 `SQLITE_VERSION`，不得把系统 SQLite 版本误当作二进制实际版本。
 
@@ -42,7 +44,7 @@ React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公�
 
 | 用途 | 镜像 | Digest |
 |---|---|---|
-| Go 构建 | `golang:1.26.5-bookworm` | `sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599` |
+| Go 构建 | `golang:1.26.10-bookworm` | `sha256:632dff7351799a5a9954a48dc06670ade72ee44e8c351cdc0e5a57af2fea21af` |
 | Node 构建 | `node:24.19.0-bookworm-slim` | `sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03` |
 | 运行时 | `debian:bookworm-slim` | `sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818` |
 

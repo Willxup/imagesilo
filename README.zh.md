@@ -136,7 +136,7 @@ docker compose exec imagesilo sh -c \
 
 ### 前置依赖
 
-- Go 1.26.5
+- Go 1.26.10
 - Node.js 24.19.0
 - npm
 
