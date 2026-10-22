@@ -22,7 +22,7 @@ clean:
 	rm -rf bin coverage internal/webui/dist web/dist web/playwright-report web/test-results
 
 docker-build:
-	docker buildx build --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --file deploy/docker/Dockerfile .
+	docker buildx build --pull --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --file deploy/docker/Dockerfile .
 
 e2e: build
 	npm --prefix web run e2e

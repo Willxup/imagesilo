@@ -1,6 +1,6 @@
-ARG NODE_IMAGE=node:24.19.0-bookworm-slim@sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03
-ARG GO_IMAGE=golang:1.26.5-bookworm@sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599
-ARG RUNTIME_IMAGE=debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
+ARG NODE_IMAGE=node:24-bookworm-slim
+ARG GO_IMAGE=golang:1.26-bookworm
+ARG RUNTIME_IMAGE=debian:bookworm-slim
 ARG VIPS_VERSION=8.18.4
 ARG VIPS_SHA256=2677bad6c422617fd1172d359c16af34e736965d042c214203a87187d26ff037
 ARG VERSION=dev
@@ -10,7 +10,7 @@ ARG BUILD_SOURCE=https://github.com/Willxup/imagesilo
 FROM ${NODE_IMAGE} AS web-build
 ARG VERSION
 WORKDIR /src/web
-COPY web/package.json web/package-lock.json ./
+COPY web/package.json web/package-lock.json web/.npmrc ./
 RUN npm ci
 COPY web/ ./
 COPY api/ /src/api/

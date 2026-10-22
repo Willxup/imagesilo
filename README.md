@@ -136,9 +136,11 @@ NFS and SMB are not supported. Do not run two ImageSilo containers against the s
 
 ### Prerequisites
 
-- Go 1.26.5
-- Node.js 24.19.0
+- Go >=1.26.10
+- Node.js >=24.22.1
 - npm
+
+Local toolchains need only meet these minimum versions; no exact version is pinned. npm enforces the Node.js minimum during installation. CI uses the latest Go 1.26.x and Node.js 24.x; Docker builds use rolling Debian Bookworm image tags with `--pull`.
 
 ### Build and Verify
 

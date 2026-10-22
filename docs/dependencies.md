@@ -1,16 +1,22 @@
 # 依赖版本基线
 
-依赖解析基线日期：2026-07-29；工具链与基础镜像复核日期：2026-08-06。全部版本排除了 alpha、beta、RC、preview 和 nightly；直接依赖使用精确版本，前端完整依赖树由 `package-lock.json` 锁定。
+依赖解析基线日期：2026-07-29；Go/Node.js 安全下限与基础镜像策略复核日期：2026-10-22。工具链使用最低版本要求和稳定系列滚动更新，不选 alpha、beta、RC、preview 或 nightly；应用依赖仍通过 `go.mod`、`go.sum` 与 `web/package-lock.json` 管理，不随工具链策略放宽。
 
 ## 工具链与原生组件
 
-| 组件 | 精确版本 | 官方来源 |
+| 组件 | 版本要求 | 官方来源 |
 |---|---:|---|
-| Go | 1.26.5 | `https://go.dev/dl/` |
-| Node.js | 24.19.0 | `https://nodejs.org/dist/` |
+| Go | >=1.26.10 | `https://go.dev/dl/` |
+| Node.js | >=24.22.1 | `https://nodejs.org/dist/` |
 | TypeScript | 5.9.3 | `https://registry.npmjs.org/typescript/5.9.3` |
 | SQLite | 3.53.4 | `https://www.sqlite.org/download.html` |
 | libvips | 8.18.4 | `https://github.com/libvips/libvips/releases/tag/v8.18.4` |
+
+Go 最低版本为 1.26.10，以修复标准库 `crypto/x509` 的 [CVE-2026-111943](https://www.cve.org/CVERecord?id=CVE-2026-111943)（[GO-2026-6809](https://pkg.go.dev/vuln/GO-2026-6809)）。`go.mod` 的 `go` 指令声明最低版本，不添加精确 `toolchain` 指令。
+
+Node.js 最低版本为 24.22.1，对应 [2026 年 10 月安全发布](https://nodejs.org/en/blog/vulnerability/october-2026-security-releases)。`web/package.json` 声明 `>=24.22.1`，`web/.npmrc` 强制检查 engines，Docker 前端阶段也复制该配置。Node.js 仅用于前端构建，不包含在最终运行镜像中。
+
+本地不保留 `.go-version`、`.node-version` 等精确版本文件，允许共用满足最低要求的工具链。CI 通过 `check-latest: true` 跟随最新 Go `1.26.x` 和 Node.js `24.x`，不自动跨版本系列。本地允许更高系列不代表所有未来版本都已验证或没有漏洞，安全下限仍需维护。历史 benchmark 中的工具链版本保留为测量记录。已发布的二进制和容器镜像需要以新版本重新构建并部署才能获得修复。
 
 本地编译使用 `github.com/mattn/go-sqlite3` 自带的 SQLite amalgamation；阶段 0 在下载模块后核对其 `SQLITE_VERSION`，不得把系统 SQLite 版本误当作二进制实际版本。
 
@@ -38,12 +44,12 @@ React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公�
 
 ## Docker 基础镜像
 
-以下均锁定多架构 OCI index digest：
+以下使用滚动标签，不固定补丁版本或 digest；构建与运行环境均保留 Debian Bookworm，保证 CGO/libvips 的 libc 兼容性：
 
-| 用途 | 镜像 | Digest |
+| 用途 | 镜像 | 更新范围 |
 |---|---|---|
-| Go 构建 | `golang:1.26.5-bookworm` | `sha256:6c5605ab3a9a9fb3c4eafe5b3d63cdbf3881caf113262b67862547b54a9db599` |
-| Node 构建 | `node:24.19.0-bookworm-slim` | `sha256:3638d9a6fe4030bd716be989438248074489337ba3275657f93595428be4fc03` |
-| 运行时 | `debian:bookworm-slim` | `sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818` |
+| Go 构建 | `golang:1.26-bookworm` | Go 1.26 系列及 Bookworm 更新 |
+| Node 构建 | `node:24-bookworm-slim` | Node.js 24 系列及 Bookworm 更新 |
+| 运行时 | `debian:bookworm-slim` | Bookworm 更新 |
 
-这些 digest 在依赖升级时重新解析，并重新执行 amd64/arm64 构建与 smoke test。
+`make docker-build` 和 Release 原生构建均使用 `--pull`，手动构建也必须加 `--pull`。同一源码在不同时间构建可能使用不同基础镜像；新发布仍需通过 amd64/arm64 构建与 smoke test。该策略不会更新已运行的容器，也不会覆盖已发布的不可变镜像。
