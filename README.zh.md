@@ -136,9 +136,11 @@ docker compose exec imagesilo sh -c \
 
 ### 前置依赖
 
-- Go 1.26.10
-- Node.js 24.19.0
+- Go >=1.26.10
+- Node.js >=24.22.1
 - npm
+
+本地工具链只需满足最低版本，不固定精确版本；npm 安装依赖时会强制检查 Node.js 最低版本。CI 使用最新 Go 1.26.x 和 Node.js 24.x；Docker 构建使用 Debian Bookworm 滚动镜像标签，并通过 `--pull` 刷新基础镜像。
 
 ### 构建与验证
 
