@@ -26,7 +26,7 @@
 |---|---|
 | 路径穿越、双重编码和保留路由 | `internal/delivery/path_test.go`、`internal/platform/storage/filesystem_test.go` |
 | Session 轮换、CSRF、登录限速和安全响应头 | `internal/httpapi/phase_two_test.go` |
-| 私密图片、Token Scope、吊销、过期和越权删除 | `internal/httpapi/phase_two_test.go`、`internal/httpapi/phase_five_test.go`、桌面 Playwright |
+| 私密图片、Token Scope、吊销、过期和越权删除 | `internal/httpapi/phase_two_test.go`、`internal/httpapi/phase_five_test.go` |
 | 损坏、伪装、截断和超像素图片 | `internal/platform/processor/processor_test.go` |
 | 标准 URL/别名、Range、416、ETag、条件请求和 HEAD | `internal/httpapi/delivery_handler_test.go`、`scripts/container-smoke.sh` |
 | 上传/删除/巡检/重建后的临时文件 | `internal/httpapi/phase_seven_test.go`、`scripts/container-smoke.sh` |

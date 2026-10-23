@@ -11,7 +11,7 @@
 
 以上 JavaScript Actions 均声明使用 Node.js 24 runtime（由 Action 自身提供，不受项目 setup-node 配置控制）。项目工具链由 `actions/setup-node` 选择 Node.js `24.x`、`actions/setup-go` 选择 Go `1.26.x`，均启用 `check-latest: true`，每次检查该系列的最新版本。本地不使用精确版本文件：Go 最低要求由 `go.mod` 指定为 1.26.10，Node.js 最低要求由 `web/package.json` 指定为 >=24.22.1，`web/.npmrc` 启用 `engine-strict=true`，安装时拒绝不满足要求的版本。
 
-唯一的 `quality` job 执行 `make check e2e`，覆盖 Go、React、OpenAPI 生成一致性、Lint、类型检查、单元/集成测试和单 worker 浏览器闭环。该工作流不构建容器镜像、不运行容器 smoke，也不接触 GHCR；`quality` check 名称保持不变。
+唯一的 `quality` job 执行 `make check`，覆盖 Go、React、前端构建、OpenAPI 生成一致性、Lint、类型检查和单元/集成测试。界面或浏览器行为变更按需使用现有浏览器人工或通过 computer-use 工具验收，见[浏览器验收清单](./browser-acceptance.md)；CI 不安装专用浏览器，也不执行浏览器验收。该工作流不构建容器镜像、不运行容器 smoke，也不接触 GHCR；`quality` check 名称保持不变。
 
 ## Release smoke
 

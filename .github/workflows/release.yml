@@ -73,7 +73,7 @@ jobs:
           go mod verify
           npm --prefix web audit --omit=dev --audit-level=critical
       - name: Run release quality gate
-        run: make check e2e
+        run: make check
 
   release-smoke:
     name: Release smoke and publish (${{ matrix.suffix }})

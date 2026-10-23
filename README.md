@@ -161,7 +161,9 @@ IMAGESILO_COOKIE_SECURE=false \
   ./bin/imagesilo serve
 ```
 
-Use `/healthz` for liveness and `/readyz` for SQLite readiness. Run `make e2e` for the single-worker browser workflow.
+Use `/healthz` for liveness and `/readyz` for SQLite readiness.
+
+UI and browser behavior changes are checked on demand in an existing browser, manually or with computer-use tools. No project-managed browser or browser-test framework is required. CI runs `make check` (build, lint, type checks, and unit/integration tests), not browser acceptance. Follow the [browser acceptance checklist](./docs/browser-acceptance.md), record actual results, and explicitly mark unverified scenarios.
 
 ## Documentation
 
