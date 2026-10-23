@@ -2,7 +2,7 @@ SHELL := /bin/sh
 GO_PACKAGES := ./cmd/... ./db/... ./internal/... ./tests/...
 VERSION ?= dev
 
-.PHONY: build check clean docker-build e2e format generate generate-check test web-build web-install web-sync
+.PHONY: build check clean docker-build format generate generate-check test web-build web-install web-sync
 
 build: web-sync
 	mkdir -p bin
@@ -19,13 +19,10 @@ check: web-sync
 
 clean:
 	go clean
-	rm -rf bin coverage internal/webui/dist web/dist web/playwright-report web/test-results
+	rm -rf bin coverage internal/webui/dist web/dist
 
 docker-build:
 	docker buildx build --pull --platform linux/amd64,linux/arm64 --build-arg VERSION=$(VERSION) --file deploy/docker/Dockerfile .
-
-e2e: build
-	npm --prefix web run e2e
 
 format:
 	gofmt -w cmd db internal

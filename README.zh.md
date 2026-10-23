@@ -161,7 +161,9 @@ IMAGESILO_COOKIE_SECURE=false \
   ./bin/imagesilo serve
 ```
 
-`/healthz` 用于存活检查，`/readyz` 用于 SQLite 就绪检查。运行 `make e2e` 可执行单 worker 浏览器闭环。
+`/healthz` 用于存活检查，`/readyz` 用于 SQLite 就绪检查。
+
+界面或浏览器行为变更按需使用现有浏览器，通过人工或 computer-use 工具验收，不要求项目安装或维护专用浏览器及浏览器测试框架。CI 执行 `make check`（构建、Lint、类型检查、单元/集成测试），不执行浏览器验收。请遵循[浏览器验收清单](./docs/browser-acceptance.md)，记录实际结果并明确标注未验证场景。
 
 ## 文档导航
 
