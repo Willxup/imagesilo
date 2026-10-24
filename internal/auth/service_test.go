@@ -238,3 +238,146 @@ func TestPasswordChangeCannotLeaveOldPasswordSession(t *testing.T) {
 		t.Fatalf("old-password session survived password change: identity=%+v error=%v", oldLogin.identity, err)
 	}
 }
+
+func TestProfileUpdateCannotLeaveConcurrentLoginWithOldProfile(t *testing.T) {
+	service, repository, keeper, keeperToken, now := newProfileConcurrencyTestService(t)
+	loginRead := make(chan struct{})
+	resumeLogin := make(chan struct{})
+	service.afterLoginPasswordRead = func() {
+		close(loginRead)
+		<-resumeLogin
+	}
+	loginDone := make(chan loginResult, 1)
+	go func() {
+		identity, token, _, err := service.Login(context.Background(), "old@example.com", "a secure test password", now)
+		loginDone <- loginResult{identity: identity, token: token, err: err}
+	}()
+	<-loginRead
+	profileStarted := make(chan struct{})
+	profileDone := make(chan error, 1)
+	go func() {
+		close(profileStarted)
+		_, err := service.UpdateProfile(context.Background(), keeper, "New Name", "new@example.com", now)
+		profileDone <- err
+	}()
+	<-profileStarted
+	var profileErr error
+	profileFinished := false
+	select {
+	case profileErr = <-profileDone:
+		profileFinished = true
+	case <-time.After(50 * time.Millisecond):
+	}
+	close(resumeLogin)
+	login := <-loginDone
+	if !profileFinished {
+		profileErr = <-profileDone
+	}
+	if login.err != nil || profileErr != nil {
+		t.Fatalf("Login() error = %v, UpdateProfile() error = %v", login.err, profileErr)
+	}
+	durable, err := repository.FindAdminByID(context.Background(), keeper.AdminID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, token := range []string{keeperToken, login.token} {
+		identity, err := service.Authenticate(token, now)
+		if err != nil || identity.DisplayName != durable.DisplayName || identity.Email != durable.Email {
+			t.Fatalf("Authenticate() = %+v, %v; durable profile = %s/%s", identity, err, durable.DisplayName, durable.Email)
+		}
+	}
+}
+
+func TestConcurrentProfileUpdatesKeepDatabaseAndSessionsConsistent(t *testing.T) {
+	service, repository, keeper, keeperToken, now := newProfileConcurrencyTestService(t)
+	service.index.mu.Lock()
+	indexLocked := true
+	defer func() {
+		if indexLocked {
+			service.index.mu.Unlock()
+		}
+	}()
+	firstDone := make(chan error, 1)
+	go func() {
+		_, err := service.UpdateProfile(context.Background(), keeper, "First Name", "first@example.com", now)
+		firstDone <- err
+	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		profile, err := repository.FindAdminByID(context.Background(), keeper.AdminID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if profile.Email == "first@example.com" {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("first profile update did not reach the database")
+		}
+		time.Sleep(time.Millisecond)
+	}
+	secondStarted := make(chan struct{})
+	secondDone := make(chan error, 1)
+	go func() {
+		close(secondStarted)
+		_, err := service.UpdateProfile(context.Background(), keeper, "Second Name", "second@example.com", now)
+		secondDone <- err
+	}()
+	<-secondStarted
+	time.Sleep(50 * time.Millisecond)
+	profile, err := repository.FindAdminByID(context.Background(), keeper.AdminID)
+	if err != nil || profile.Email != "first@example.com" {
+		t.Fatalf("second profile update overtook the first index update: %s/%s, %v", profile.DisplayName, profile.Email, err)
+	}
+	service.index.mu.Unlock()
+	indexLocked = false
+	if err := <-firstDone; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-secondDone; err != nil {
+		t.Fatal(err)
+	}
+	profile, err = repository.FindAdminByID(context.Background(), keeper.AdminID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := service.Authenticate(keeperToken, now)
+	if err != nil || profile.Email != "second@example.com" || identity.Email != profile.Email || identity.DisplayName != profile.DisplayName {
+		t.Fatalf("final session = %+v, %v; durable profile = %s/%s", identity, err, profile.DisplayName, profile.Email)
+	}
+}
+
+func newProfileConcurrencyTestService(t *testing.T) (*Service, *Repository, SessionIdentity, string, time.Time) {
+	t.Helper()
+	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatal(err)
+	}
+	passwordHash, err := hashPassword("a secure test password", PasswordParameters{
+		Memory: 1024, Iterations: 1, Parallelism: 1, SaltLength: 16, KeyLength: 32,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now().UTC().Truncate(time.Second)
+	repository := NewRepository(db)
+	if err := repository.CreateAdmin(context.Background(), Admin{
+		ID: "admin-id", DisplayName: "Old Name", Email: "old@example.com", PasswordHash: passwordHash,
+		CreatedAt: now, UpdatedAt: now,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	service, err := NewService(repository, NewSessionIndex())
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, token, _, err := service.Login(context.Background(), "old@example.com", "a secure test password", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return service, repository, identity, token, now
+}
