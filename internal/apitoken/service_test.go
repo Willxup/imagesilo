@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -127,4 +129,177 @@ func TestTokenExpiryAndValidation(t *testing.T) {
 	if reloaded.TokenCount() != 0 {
 		t.Fatalf("reloaded expired token count = %d", reloaded.TokenCount())
 	}
+}
+
+func TestRevokeDuringCreateCannotRepublishToken(t *testing.T) {
+	service, db := newTokenMutationTestService(t)
+	ctx := context.Background()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	committed := make(chan struct{})
+	resume := make(chan struct{})
+	var resumeOnce sync.Once
+	releaseCreate := func() { resumeOnce.Do(func() { close(resume) }) }
+	t.Cleanup(releaseCreate)
+	service.afterCreateCommit = func() {
+		close(committed)
+		<-resume
+	}
+	type createResult struct {
+		plaintext string
+		err       error
+	}
+	created := make(chan createResult, 1)
+	go func() {
+		_, plaintext, err := service.Create(ctx, "concurrent revoke", []Scope{ScopeImagesReadPrivate}, nil, now)
+		created <- createResult{plaintext: plaintext, err: err}
+	}()
+	select {
+	case <-committed:
+	case <-time.After(time.Second):
+		t.Fatal("Create() did not commit the token")
+	}
+
+	listed, err := service.List(ctx)
+	if err != nil || len(listed) != 1 {
+		t.Fatalf("List() before publication = %+v, %v", listed, err)
+	}
+	revokeAttempted := make(chan struct{})
+	service.beforeRevokeLock = func() { close(revokeAttempted) }
+	revoked := make(chan error, 1)
+	go func() { revoked <- service.Revoke(ctx, listed[0].ID) }()
+	<-revokeAttempted
+	revokeFinished := false
+	select {
+	case err := <-revoked:
+		revokeFinished = true
+		t.Errorf("Revoke() completed before the committed token was published: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	releaseCreate()
+	result := <-created
+	if result.err != nil {
+		t.Fatalf("Create() error = %v", result.err)
+	}
+	if !revokeFinished {
+		if err := <-revoked; err != nil {
+			t.Fatalf("Revoke() error = %v", err)
+		}
+	}
+	var status string
+	if err := db.QueryRow("SELECT status FROM api_tokens WHERE id = ?", listed[0].ID).Scan(&status); err != nil || status != "revoked" {
+		t.Fatalf("database token status = %q, %v", status, err)
+	}
+	if _, err := service.Authenticate(result.plaintext, now); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("Authenticate() accepted a durably revoked token: %v", err)
+	}
+	if err := service.Load(ctx, now); err != nil {
+		t.Fatalf("Load() after concurrent revoke error = %v", err)
+	}
+	if service.TokenCount() != 0 {
+		t.Fatalf("revoked token was restored by Load(): count = %d", service.TokenCount())
+	}
+}
+
+func TestWaitingTokenMutationAllowsRebuildAndAuthentication(t *testing.T) {
+	service, _ := newTokenMutationTestService(t)
+	ctx := context.Background()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	token, plaintext, err := service.Create(ctx, "rebuild ordering", []Scope{ScopeImagesUpload}, nil, now)
+	if err != nil {
+		t.Fatalf("Create() error = %v", err)
+	}
+	service.mutationsMu.Lock()
+	var unlockOnce sync.Once
+	unlock := func() { unlockOnce.Do(service.mutationsMu.Unlock) }
+	t.Cleanup(unlock)
+	attempted := make(chan struct{})
+	service.beforeRevokeLock = func() { close(attempted) }
+	revoked := make(chan error, 1)
+	go func() { revoked <- service.Revoke(ctx, token.ID) }()
+	<-attempted
+
+	rebuilt := make(chan error, 1)
+	go func() { rebuilt <- service.Load(ctx, now) }()
+	select {
+	case err := <-rebuilt:
+		if err != nil {
+			t.Fatalf("Load() while token mutation waits error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("a waiting token mutation blocked the rebuild barrier")
+	}
+	authenticated := make(chan error, 1)
+	go func() { _, err := service.Authenticate(plaintext, now); authenticated <- err }()
+	select {
+	case err := <-authenticated:
+		if err != nil {
+			t.Fatalf("Authenticate() while token mutation waits error = %v", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("authentication waited for the token mutation lock")
+	}
+	unlock()
+	if err := <-revoked; err != nil {
+		t.Fatalf("Revoke() after rebuild error = %v", err)
+	}
+	if _, err := service.Authenticate(plaintext, now); !errors.Is(err, ErrInvalidToken) {
+		t.Fatalf("Authenticate() after revoke error = %v", err)
+	}
+}
+
+func TestTokenMutationErrorsReleaseWriteLock(t *testing.T) {
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	now := time.Unix(1_800_000_000, 0).UTC()
+	for _, test := range []struct {
+		name string
+		run  func(*Service) error
+		want error
+	}{
+		{name: "create canceled", run: func(service *Service) error {
+			_, _, err := service.Create(canceled, "canceled", []Scope{ScopeImagesUpload}, nil, now)
+			return err
+		}, want: context.Canceled},
+		{name: "revoke canceled", run: func(service *Service) error { return service.Revoke(canceled, "missing") }, want: context.Canceled},
+		{name: "revoke missing", run: func(service *Service) error { return service.Revoke(context.Background(), "missing") }, want: ErrTokenNotFound},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			service, _ := newTokenMutationTestService(t)
+			if err := test.run(service); !errors.Is(err, test.want) {
+				t.Fatalf("mutation error = %v, want %v", err, test.want)
+			}
+			finished := make(chan error, 1)
+			go func() {
+				token, _, err := service.Create(context.Background(), "after error", []Scope{ScopeImagesUpload}, nil, now)
+				if err == nil {
+					err = service.Revoke(context.Background(), token.ID)
+				}
+				if err == nil {
+					err = service.Load(context.Background(), now)
+				}
+				finished <- err
+			}()
+			select {
+			case err := <-finished:
+				if err != nil {
+					t.Fatalf("token mutations after error failed: %v", err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("failed mutation retained a write lock or rebuild barrier")
+			}
+		})
+	}
+}
+
+func newTokenMutationTestService(t *testing.T) (*Service, *sql.DB) {
+	t.Helper()
+	db, err := database.Open(filepath.Join(t.TempDir(), "imagesilo.db"))
+	if err != nil {
+		t.Fatalf("database.Open() error = %v", err)
+	}
+	t.Cleanup(func() { db.Close() })
+	if err := migrations.Apply(context.Background(), db); err != nil {
+		t.Fatalf("migrations.Apply() error = %v", err)
+	}
+	return NewService(NewRepository(db), NewIndex()), db
 }

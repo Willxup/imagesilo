@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/Willxup/imagesilo/internal/indexbarrier"
@@ -13,9 +14,12 @@ import (
 )
 
 type Service struct {
-	repository *Repository
-	index      *Index
-	barrier    *indexbarrier.Barrier
+	repository        *Repository
+	index             *Index
+	barrier           *indexbarrier.Barrier
+	mutationsMu       sync.Mutex
+	afterCreateCommit func()
+	beforeRevokeLock  func()
 }
 
 func NewService(repository *Repository, index *Index) *Service {
@@ -65,10 +69,16 @@ func (s *Service) Create(ctx context.Context, name string, scopes []Scope, expir
 		ID: id.String(), Name: name, TokenPrefix: prefix, Scopes: normalizedScopes,
 		ExpiresAt: expiresAt, Status: "active", CreatedAt: now.UTC(),
 	}
+	// Keep each durable mutation and its index update in the same write order.
+	s.mutationsMu.Lock()
+	defer s.mutationsMu.Unlock()
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
 	if err := s.repository.Create(ctx, token, hash); err != nil {
 		return Token{}, "", err
+	}
+	if s.afterCreateCommit != nil {
+		s.afterCreateCommit()
 	}
 	s.index.Add(hash, identityFromToken(token))
 	return token, plaintext, nil
@@ -79,6 +89,11 @@ func (s *Service) List(ctx context.Context) ([]Token, error) {
 }
 
 func (s *Service) Revoke(ctx context.Context, id string) error {
+	if s.beforeRevokeLock != nil {
+		s.beforeRevokeLock()
+	}
+	s.mutationsMu.Lock()
+	defer s.mutationsMu.Unlock()
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
 	hash, err := s.repository.Revoke(ctx, id)
