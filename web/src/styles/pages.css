@@ -388,8 +388,8 @@
   .setup-card { margin: 0 auto; padding: 26px 24px 36px; }
   .setup-heading h1 { font-size: 24px; }
   .setup-form { gap: 18px; }
-  .alias-file-picker { flex-wrap: wrap; }
-  .alias-file-picker-action { margin-left: 54px; }
+  .alias-file-picker { display: grid; grid-template-columns: 42px minmax(0, 1fr); }
+  .alias-file-picker-action { grid-column: 2; justify-self: start; margin-left: 0; }
 }
 @media (max-width: 640px) {
   .component-card-heading { padding: 20px 20px 16px; }
