@@ -1,5 +1,29 @@
 import { expect, test } from '@playwright/test'
-import { login, uploadTinyImage } from './helpers'
+import { login, tinyWebP, uploadTinyImage } from './helpers'
+
+test('a created long alias path stays within a narrow viewport', async ({ page }, testInfo) => {
+  await login(page)
+  await page.setViewportSize({ width: 393, height: 852 })
+  await page.goto('/admin/aliases')
+  const aliasPath = `/legacy/${'long-valid-alias-'.repeat(12)}image.webp`
+  await page.getByLabel('历史路径', { exact: true }).first().fill(aliasPath)
+  await page.getByLabel('图片文件').setInputFiles({ name: 'long-alias.webp', mimeType: 'image/webp', buffer: tinyWebP })
+  await page.getByRole('button', { name: '创建映射', exact: true }).click()
+  const created = page.getByText(`已创建 ${aliasPath}`, { exact: true })
+  await expect(created).toBeVisible()
+  expect((await page.request.get(aliasPath)).status()).toBe(200)
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(393)
+  expect(await created.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true)
+  await page.getByRole('button', { name: '语言', exact: true }).click()
+  await page.getByRole('menuitem', { name: 'English', exact: true }).click()
+  await expect(page.getByText(`Created ${aliasPath}`, { exact: true })).toBeVisible()
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(393)
+  await expect(page.locator('.tail-language-dropdown')).toHaveCount(0)
+  const toast = page.locator('[data-sonner-toast]')
+  if (await toast.count()) await toast.locator('[data-close-button]').click()
+  await expect(toast).toHaveCount(0)
+  await page.screenshot({ path: testInfo.outputPath('alias-mobile-en.png'), fullPage: true })
+})
 
 test('filter submission preserves focus and real image links keep controls independent', async ({ page }) => {
   await login(page)

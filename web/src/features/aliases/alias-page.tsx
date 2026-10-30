@@ -131,7 +131,7 @@ export function AliasPage() {
               {create.isPending ? `${t('aliases.saving')} ${uploadProgress}%` : t('aliases.create')}
             </Button>
             {created ? (
-              <p className="mt-4 text-green" aria-live="polite">
+              <p className="mt-4 text-green [overflow-wrap:anywhere]" aria-live="polite">
                 {t('aliases.created', { path: created.path })}
               </p>
             ) : null}
