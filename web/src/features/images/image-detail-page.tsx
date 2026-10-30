@@ -22,7 +22,13 @@ export function ImageDetailPage() {
   const currentEntry = useRef<string | null>(location.key)
   useLayoutEffect(() => {
     currentEntry.current = location.key
-    return () => { currentEntry.current = null }
+    // Browser history changes before a concurrent route transition commits.
+    const invalidateReturn = () => { currentEntry.current = null }
+    window.addEventListener('popstate', invalidateReturn)
+    return () => {
+      currentEntry.current = null
+      window.removeEventListener('popstate', invalidateReturn)
+    }
   }, [location.key])
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
