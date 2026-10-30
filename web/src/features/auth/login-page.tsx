@@ -28,9 +28,10 @@ export function LoginPage() {
   const [theme, setTheme] = useState<'light' | 'dark'>(() => (document.documentElement.dataset.theme === 'dark' ? 'dark' : 'light'))
   const [languageOpen, setLanguageOpen] = useState(false)
   const { register, handleSubmit, formState } = useForm<LoginFields>()
+  const destination = loginDestination(location.state?.from)
 
   if (session) {
-    return <Navigate to="/admin/upload" replace />
+    return <Navigate to={destination} replace />
   }
   if (setupStatus && !setupStatus.initialized) {
     return <Navigate to="/admin/setup" replace />
@@ -45,7 +46,6 @@ export function LoginPage() {
         body: JSON.stringify(values),
       })
       await refresh()
-      const destination = typeof location.state?.from === 'string' ? location.state.from : '/admin/upload'
       navigate(destination, { replace: true })
     } catch {
       setError(t('auth.invalidCredentials'))
@@ -147,4 +147,11 @@ export function LoginPage() {
       </div>
     </div>
   )
+}
+
+function loginDestination(from: unknown) {
+  if (typeof from !== 'string' || !from.startsWith('/admin/')) return '/admin/upload'
+  const candidate = new URL(from, window.location.origin)
+  if (candidate.origin !== window.location.origin || !candidate.pathname.startsWith('/admin/') || ['/admin/login', '/admin/setup'].includes(candidate.pathname)) return '/admin/upload'
+  return `${candidate.pathname}${candidate.search}${candidate.hash}`
 }

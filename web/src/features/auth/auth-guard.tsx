@@ -14,7 +14,7 @@ export function AuthGuard({ children }: { children: ReactNode }) {
     if (setupStatus && !setupStatus.initialized) {
       return <Navigate to="/admin/setup" replace />
     }
-    return <Navigate to="/admin/login" state={{ from: location.pathname }} replace />
+    return <Navigate to="/admin/login" state={{ from: `${location.pathname}${location.search}${location.hash}` }} replace />
   }
   return children
 }
