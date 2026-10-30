@@ -7,7 +7,7 @@ export type LinkableImage = {
 
 export function imageLinks(image: LinkableImage): Record<LinkFormat, string> {
   const direct = new URL(image.standardUrl, window.location.origin).toString()
-  const alt = image.originalName.replaceAll(']', '\\]')
+  const alt = image.originalName.replace(/[\\[\]]/g, '\\$&')
   return {
     direct,
     markdown: `![${alt}](${direct})`,
