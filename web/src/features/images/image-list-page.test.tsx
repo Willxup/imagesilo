@@ -11,6 +11,8 @@ import { ImageDetailPage } from './image-detail-page'
 import { ImageListPage } from './image-list-page'
 
 vi.mock('../../lib/api-client', () => ({ apiRequest: vi.fn() }))
+// Keep page behavior tests focused on interactions, without rendering decorative SVG trees.
+vi.mock('../../components/ui/icon', () => ({ Icon: () => null }))
 
 const image = {
   id: '019c1234-5678-7abc-8def-0123456789ab',
@@ -160,12 +162,18 @@ describe('ImageListPage', () => {
     )
     await screen.findByRole('checkbox', { name: '选择图片 batch-0.jpg' })
     const loadMore = screen.getByRole('button', { name: '加载更多' })
-    for (let page = 1; page <= 4; page += 1) {
-      fireEvent.click(loadMore)
-      await waitFor(() => expect(document.querySelectorAll('.image-select input')).toHaveLength(Math.min((page + 1) * 24, 101)))
+    // Select each page as it loads to exercise cross-page retention without rerendering
+    // all 101 cards for every selection.
+    for (let page = 0; page <= 4; page += 1) {
+      if (page > 0) {
+        fireEvent.click(loadMore)
+        await waitFor(() => expect(document.querySelectorAll('.image-select input')).toHaveLength(Math.min((page + 1) * 24, 101)))
+      }
+      const loaded = Array.from(document.querySelectorAll<HTMLInputElement>('.image-select input'))
+      act(() => { for (const checkbox of loaded.slice(page * 24)) fireEvent.click(checkbox) })
+      expect(loaded.filter((checkbox) => checkbox.checked)).toHaveLength(Math.min(loaded.length, 100))
     }
     const checkboxes = Array.from(document.querySelectorAll<HTMLInputElement>('.image-select input'))
-    act(() => { for (const checkbox of checkboxes) fireEvent.click(checkbox) })
     expect(checkboxes.filter((checkbox) => checkbox.checked)).toHaveLength(100)
     expect(checkboxes[100]).not.toBeChecked()
     expect(warning).toHaveBeenCalledWith('每批最多选择 100 张图片。')
