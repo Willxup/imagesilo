@@ -121,9 +121,12 @@ func TestAliasDeleteSerializesWithSamePathReplacement(t *testing.T) {
 			if targetID != aliasTestImageID {
 				insertAliasTestImage(t, db, targetID)
 			}
+			const unrelatedImageID = "019c1234-5678-7abc-8def-0123456789ad"
+			insertAliasTestImage(t, db, unrelatedImageID)
 			index := delivery.NewIndex()
 			index.Add(aliasTestImageID, delivery.Target{StorageKey: aliasTestImageID})
 			index.Add(targetID, delivery.Target{StorageKey: targetID})
+			index.Add(unrelatedImageID, delivery.Target{StorageKey: unrelatedImageID})
 			service := NewService(NewRepository(db), index, indexbarrier.New())
 			old, err := service.Create(context.Background(), "/legacy/replaced.jpg", aliasTestImageID, "old", time.Now())
 			if err != nil {
@@ -147,7 +150,7 @@ func TestAliasDeleteSerializesWithSamePathReplacement(t *testing.T) {
 				_, err := service.Create(context.Background(), old.Path, targetID, "new", time.Now())
 				replacement <- err
 			}()
-			if _, err := service.Create(context.Background(), "/legacy/other.jpg", targetID, "other", time.Now()); err != nil {
+			if _, err := service.Create(context.Background(), "/legacy/other.jpg", unrelatedImageID, "other", time.Now()); err != nil {
 				t.Fatalf("unrelated alias create failed: %v", err)
 			}
 			if _, ok := index.GetAlias(old.Path); !ok {

@@ -43,6 +43,8 @@ func (s *Service) Create(ctx context.Context, path, imageID, source string, now 
 		return Alias{}, fmt.Errorf("generate image alias id: %w", err)
 	}
 	value := Alias{ID: id.String(), Path: normalizedPath, ImageID: imageID, Source: source, CreatedAt: now.UTC()}
+	unlock := s.barrier.LockImage(imageID)
+	defer unlock()
 	release := s.barrier.BeginAliasChange(value.Path)
 	defer release()
 	if err := s.repository.Create(ctx, value); err != nil {
