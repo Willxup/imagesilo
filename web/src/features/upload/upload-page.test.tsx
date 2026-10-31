@@ -87,6 +87,44 @@ describe('UploadPage', () => {
     expect(await screen.findByText('Image exceeds the configured maximum.')).toBeInTheDocument()
   })
 
+  it.each([1, 2])('stops a batch immediately on 401 with %i workers before the page unmounts', async (concurrency) => {
+    vi.mocked(apiRequest).mockResolvedValue({ processingConcurrency: concurrency, maxBatchCount: 20 } as SystemInfo)
+    const signals: AbortSignal[] = []
+    let expire!: (reason: ApiError) => void
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, signal) => new Promise((_resolve, reject) => {
+      if (signals.length === 0) expire = reject
+      signals.push(signal)
+      signal.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const warning = vi.spyOn(toast, 'warning')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    try {
+      await waitFor(() => expect(client.getQueryData(['system'])).toBeTruthy())
+      const files = ['first.jpg', 'second.jpg', 'queued.jpg'].map(name => new File(['jpg'], name, { type: 'image/jpeg' }))
+      fireEvent.change(screen.getByLabelText('选择图片文件'), { target: { files } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 3 个文件/ }))
+      await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(concurrency))
+
+      await act(async () => { expire(new ApiError(401, 'Session expired.', 'invalid_session')) })
+
+      expect(uploadForm).toHaveBeenCalledTimes(concurrency)
+      expect(signals.slice(1).every(signal => signal.aborted)).toBe(true)
+      expect(warning).not.toHaveBeenCalled()
+    } finally { view.unmount(); warning.mockRestore() }
+  })
+
+  it('continues queued uploads after a non-authentication failure', async () => {
+    vi.mocked(uploadForm).mockRejectedValue(new ApiError(413, 'Image is too large.', 'file_too_large'))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    const files = ['first.jpg', 'second.jpg'].map(name => new File(['jpg'], name, { type: 'image/jpeg' }))
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files } })
+    fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+    await waitFor(() => expect(screen.getAllByText('Image is too large.')).toHaveLength(2))
+    expect(uploadForm).toHaveBeenCalledTimes(2)
+  })
+
   it('restores upload visibility and copies all successful links', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } })

@@ -1,6 +1,25 @@
 import { expect, test } from '@playwright/test'
 import { login, tinyWebP } from './helpers'
 
+test('an expired session stops queued uploads before the login redirect completes', async ({ page }) => {
+  await login(page)
+  await page.getByLabel('选择图片文件').setInputFiles([
+    { name: 'expired-first.webp', mimeType: 'image/webp', buffer: tinyWebP },
+    { name: 'expired-queued.webp', mimeType: 'image/webp', buffer: tinyWebP },
+  ])
+  let requests = 0
+  page.on('request', request => {
+    if (request.method() === 'POST' && new URL(request.url()).pathname === '/api/v1/images') requests += 1
+  })
+  await page.context().clearCookies()
+  const rejected = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/v1/images')
+  await page.getByRole('button', { name: '上传 2 个文件', exact: true }).click()
+  expect((await rejected).status()).toBe(401)
+  await expect(page).toHaveURL(/\/admin\/login$/)
+  await expect(page.getByLabel('管理员邮箱')).toBeVisible()
+  expect(requests).toBe(1)
+})
+
 test('unfinished uploads can stay or leave without starting queued requests', async ({ page }) => {
   await login(page)
   let requests = 0

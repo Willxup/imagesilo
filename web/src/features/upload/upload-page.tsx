@@ -147,6 +147,12 @@ export function UploadPage() {
       updateItem(source.id, { status: 'complete', progress: 100, result: image, previewUrl: image.thumbnailUrl, controller: undefined, error: undefined })
       return true
     } catch (uploadError) {
+      if (uploadError instanceof ApiError && uploadError.status === 401) {
+        // Stop workers before the authentication redirect unmounts this page.
+        active.current = false
+        for (const pending of controllers.current) pending.abort()
+        return false
+      }
       updateItem(source.id, {
         status: uploadError instanceof DOMException && uploadError.name === 'AbortError' ? 'canceled' : 'failed',
         controller: undefined,
