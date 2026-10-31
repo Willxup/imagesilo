@@ -4,14 +4,13 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": "24.x"
+    "node": ">=24.22.1"
   },
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "e2e": "playwright test",
     "typecheck": "tsc -b --pretty false",
     "generate:api": "openapi-typescript ../api/openapi.yaml -o src/generated/openapi.d.ts"
   },
@@ -33,7 +32,6 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
-    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@testing-library/jest-dom": "7.0.0",
     "@testing-library/react": "16.3.2",

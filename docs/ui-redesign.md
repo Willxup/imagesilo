@@ -1,5 +1,7 @@
 # ImageSilo — Prism workspace redesign
 
+This document preserves the redesign plan and historical validation. Playwright has been removed; see the [browser acceptance checklist](./browser-acceptance.md) for current verification.
+
 ## Intent
 
 Rebuild the experience as a calm, image-first creative workspace. Preserve every existing operation and route. The existing blue/cyan/green folded logo is the brand: overlapping planes, careful depth, and precise movement provide the visual language. This is a structural redesign, not a color override of the old admin template.
@@ -74,7 +76,7 @@ Motion must communicate state and spatial continuity, not delay the task.
 2. Check light and dark, Chinese and English, 375px mobile, 768px tablet, 1024px compact desktop and 1440px desktop. No horizontal overflow, clipped menus or inaccessible actions.
 3. Verify keyboard navigation, modal/drawer focus return and Escape, visible focus, readable contrast, and reduced motion.
 4. Verify upload (file/drop/paste, progress/cancel/retry, multi-copy), filters/list/grid/selection/copy/visibility/delete, aliases, tokens, settings, system, auth flows with existing tests plus focused coverage for new interactions.
-5. Run project `make check e2e` and inspect results. Review final diff for lost features and unnecessary complexity.
+5. Run `make check` and inspect results; verify browser behavior using the acceptance checklist. Review the final diff for lost features and unnecessary complexity.
 6. Primary agent independently inspects screenshots and runtime; developer handoff alone does not establish acceptance.
 
 Worktree: `/Users/will/Projects/imagesilo/.worktrees/prism-ui`, branch `worktree/prism-ui`. No commit, push, PR, release or deployment is requested.

@@ -2,7 +2,7 @@
 
 ## 质量门
 
-PR 的 `Quick verify` 工作流只执行 `make check e2e`，覆盖全部 Go 包、React、OpenAPI 生成一致性和单 worker 浏览器闭环，不构建容器镜像。推送 Release Tag 后，`Release image` 工作流重新执行质量门，再在原生 amd64、原生 arm64 执行 Delivery Index benchmark、构建镜像、容器 smoke 和并发 `1` 的图片处理 benchmark。只有全部验证成功的同一镜像才会推送对应平台标签；两个架构都成功后才创建版本与 `latest` manifest。
+PR 的 `Quick verify` 工作流只执行 `make check`，覆盖全部 Go 包、React、前端构建、OpenAPI 生成一致性、Lint、类型检查和单元/集成测试，不构建容器镜像。涉及界面或浏览器行为的发布变更按[浏览器验收清单](./browser-acceptance.md)另行记录实际结果；本地发布检查和 CI 均不执行浏览器验收。推送 Release Tag 后，`Release image` 工作流重新执行质量门，再在原生 amd64、原生 arm64 执行 Delivery Index benchmark、构建镜像、容器 smoke 和并发 `1` 的图片处理 benchmark。只有全部验证成功的同一镜像才会推送对应平台标签；两个架构都成功后才创建版本与 `latest` manifest。
 
 图片处理 benchmark 每个架构总计 `16` 个请求，容器限制为 1 CPU、768 MiB 和 256 PID，并强制要求全部请求成功、无 busy 响应、p95 不超过 20 秒且 cgroup 峰值不超过 512 MiB。
 
