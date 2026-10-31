@@ -30,6 +30,12 @@ ImageSilo is a Docker-first image host built as one Go process with SQLite and l
 
 <p align="center">
   <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/gallery-dark.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/gallery-light.jpg" />
+    <img src="./assets/screenshots/gallery-light.jpg" alt="ImageSilo image library" width="100%" />
+  </picture>
+  <br />
+  <picture>
     <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark.jpg" />
     <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light.jpg" />
     <img src="./assets/screenshots/login-light.jpg" alt="ImageSilo sign-in page" width="49%" />

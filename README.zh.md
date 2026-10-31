@@ -30,14 +30,20 @@ ImageSilo 是一个 Docker 优先的自托管图床：单个 Go 进程、SQLite 
 
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark.jpg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light.jpg" />
-    <img src="./assets/screenshots/login-light.jpg" alt="ImageSilo 登录页" width="49%" />
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/gallery-dark-zh.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/gallery-light-zh.jpg" />
+    <img src="./assets/screenshots/gallery-light-zh.jpg" alt="ImageSilo 图片库" width="100%" />
+  </picture>
+  <br />
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/login-dark-zh.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/login-light-zh.jpg" />
+    <img src="./assets/screenshots/login-light-zh.jpg" alt="ImageSilo 登录页" width="49%" />
   </picture>
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/upload-dark.jpg" />
-    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/upload-light.jpg" />
-    <img src="./assets/screenshots/upload-light.jpg" alt="ImageSilo 图片上传页" width="49%" />
+    <source media="(prefers-color-scheme: dark)" srcset="./assets/screenshots/upload-dark-zh.jpg" />
+    <source media="(prefers-color-scheme: light)" srcset="./assets/screenshots/upload-light-zh.jpg" />
+    <img src="./assets/screenshots/upload-light-zh.jpg" alt="ImageSilo 图片上传页" width="49%" />
   </picture>
 </p>
 
