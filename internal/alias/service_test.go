@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -70,6 +71,7 @@ func TestAliasValidationAndMissingTarget(t *testing.T) {
 		path, imageID, source string
 		wantErr               error
 	}{
+		{"/", aliasTestImageID, "test", delivery.ErrReservedAliasPath},
 		{"/api/v1/images", aliasTestImageID, "test", delivery.ErrReservedAliasPath},
 		{"/legacy/../image.jpg", aliasTestImageID, "test", delivery.ErrInvalidAliasPath},
 		{"/legacy/image.jpg", "not-a-uuid", "test", ErrInvalidImage},
@@ -108,6 +110,166 @@ func TestAliasListUsesStableCursorPagination(t *testing.T) {
 	if _, err := service.ListPage(context.Background(), 2, "invalid"); !errors.Is(err, ErrInvalidCursor) {
 		t.Fatalf("invalid ListPage() error = %v", err)
 	}
+}
+
+func TestAliasDeleteSerializesWithSamePathReplacement(t *testing.T) {
+	for _, targetID := range []string{aliasTestImageID, "019c1234-5678-7abc-8def-0123456789ac"} {
+		t.Run(targetID, func(t *testing.T) {
+			db := openAliasTestDatabase(t)
+			defer db.Close()
+			insertAliasTestImage(t, db, aliasTestImageID)
+			if targetID != aliasTestImageID {
+				insertAliasTestImage(t, db, targetID)
+			}
+			const unrelatedImageID = "019c1234-5678-7abc-8def-0123456789ad"
+			insertAliasTestImage(t, db, unrelatedImageID)
+			index := delivery.NewIndex()
+			index.Add(aliasTestImageID, delivery.Target{StorageKey: aliasTestImageID})
+			index.Add(targetID, delivery.Target{StorageKey: targetID})
+			index.Add(unrelatedImageID, delivery.Target{StorageKey: unrelatedImageID})
+			service := NewService(NewRepository(db), index, indexbarrier.New())
+			old, err := service.Create(context.Background(), "/legacy/replaced.jpg", aliasTestImageID, "old", time.Now())
+			if err != nil {
+				t.Fatal(err)
+			}
+			deletedSQL := make(chan struct{})
+			resumeDelete := make(chan struct{})
+			releaseDelete := sync.OnceFunc(func() { close(resumeDelete) })
+			defer releaseDelete()
+			service.afterRepositoryChange = func(operation, path string) {
+				if operation == "delete" {
+					close(deletedSQL)
+					<-resumeDelete
+				}
+			}
+			deleted := make(chan error, 1)
+			go func() { deleted <- service.Delete(context.Background(), old.ID) }()
+			<-deletedSQL
+			replacement := make(chan error, 1)
+			go func() {
+				_, err := service.Create(context.Background(), old.Path, targetID, "new", time.Now())
+				replacement <- err
+			}()
+			if _, err := service.Create(context.Background(), "/legacy/other.jpg", unrelatedImageID, "other", time.Now()); err != nil {
+				t.Fatalf("unrelated alias create failed: %v", err)
+			}
+			if _, ok := index.GetAlias(old.Path); !ok {
+				t.Fatal("delivery reads were blocked or changed before index removal")
+			}
+			select {
+			case err := <-replacement:
+				t.Fatalf("replacement passed the unfinished delete: %v", err)
+			case <-time.After(25 * time.Millisecond):
+			}
+			releaseDelete()
+			if err := <-deleted; err != nil {
+				t.Fatal(err)
+			}
+			if err := <-replacement; err != nil {
+				t.Fatal(err)
+			}
+			persisted, err := service.Resolve(context.Background(), old.Path)
+			if err != nil || persisted.ID == old.ID || persisted.ImageID != targetID {
+				t.Fatalf("replacement in SQLite = %+v, %v", persisted, err)
+			}
+			if imageID, ok := index.ResolveAlias(old.Path); !ok || imageID != targetID {
+				t.Fatalf("replacement in index = %q, %t", imageID, ok)
+			}
+			if err := service.Delete(context.Background(), old.ID); !errors.Is(err, ErrAliasNotFound) {
+				t.Fatalf("stale Delete() error = %v, want ErrAliasNotFound", err)
+			}
+		})
+	}
+}
+
+func TestAliasDelayedCreateCannotResurrectAfterDelete(t *testing.T) {
+	db := openAliasTestDatabase(t)
+	defer db.Close()
+	insertAliasTestImage(t, db, aliasTestImageID)
+	index := delivery.NewIndex()
+	index.Add(aliasTestImageID, delivery.Target{StorageKey: aliasTestImageID})
+	service := NewService(NewRepository(db), index, indexbarrier.New())
+	createdSQL := make(chan struct{})
+	resumeCreate := make(chan struct{})
+	releaseCreate := sync.OnceFunc(func() { close(resumeCreate) })
+	defer releaseCreate()
+	service.afterRepositoryChange = func(operation, path string) {
+		if operation == "create" {
+			close(createdSQL)
+			<-resumeCreate
+		}
+	}
+	created := make(chan error, 1)
+	go func() {
+		_, err := service.Create(context.Background(), "/legacy/delayed.jpg", aliasTestImageID, "test", time.Now())
+		created <- err
+	}()
+	<-createdSQL
+	persisted, err := service.Resolve(context.Background(), "/legacy/delayed.jpg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	deleted := make(chan error, 1)
+	go func() { deleted <- service.Delete(context.Background(), persisted.ID) }()
+	select {
+	case err := <-deleted:
+		t.Fatalf("delete passed the unfinished create: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	releaseCreate()
+	if err := <-created; err != nil {
+		t.Fatal(err)
+	}
+	if err := <-deleted; err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.Resolve(context.Background(), persisted.Path); !errors.Is(err, ErrAliasNotFound) {
+		t.Fatalf("Resolve() after deletion error = %v", err)
+	}
+	if _, ok := index.ResolveAlias(persisted.Path); ok {
+		t.Fatal("delayed create resurrected the deleted alias")
+	}
+}
+
+func TestAliasFailedMutationsReleasePathLock(t *testing.T) {
+	db := openAliasTestDatabase(t)
+	defer db.Close()
+	insertAliasTestImage(t, db, aliasTestImageID)
+	index := delivery.NewIndex()
+	index.Add(aliasTestImageID, delivery.Target{StorageKey: aliasTestImageID})
+	service := NewService(NewRepository(db), index, indexbarrier.New())
+	initial, err := service.Create(context.Background(), "/legacy/retry.jpg", aliasTestImageID, "test", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	run := func(operation func() error, want error) {
+		t.Helper()
+		completed := make(chan error, 1)
+		go func() { completed <- operation() }()
+		select {
+		case err := <-completed:
+			if !errors.Is(err, want) {
+				t.Fatalf("mutation error = %v, want %v", err, want)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("failed mutation did not release the alias path lock")
+		}
+	}
+	run(func() error {
+		_, err := service.Create(context.Background(), initial.Path, aliasTestImageID, "duplicate", time.Now())
+		return err
+	}, ErrAliasConflict)
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	run(func() error {
+		_, err := service.Create(canceled, initial.Path, aliasTestImageID, "canceled", time.Now())
+		return err
+	}, context.Canceled)
+	run(func() error { return service.Delete(context.Background(), initial.ID) }, nil)
+	run(func() error {
+		_, err := service.Create(context.Background(), initial.Path, aliasTestImageID, "retry", time.Now())
+		return err
+	}, nil)
 }
 
 func openAliasTestDatabase(t *testing.T) *sql.DB {

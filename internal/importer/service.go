@@ -25,12 +25,13 @@ const (
 )
 
 type Service struct {
-	repository *Repository
-	storage    *storage.Filesystem
-	index      *delivery.Index
-	processor  processor.Engine
-	gate       *processor.Gate
-	barrier    *indexbarrier.Barrier
+	repository        *Repository
+	storage           *storage.Filesystem
+	index             *delivery.Index
+	processor         processor.Engine
+	gate              *processor.Gate
+	barrier           *indexbarrier.Barrier
+	afterCreateCommit func(imageID string)
 }
 
 type ProcessingLease struct {
@@ -231,12 +232,17 @@ func (s *Service) ImportStaged(
 		}
 		thumbnailCommitted = true
 	}
-	releaseChange := s.barrier.BeginChange()
+	unlock := s.barrier.LockImage(value.ID)
+	defer unlock()
+	releaseChange := s.barrier.BeginAliasChange(alias.Path)
 	defer releaseChange()
 	if err := s.repository.Create(ctx, value, alias); err != nil {
 		return Result{}, err
 	}
 	databaseCommitted = true
+	if s.afterCreateCommit != nil {
+		s.afterCreateCommit(value.ID)
+	}
 	s.index.Add(value.ID, delivery.Target{
 		StorageKey: value.StorageKey, MIMEType: value.MIMEType, ETag: fmt.Sprintf("\"%x\"", value.StoredSHA256),
 		Size: value.StoredSize, LastModified: value.UpdatedAt, Visibility: string(value.Visibility), OriginalName: value.OriginalName,

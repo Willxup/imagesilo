@@ -15,9 +15,10 @@ import (
 )
 
 type Service struct {
-	repository *Repository
-	index      *delivery.Index
-	barrier    *indexbarrier.Barrier
+	repository            *Repository
+	index                 *delivery.Index
+	barrier               *indexbarrier.Barrier
+	afterRepositoryChange func(operation, path string)
 }
 
 func NewService(repository *Repository, index *delivery.Index, barrier *indexbarrier.Barrier) *Service {
@@ -42,10 +43,15 @@ func (s *Service) Create(ctx context.Context, path, imageID, source string, now 
 		return Alias{}, fmt.Errorf("generate image alias id: %w", err)
 	}
 	value := Alias{ID: id.String(), Path: normalizedPath, ImageID: imageID, Source: source, CreatedAt: now.UTC()}
-	release := s.barrier.BeginChange()
+	unlock := s.barrier.LockImage(imageID)
+	defer unlock()
+	release := s.barrier.BeginAliasChange(value.Path)
 	defer release()
 	if err := s.repository.Create(ctx, value); err != nil {
 		return Alias{}, err
+	}
+	if s.afterRepositoryChange != nil {
+		s.afterRepositoryChange("create", value.Path)
 	}
 	s.index.AddAlias(value.Path, value.ImageID)
 	return value, nil
@@ -117,11 +123,18 @@ func (s *Service) Delete(ctx context.Context, id string) error {
 	if err != nil || parsedID.String() != id {
 		return ErrAliasNotFound
 	}
-	release := s.barrier.BeginChange()
-	defer release()
-	path, err := s.repository.Delete(ctx, id)
+	path, err := s.repository.PathByID(ctx, id)
 	if err != nil {
 		return err
+	}
+	release := s.barrier.BeginAliasChange(path)
+	defer release()
+	path, err = s.repository.Delete(ctx, id)
+	if err != nil {
+		return err
+	}
+	if s.afterRepositoryChange != nil {
+		s.afterRepositoryChange("delete", path)
 	}
 	s.index.RemoveAlias(path)
 	return nil

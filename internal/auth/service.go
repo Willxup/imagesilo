@@ -118,6 +118,9 @@ func (s *Service) UpdateProfile(ctx context.Context, identity SessionIdentity, d
 	if err != nil {
 		return SessionIdentity{}, err
 	}
+	s.credentialsMu.Lock()
+	defer s.credentialsMu.Unlock()
+
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
 	if err := s.repository.UpdateProfile(ctx, identity.AdminID, displayName, email, now); err != nil {

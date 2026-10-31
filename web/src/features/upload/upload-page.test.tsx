@@ -1,8 +1,11 @@
+import { useState } from 'react'
+import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
+import { toast } from 'sonner'
 import { ApiError, apiRequest, uploadForm } from '../../lib/api-client'
 import type { SystemInfo } from '../../lib/api-types'
 import { UploadPage } from './upload-page'
@@ -32,11 +35,11 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'dropped.jpg', { type: 'image/jpeg' })
-    const dropZone = await screen.findByText('拖放图片到这里，或直接粘贴剪贴板图片')
+    const dropZone = await screen.findByText('把图片放到这里')
     fireEvent.drop(dropZone.parentElement!, { dataTransfer: { files: [file] } })
     expect(await screen.findByText('dropped.jpg')).toBeInTheDocument()
     expect(screen.getByText(/在浏览器中排队/)).toBeInTheDocument()
@@ -46,7 +49,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'camera.JPG', { type: '' })
@@ -55,18 +58,71 @@ describe('UploadPage', () => {
     expect(await screen.findByText('camera.JPG')).toBeInTheDocument()
   })
 
+  it('shows a local preview and revokes it when the queue is cleared', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:preview-test')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={queryClient}><RoutedUploadPage /></QueryClientProvider>)
+    const file = new File(['jpeg'], 'preview.jpg', { type: 'image/jpeg' })
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [file] } })
+    const row = (await screen.findByText('preview.jpg')).closest('article')!
+    expect(row.querySelector('img')).toHaveAttribute('src', 'blob:preview-test')
+    fireEvent.click(screen.getByRole('button', { name: '清除' }))
+    expect(revoke).toHaveBeenCalledWith('blob:preview-test')
+    create.mockRestore()
+    revoke.mockRestore()
+  })
+
   it('keeps the structured server reason on a failed upload row', async () => {
     vi.mocked(uploadForm).mockRejectedValue(new ApiError(413, 'Image exceeds the configured maximum.', 'file_too_large'))
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
     const file = new File(['jpeg'], 'large.jpg', { type: 'image/jpeg' })
     fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [file] } })
     fireEvent.click(await screen.findByRole('button', { name: /上传 1 个文件/ }))
     expect(await screen.findByText('Image exceeds the configured maximum.')).toBeInTheDocument()
+  })
+
+  it.each([1, 2])('stops a batch immediately on 401 with %i workers before the page unmounts', async (concurrency) => {
+    vi.mocked(apiRequest).mockResolvedValue({ processingConcurrency: concurrency, maxBatchCount: 20 } as SystemInfo)
+    const signals: AbortSignal[] = []
+    let expire!: (reason: ApiError) => void
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, signal) => new Promise((_resolve, reject) => {
+      if (signals.length === 0) expire = reject
+      signals.push(signal)
+      signal.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const warning = vi.spyOn(toast, 'warning')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    try {
+      await waitFor(() => expect(client.getQueryData(['system'])).toBeTruthy())
+      const files = ['first.jpg', 'second.jpg', 'queued.jpg'].map(name => new File(['jpg'], name, { type: 'image/jpeg' }))
+      fireEvent.change(screen.getByLabelText('选择图片文件'), { target: { files } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 3 个文件/ }))
+      await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(concurrency))
+
+      await act(async () => { expire(new ApiError(401, 'Session expired.', 'invalid_session')) })
+
+      expect(uploadForm).toHaveBeenCalledTimes(concurrency)
+      expect(signals.slice(1).every(signal => signal.aborted)).toBe(true)
+      expect(warning).not.toHaveBeenCalled()
+    } finally { view.unmount(); warning.mockRestore() }
+  })
+
+  it('continues queued uploads after a non-authentication failure', async () => {
+    vi.mocked(uploadForm).mockRejectedValue(new ApiError(413, 'Image is too large.', 'file_too_large'))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    const files = ['first.jpg', 'second.jpg'].map(name => new File(['jpg'], name, { type: 'image/jpeg' }))
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files } })
+    fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+    await waitFor(() => expect(screen.getAllByText('Image is too large.')).toHaveLength(2))
+    expect(uploadForm).toHaveBeenCalledTimes(2)
   })
 
   it('restores upload visibility and copies all successful links', async () => {
@@ -104,7 +160,7 @@ describe('UploadPage', () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     render(
       <QueryClientProvider client={queryClient}>
-        <UploadPage />
+        <RoutedUploadPage />
       </QueryClientProvider>,
     )
 
@@ -128,7 +184,7 @@ describe('UploadPage', () => {
     })
 
     fireEvent.click(screen.getAllByRole('button', { name: /选择链接格式/ })[0])
-    fireEvent.click(screen.getByRole('button', { name: '复制 Markdown' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '复制 Markdown' }))
     fireEvent.click(screen.getByRole('button', { name: '复制 2 张成功图片的MD' }))
     await waitFor(() => {
       expect(writeText).toHaveBeenLastCalledWith(
@@ -142,4 +198,81 @@ describe('UploadPage', () => {
     fireEvent.click(rowFormatButton)
     expect(rowFormatButton.closest('.ui-dropdown-root')?.querySelector('.ui-dropdown-panel')).toHaveClass('is-left')
   })
+  it('releases completed previews and lets another full batch be queued', async () => {
+    const create = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:completed')
+    const revoke = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+    vi.mocked(apiRequest).mockResolvedValue({ processingConcurrency: 1, maxBatchCount: 1 } as SystemInfo)
+    vi.mocked(uploadForm).mockResolvedValue({ id: 'done', originalName: 'done.jpg', standardUrl: '/image/done', thumbnailUrl: '/thumbnail/done' })
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    try {
+      await waitFor(() => expect(client.getQueryData(['system'])).toBeTruthy())
+      const input = screen.getByLabelText('选择图片文件')
+      fireEvent.change(input, { target: { files: [new File(['jpg'], 'done.jpg', { type: 'image/jpeg' })] } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 1 个文件/ }))
+      await waitFor(() => expect(revoke).toHaveBeenCalledWith('blob:completed'))
+      expect(screen.getByText('done.jpg').closest('article')?.querySelector('img')).toHaveAttribute('src', '/thumbnail/done')
+      fireEvent.change(input, { target: { files: [new File(['jpg'], 'next.jpg', { type: 'image/jpeg' })] } })
+      expect(screen.getByText('next.jpg')).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: /上传 1 个文件/ })).toBeEnabled()
+    } finally { view.unmount(); create.mockRestore(); revoke.mockRestore() }
+  })
+
+  it('keeps uploads when navigation is canceled and aborts the batch when leaving', async () => {
+    let signal: AbortSignal | undefined
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, nextSignal) => new Promise((_resolve, reject) => {
+      signal = nextSignal
+      nextSignal?.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const success = vi.spyOn(toast, 'success')
+    const warning = vi.spyOn(toast, 'warning')
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const router = createMemoryRouter([{ path: '/upload', element: <UploadPage /> }, { path: '/images', element: <h1>Library destination</h1> }], { initialEntries: ['/upload'] })
+    render(<QueryClientProvider client={client}><RouterProvider router={router} /></QueryClientProvider>)
+    try {
+      fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [new File(['jpg'], 'first.jpg', { type: 'image/jpeg' }), new File(['jpg'], 'queued.jpg', { type: 'image/jpeg' })] } })
+      fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+      await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(1))
+      const unload = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(unload)
+      expect(unload.defaultPrevented).toBe(true)
+      await act(async () => { await router.navigate('/images') })
+      fireEvent.click(await screen.findByRole('button', { name: '留在此页' }))
+      expect(router.state.location.pathname).toBe('/upload')
+      expect(signal?.aborted).toBe(false)
+      await act(async () => { await router.navigate('/images') })
+      fireEvent.click(await screen.findByRole('button', { name: '停止并离开' }))
+      await screen.findByRole('heading', { name: 'Library destination' })
+      await waitFor(() => expect(signal?.aborted).toBe(true))
+      expect(uploadForm).toHaveBeenCalledTimes(1)
+      expect(success).not.toHaveBeenCalled()
+      expect(warning).not.toHaveBeenCalled()
+      const after = new Event('beforeunload', { cancelable: true })
+      window.dispatchEvent(after)
+      expect(after.defaultPrevented).toBe(false)
+    } finally { success.mockRestore(); warning.mockRestore() }
+  })
+
+  it('aborts in-flight requests on forced unmount without starting queued files', async () => {
+    let signal: AbortSignal | undefined
+    vi.mocked(uploadForm).mockImplementation((_path, _body, _progress, nextSignal) => new Promise((_resolve, reject) => {
+      signal = nextSignal
+      nextSignal?.addEventListener('abort', () => reject(new DOMException('Canceled', 'AbortError')), { once: true })
+    }))
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(<QueryClientProvider client={client}><RoutedUploadPage /></QueryClientProvider>)
+    fireEvent.change(await screen.findByLabelText('选择图片文件'), { target: { files: [new File(['jpg'], 'a.jpg', { type: 'image/jpeg' }), new File(['jpg'], 'b.jpg', { type: 'image/jpeg' })] } })
+    fireEvent.click(screen.getByRole('button', { name: /上传 2 个文件/ }))
+    await waitFor(() => expect(uploadForm).toHaveBeenCalledTimes(1))
+    view.unmount()
+    await act(async () => { await Promise.resolve() })
+    expect(signal?.aborted).toBe(true)
+    expect(uploadForm).toHaveBeenCalledTimes(1)
+  })
+
 })
+
+function RoutedUploadPage() {
+  const [router] = useState(() => createMemoryRouter([{ path: '/', element: <UploadPage /> }]))
+  return <RouterProvider router={router} />
+}

@@ -1,0 +1,53 @@
+/* One content entrance; returning to a library must not replay its cards. */
+.page-transition { animation: page-enter 180ms var(--silo-ease); }
+.page-transition.is-detail, .page-transition[data-navigation="POP"] { animation: none; }
+
+/* Radix Select mounts on demand; retain its short entrance and reduced-motion fallback. */
+.ui-select-content { animation: ui-menu-in 140ms ease-out; }
+
+/* Transitions reverse from the current frame when an overlay is interrupted. */
+.ui-dropdown-panel { opacity: 1; transform: none; animation: none; transition: opacity 140ms ease-out, transform 140ms var(--silo-ease); }
+.ui-dropdown-panel[data-state="closed"] { opacity: 0; transform: translateY(var(--menu-enter-y, 3px)); pointer-events: none; }
+.ui-modal-root { opacity: 1; animation: none; transition: opacity 180ms ease-out; }
+.ui-modal-root[data-state="closed"] { opacity: 0; }
+.ui-modal-panel { transform: none; transition: transform 180ms var(--silo-ease); }
+.ui-modal-root[data-state="closed"] .ui-modal-panel { transform: translateY(8px); }
+@starting-style {
+  .ui-dropdown-panel[data-state="open"] { opacity: 0; transform: translateY(var(--menu-enter-y, 4px)); }
+  .ui-modal-root[data-state="open"] { opacity: 0; }
+  .ui-modal-root[data-state="open"] .ui-modal-panel { transform: translateY(8px); }
+}
+
+/* Only the selected image has a shared name; the surrounding UI fades briefly. */
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: 140ms; }
+::view-transition-group(*) { animation-duration: 300ms; animation-timing-function: var(--silo-ease); }
+::view-transition { pointer-events: none; }
+@keyframes page-enter { from { opacity: 0; } to { opacity: 1; } }
+@keyframes batch-dock-in { from { opacity: 0; transform: translate(-50%, 12px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@keyframes batch-dock-mobile-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+/* State changes stay local: no text scaling, no replay of every card on return. */
+.preview-image { opacity: 0; transition: opacity 160ms ease-out; }
+.preview-image[data-ready="true"] { opacity: 1; }
+.upload-row { animation: page-enter 180ms ease-out; }
+.copy-link-control[data-copied="true"] .copy-link-main > svg { animation: feedback-in 180ms var(--silo-ease); }
+@keyframes feedback-in { from { opacity: .3; } to { opacity: 1; } }
+.image-skeleton { animation: skeleton-breathe 1800ms ease-in-out infinite alternate; }
+@keyframes skeleton-breathe { from { opacity: .55; } to { opacity: 1; } }
+@media (max-width: 1023px) {
+  .navigation-sheet[data-state="closed"] .ui-modal-panel { transform: translateY(24px); }
+  @starting-style { .navigation-sheet[data-state="open"] .ui-modal-panel { transform: translateY(24px); } }
+}
+.route-placeholder { min-height: 400px; animation: placeholder-in 120ms ease-out 120ms both; }
+.route-placeholder-label { display: flex; align-items: center; gap: 8px; min-height: 44px; color: var(--tail-text-soft); font-size: 13px; }
+.route-placeholder-label svg { width: 16px; height: 16px; }
+.route-placeholder-content { display: grid; gap: 18px; padding-top: 20px; }
+.route-placeholder-content > * { border-radius: 10px; background: var(--tail-surface-soft); }
+.route-placeholder-content > div { width: min(280px, 60%); height: 26px; margin-bottom: 16px; }
+.route-placeholder-content > span { height: 64px; }
+@keyframes placeholder-in { from { opacity: 0; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-delay: 0ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation-duration: .01ms !important; }
+  .image-card-clickable:hover .image-card-media, .image-card-clickable:hover .image-card-media img { transform: none !important; }
+  .upload-dropzone:hover .fold-art span, .upload-dropzone.is-dragging .fold-art span { transform: rotate(-12deg) skewY(-7deg) !important; }
+}

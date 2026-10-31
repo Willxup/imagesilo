@@ -1,4 +1,4 @@
-package image
+package indexbarrier
 
 import "sync"
 
@@ -7,12 +7,13 @@ type keyedLockEntry struct {
 	refs int
 }
 
-type keyedLocker struct {
+// KeyedLocker serializes mutations per key and removes idle lock entries.
+type KeyedLocker struct {
 	mu      sync.Mutex
 	entries map[string]*keyedLockEntry
 }
 
-func (l *keyedLocker) Lock(key string) func() {
+func (l *KeyedLocker) Lock(key string) func() {
 	l.mu.Lock()
 	if l.entries == nil {
 		l.entries = make(map[string]*keyedLockEntry)

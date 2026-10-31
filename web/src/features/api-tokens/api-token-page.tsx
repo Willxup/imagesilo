@@ -77,11 +77,14 @@ export function ApiTokenPage() {
 
   return (
     <section>
+      <p className="page-kicker">{t('apiTokens.eyebrow')}</p>
       <h1 className="page-title">{t('apiTokens.title')}</h1>
       <p className="page-description">{t('apiTokens.description')}</p>
 
+      <div className="token-layout mt-8">
+      <div>
       <form onSubmit={(event) => void submit(event)}>
-        <ComponentCard className="mt-8" title={t('apiTokens.create')}>
+        <ComponentCard title={t('apiTokens.create')}>
         <label className="font-medium" htmlFor="token-name">{t('apiTokens.name')}</label>
         <Input
           className="mt-1.5"
@@ -103,7 +106,7 @@ export function ApiTokenPage() {
                 />
                 <span>
                   <span className="block font-mono text-sm">{scope}</span>
-                  <span className="mt-1 block text-xs text-muted-foreground">{t(`apiTokens.scopeHelp.${scope}`)}</span>
+                  <span className="mt-1 block text-xs text-muted-foreground">{t(`apiTokens.scopeDescription.${scopeDescriptionKeys[scope]}`)}</span>
                 </span>
               </label>
             ))}
@@ -149,7 +152,7 @@ export function ApiTokenPage() {
       </form>
 
       {created ? (
-        <div className="mt-6 rounded-2xl border border-primary/25 bg-accent-soft p-5" role="status">
+        <div className="token-secret mt-6" role="status">
           <p className="font-semibold text-primary">{t('apiTokens.copyNow')}</p>
           <code className="mt-3 block break-all rounded-xl bg-panel p-4 text-sm text-ink">{created.token}</code>
           <Button className="mt-3" size="sm" variant="outline" type="button" onClick={() => void copyText(created.token).then(() => toast.success(t('toast.tokenCopied'))).catch(() => toast.error(t('toast.copyFailed')))}>
@@ -157,8 +160,9 @@ export function ApiTokenPage() {
           </Button>
         </div>
       ) : null}
+      </div>
 
-      <ComponentCard className="mt-6" title={t('apiTokens.existing')}>
+      <ComponentCard className="token-list" title={t('apiTokens.existing')}>
       {query.isLoading ? <p className="text-muted-foreground">{t('common.loading')}</p> : null}
       {query.isError ? <p className="text-danger">{t('apiTokens.listFailed')}</p> : null}
       {query.data?.items.length === 0 ? <p className="text-muted-foreground">{t('apiTokens.empty')}</p> : null}
@@ -166,12 +170,12 @@ export function ApiTokenPage() {
         {query.data?.items.map((token) => (
           <article className="surface-panel p-5" key={token.id}>
             <div className="flex flex-wrap items-start justify-between gap-4">
-              <div>
+              <div className="min-w-0 [overflow-wrap:anywhere]">
                 <p className="font-semibold">{token.name}</p>
                 <p className="mt-1 font-mono text-sm text-muted-foreground">{token.tokenPrefix}…</p>
                 <p className="mt-2 text-sm text-muted-foreground">{token.scopes.join(', ')}</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {token.expiresAt ? t('apiTokens.expires', { value: new Date(token.expiresAt).toLocaleString() }) : t('apiTokens.neverExpires')}
+                  {token.expiresAt ? t('apiTokens.expires', { value: new Date(token.expiresAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language) }) : t('apiTokens.neverExpires')}
                 </p>
               </div>
               <div className="flex items-center gap-3">
@@ -187,9 +191,17 @@ export function ApiTokenPage() {
         ))}
       </div>
       </ComponentCard>
+      </div>
       <ConfirmDialog open={Boolean(revokeTarget)} onOpenChange={(open) => !open && setRevokeTarget(null)} title={t('apiTokens.revokeTitle')} description={t('apiTokens.confirmRevoke', { name: revokeTarget?.name ?? '' })} confirmLabel={t('apiTokens.revoke')} cancelLabel={t('common.cancel')} closeLabel={t('common.close')} destructive pending={revokeMutation.isPending} onConfirm={() => revokeTarget && revokeMutation.mutate(revokeTarget.id)} />
     </section>
   )
+}
+
+const scopeDescriptionKeys: Record<ApiTokenScope, string> = {
+  'images:upload': 'upload',
+  'images:read_private': 'readPrivate',
+  'images:delete': 'delete',
+  'aliases:write': 'writeAlias',
 }
 
 function expirationISO(date: string, hour: string, minute: string) {

@@ -106,6 +106,18 @@ func (r *Repository) GetByPath(ctx context.Context, path string) (Alias, error) 
 	return value, err
 }
 
+func (r *Repository) PathByID(ctx context.Context, id string) (string, error) {
+	var path string
+	err := r.db.QueryRowContext(ctx, "SELECT alias_path FROM image_aliases WHERE id = ?", id).Scan(&path)
+	if errors.Is(err, sql.ErrNoRows) {
+		return "", ErrAliasNotFound
+	}
+	if err != nil {
+		return "", fmt.Errorf("read image alias path: %w", err)
+	}
+	return path, nil
+}
+
 func (r *Repository) Delete(ctx context.Context, id string) (string, error) {
 	var path string
 	err := r.db.QueryRowContext(ctx, `

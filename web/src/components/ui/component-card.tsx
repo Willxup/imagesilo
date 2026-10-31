@@ -19,16 +19,16 @@ function ComponentCard({
   return (
     <section
       className={cn(
-        "min-w-0 rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-card",
+        "component-card min-w-0 rounded-2xl border",
         className
       )}
       {...props}
     >
-      <div className="px-6 py-5">
-        <h2 className="text-base font-medium text-gray-800 dark:text-white/90">{title}</h2>
-        {description ? <p className="mt-1 text-xs leading-[18px] text-gray-500 dark:text-gray-400">{description}</p> : null}
+      <div className="component-card-heading">
+        <h2>{title}</h2>
+        {description ? <p>{description}</p> : null}
       </div>
-      <div className={cn("border-t border-gray-100 p-4 dark:border-gray-800 sm:p-6", bodyClassName)}>
+      <div className={cn("component-card-body", bodyClassName)}>
         {children}
       </div>
     </section>

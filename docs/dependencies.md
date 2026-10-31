@@ -28,19 +28,19 @@ Node.js 最低版本为 24.22.1，对应 [2026 年 10 月安全发布](https://n
 | `github.com/mattn/go-sqlite3` | 1.14.49 | SQLite CGO 驱动 |
 | `github.com/google/uuid` | 1.6.0 | UUIDv7 生成与解析 |
 | `golang.org/x/crypto` | 0.54.0 | Argon2id 密码哈希 |
-| `golang.org/x/image` | 0.43.0 | 便携构建的 WebP 解码与缩略图缩放 |
+| `golang.org/x/image` | 0.45.0 | 便携构建的 WebP 解码与缩略图缩放 |
 | `golang.org/x/term` | 0.45.0 | 管理员 CLI 无回显读取密码 |
 | `github.com/davidbyttow/govips/v2` | 2.18.0 | 阶段 3 的 libvips 边界 |
 
 ## 前端直接依赖
 
-精确版本记录在 `web/package.json`；`web/package-lock.json` 是完整、可复现的依赖树。Radix primitive 只在真实组件出现时逐个引入，不预装整套组件。
+直接依赖的版本声明记录在 `web/package.json`；`web/package-lock.json` 是完整、可复现的依赖树。Radix primitive 只在真实组件出现时逐个引入，不预装整套组件。
 
 TypeScript 的 `latest` 标签在解析日为 7.0.2，但 `openapi-typescript` 7.13.0 的 peer dependency 明确为 TypeScript 5.x，`typescript-eslint` 8.65.0 也尚未声明 TypeScript 7 支持。因此锁定可解析依赖树中的最新 TypeScript 5.x（5.9.3），不使用 `--force` 或 `--legacy-peer-deps` 隐藏不兼容。
 
 React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公告明确写明“仅使用 unstable RSC APIs 时受影响”，首个修复版本标为 8.3.0；但 npm 在 2026-07-29 尚未发布 8.3.0，最新正式版仍是 7.18.2。ImageSilo 只使用 Vite SPA 的 BrowserRouter，不启用 React Server Components、SSR、Server Action 或框架模式，因此没有该公告中的服务端 Action 执行面。每次发布仍重新检查，一旦官方发布兼容修复版立即升级。
 
-`openapi-typescript` 的构建期传递依赖通过 npm `overrides` 锁定到已修复的 `js-yaml` 4.3.0、`minimatch` 10.2.6 和 `brace-expansion` 5.0.8。它只解析仓库内受信任的 `api/openapi.yaml`，不处理用户输入。
+`openapi-typescript` 的构建期传递依赖通过 npm `overrides` 锁定到已修复的 `js-yaml` 4.3.2、`minimatch` 10.2.6 和 `brace-expansion` 5.0.12。它只解析仓库内受信任的 `api/openapi.yaml`，不处理用户输入。
 
 ## Docker 基础镜像
 
@@ -53,3 +53,9 @@ React Router 7.18.2 在解析日命中 `GHSA-qwww-vcr4-c8h2`。GitHub 官方公�
 | 运行时 | `debian:bookworm-slim` | Bookworm 更新 |
 
 `make docker-build` 和 Release 原生构建均使用 `--pull`，手动构建也必须加 `--pull`。同一源码在不同时间构建可能使用不同基础镜像；新发布仍需通过 amd64/arm64 构建与 smoke test。该策略不会更新已运行的容器，也不会覆盖已发布的不可变镜像。
+
+## 2026-10-18 发布前安全补丁记录
+
+当时将 `golang.org/x/image` 更新到 0.45.0，以修复上传检查调用到的 VP8L 解码内存分配漏洞，并将间接依赖 `golang.org/x/text` 更新到 0.41.0。开发工具更新了 Vitest 4.1.11、YAML/brace overrides 及 nanoid、source-map-js、undici 的锁定版本。
+
+当时 `govulncheck` 复扫未发现实际调用链或已导入包中的漏洞，完整 `npm audit` 复扫及生产依赖初扫均为 0；这是历史扫描结果，发布时仍需重新检查。当前工具链最低版本与镜像策略以上文为准。

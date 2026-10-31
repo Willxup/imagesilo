@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -25,20 +25,23 @@ function initialFormat(): LinkFormat {
 export function CopyLinkControl({
   image,
   compact = false,
+  prominent = false,
   menuAlign = 'right',
   onCopied,
 }: {
   image: LinkableImage
   compact?: boolean
+  prominent?: boolean
   menuAlign?: 'left' | 'right'
   onCopied?: (format: LinkFormat) => void
 }) {
-  return <CopyLinksControl images={[image]} compact={compact} menuAlign={menuAlign} onCopied={onCopied} />
+  return <CopyLinksControl images={[image]} compact={compact} prominent={prominent} menuAlign={menuAlign} onCopied={onCopied} />
 }
 
 export function CopyLinksControl({
   images,
   compact = false,
+  prominent = false,
   label,
   ariaLabel,
   menuAlign = 'right',
@@ -46,6 +49,7 @@ export function CopyLinksControl({
 }: {
   images: readonly LinkableImage[]
   compact?: boolean
+  prominent?: boolean
   label?: string
   ariaLabel?: (formatLabel: string) => string
   menuAlign?: 'left' | 'right'
@@ -56,6 +60,12 @@ export function CopyLinksControl({
   const [open, setOpen] = useState(false)
   const [copying, setCopying] = useState(false)
   const count = images.length
+  const [copiedText, setCopiedText] = useState<string | null>(null)
+  const feedbackTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const value = imageLinksText(images, format)
+  const copied = copiedText === value && count > 0
+
+  useEffect(() => () => clearTimeout(feedbackTimer.current), [])
 
   useEffect(() => {
     writeLocalStorage(storageKey, format)
@@ -65,14 +75,19 @@ export function CopyLinksControl({
     if (count === 0) return
     setCopying(true)
     try {
-      await copyText(imageLinksText(images, format))
+      await copyText(value)
+      clearTimeout(feedbackTimer.current)
+      setCopiedText(value)
+      feedbackTimer.current = setTimeout(() => setCopiedText(null), 1600)
       toast.success(
         count === 1
           ? t('toast.linkCopied', { format: t(`images.linkFormatShort.${format}`) })
           : t('toast.linksCopied', { count, format: t(`images.linkFormatShort.${format}`) }),
+        { id: 'image-links-copy', duration: 2000 },
       )
       onCopied?.(format)
     } catch {
+      setCopiedText(null)
       toast.error(t('toast.copyFailed'))
     } finally {
       setCopying(false)
@@ -80,13 +95,14 @@ export function CopyLinksControl({
   }
 
   return (
-    <div className="copy-link-control" data-compact={compact || undefined} onClick={(event) => event.stopPropagation()}>
+    <div className="copy-link-control" data-compact={compact || undefined} data-prominent={prominent || undefined} data-copied={copied || undefined} onClick={(event) => event.stopPropagation()}>
       <Button
         className="copy-link-main"
         size={compact ? 'xs' : 'sm'}
-        variant="outline"
+        variant={prominent ? 'default' : 'outline'}
         type="button"
         disabled={copying || count === 0}
+        aria-busy={copying || undefined}
         aria-label={ariaLabel?.(t(`images.linkFormatShort.${format}`)) ?? (
           count === 1
             ? t('images.copySelectedFormat', { format: t(`images.linkFormatShort.${format}`) })
@@ -94,7 +110,7 @@ export function CopyLinksControl({
         )}
         onClick={() => void copy()}
       >
-        <Icon name={copying ? 'loader' : 'copy'} className={copying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+        <Icon name={copying ? 'loader' : copied ? 'check' : 'copy'} className={copying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
         <span className="image-action-label">{label ?? t('common.copy')}</span>
       </Button>
       <DropdownMenu
@@ -108,7 +124,7 @@ export function CopyLinksControl({
             type="button"
             title={t(`images.linkFormat.${format}`)}
             aria-label={`${t('images.chooseLinkFormat')}: ${t(`images.linkFormat.${format}`)}`}
-            aria-expanded={open}
+            aria-haspopup="menu" aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
             <Icon name={formatIcons[format]} className="copy-format-icon" />

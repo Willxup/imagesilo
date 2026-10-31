@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { createMemoryRouter, MemoryRouter, Route, RouterProvider, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
@@ -52,7 +52,7 @@ function renderPage() {
 }
 
 describe('ImageDetailPage', () => {
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
   beforeEach(() => {
     vi.mocked(apiRequest).mockReset()
@@ -87,5 +87,34 @@ describe('ImageDetailPage', () => {
       })
     })
     await waitFor(() => expect(screen.getByLabelText('新历史路径')).toHaveValue(''))
+  })
+
+  it('invalidates a delayed delete return on popstate before the router commits', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
+    let releaseRefresh!: () => void
+    const refresh = new Promise<void>((resolve) => { releaseRefresh = resolve })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries').mockImplementation((filters) => filters?.queryKey?.[0] === 'images' ? refresh : Promise.resolve())
+    const router = createMemoryRouter([
+      { path: '/admin/upload', element: <h1>Upload</h1> },
+      { path: '/admin/images', element: <h1>Filtered library</h1> },
+      { path: '/admin/images/:imageId', element: <ImageDetailPage /> },
+    ], {
+      initialEntries: ['/admin/upload', '/admin/images?q=sample', { pathname: `/admin/images/${imageId}`, state: { fromImageList: true } }],
+      initialIndex: 2,
+    })
+    render(<QueryClientProvider client={queryClient}><RouterProvider router={router} /></QueryClientProvider>)
+    await screen.findByRole('img', { name: 'sample.jpg' })
+    fireEvent.click(screen.getByRole('button', { name: '删除' }))
+    fireEvent.click(screen.getByRole('button', { name: '永久删除' }))
+    await waitFor(() => expect(invalidate).toHaveBeenCalledWith({ queryKey: ['images'], refetchType: 'all' }))
+
+    // A native POP happens synchronously; leave the memory router uncommitted.
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate')) })
+    await act(async () => { releaseRefresh() })
+    await waitFor(() => expect(queryClient.getMutationCache().getAll()[0]?.state.status).toBe('success'))
+    expect(router.state.location.pathname).toBe(`/admin/images/${imageId}`)
+    await act(async () => { await router.navigate(-1) })
+    expect(router.state.location.pathname).toBe('/admin/images')
+    expect(router.state.location.search).toBe('?q=sample')
   })
 })

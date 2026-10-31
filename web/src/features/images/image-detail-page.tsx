@@ -1,12 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { Button } from '../../components/ui/button'
-import { Card } from '../../components/ui/card'
-import { ComponentCard } from '../../components/ui/component-card'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { CopyLinkControl } from '../../components/ui/copy-link-control'
 import { Icon } from '../../components/ui/icon'
@@ -16,30 +14,32 @@ import { formatBytes } from '../../lib/image-links'
 import type { DeleteImageResult, ImageAlias, ImageDetail, Visibility, WebPConversionResult } from '../../lib/api-types'
 
 export function ImageDetailPage() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { imageId = '' } = useParams()
   const navigate = useNavigate()
   const location = useLocation()
   const queryClient = useQueryClient()
-  const returnTimer = useRef<number | null>(null)
-  const [leaving, setLeaving] = useState(false)
+  const currentEntry = useRef<string | null>(location.key)
+  useLayoutEffect(() => {
+    currentEntry.current = location.key
+    // Browser history changes before a concurrent route transition commits.
+    const invalidateReturn = () => { currentEntry.current = null }
+    window.addEventListener('popstate', invalidateReturn)
+    return () => {
+      currentEntry.current = null
+      window.removeEventListener('popstate', invalidateReturn)
+    }
+  }, [location.key])
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [convertOpen, setConvertOpen] = useState(false)
   const [aliasPath, setAliasPath] = useState('')
 
-  useEffect(() => () => {
-    if (returnTimer.current !== null) window.clearTimeout(returnTimer.current)
-  }, [])
+  useLayoutEffect(() => { window.scrollTo({ top: 0, behavior: 'instant' }) }, [imageId])
 
   function returnToList() {
-    if (leaving) return
-    setLeaving(true)
     const state = location.state as { fromImageList?: boolean; returnTo?: string } | null
-    const delay = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : 220
-    returnTimer.current = window.setTimeout(() => {
-      if (state?.fromImageList) navigate(-1)
-      else navigate(state?.returnTo || '/admin/images')
-    }, delay)
+    if (state?.fromImageList) navigate(-1)
+    else navigate(state?.returnTo || '/admin/images', { viewTransition: true })
   }
   const query = useQuery({ queryKey: ['image', imageId], queryFn: () => apiRequest<ImageDetail>(`/api/v1/images/${imageId}`), enabled: Boolean(imageId) })
   const visibility = useMutation({
@@ -55,11 +55,15 @@ export function ImageDetailPage() {
   const deletion = useMutation({
     mutationFn: () => apiRequest<DeleteImageResult>(`/api/v1/images/${imageId}`, { method: 'DELETE' }),
     onMutate: () => toast.loading(t('common.working'), { id: 'detail-delete' }),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
       toast.success(result.cleanupPending ? t('toast.imageDeletedCleanup') : t('toast.imageDeleted'), { id: 'detail-delete' })
-      void queryClient.invalidateQueries({ queryKey: ['images'] })
+      // Refresh cached lists before restoring their position, including shorter last pages.
+      await queryClient.invalidateQueries({ queryKey: ['images'], refetchType: 'all' })
       void queryClient.invalidateQueries({ queryKey: ['overview'] })
-      navigate('/admin/images', { replace: true })
+      if (currentEntry.current !== location.key) return
+      const state = location.state as { fromImageList?: boolean; returnTo?: string } | null
+      if (state?.fromImageList) navigate(-1)
+      else navigate(state?.returnTo || '/admin/images', { replace: true })
     },
     onError: () => toast.error(t('toast.operationFailed'), { id: 'detail-delete' }),
   })
@@ -98,63 +102,60 @@ export function ImageDetailPage() {
     if (path) aliasCreation.mutate(path)
   }
 
-  if (query.isLoading) return <p className="text-muted-foreground">{t('common.loading')}</p>
-  if (query.isError || !query.data) return <p className="text-danger">{t('images.detailFailed')}</p>
+  if (query.isLoading) {
+    const preview = (location.state as { preview?: { url?: string; name?: string } } | null)?.preview
+    return <section className="detail-page detail-loading">
+      <Button size="sm" variant="ghost" type="button" onClick={returnToList}><Icon name="chevronLeft" />{t('images.back')}</Button>
+      <div className="image-detail-layout mt-5" role="status" aria-label={t('common.loading')}>
+        <div className="image-detail-preview"><div className="image-detail-stage">{preview?.url ? <img decoding="async" src={preview.url} alt={preview.name ?? ''} style={{ viewTransitionName: `image-${imageId}` }} /> : <Icon name="loader" className="animate-spin" />}</div></div>
+        <aside className="image-detail-summary"><p className="page-kicker">{t('images.detailEyebrow')}</p><h1 className="page-title">{preview?.name ?? t('images.detailEyebrow')}</h1><p className="page-description">{t('common.loading')}</p></aside>
+      </div>
+    </section>
+  }
+  if (query.isError || !query.data) return <div className="empty-state" role="alert"><p>{t('images.detailFailed')}</p><Button variant="outline" type="button" onClick={() => void query.refetch()}>{t('images.retryLoad')}</Button><Button variant="ghost" type="button" onClick={returnToList}>{t('images.back')}</Button></div>
   const image = query.data
   const canConvert = image.mimeType === 'image/jpeg' || image.mimeType === 'image/png'
 
   return (
-    <section className={`detail-slide-in ${leaving ? 'is-leaving' : ''}`}>
-      <Button size="sm" variant="outline" type="button" disabled={leaving} onClick={returnToList}><Icon name="chevronLeft" />{t('images.back')}</Button>
+    <section className="detail-page">
+      <Button size="sm" variant="ghost" type="button" onClick={returnToList}><Icon name="chevronLeft" />{t('images.back')}</Button>
       <div className="image-detail-layout mt-5">
-        <Card className="image-detail-preview gap-0 overflow-hidden py-0"><div className="image-detail-stage"><img src={image.standardUrl} alt={image.originalName} /></div></Card>
-        <div className="image-detail-summary min-w-0">
+        <div className="image-detail-preview"><div className="image-detail-stage"><img decoding="async" src={image.standardUrl} alt={image.originalName} style={{ viewTransitionName: `image-${imageId}` }} /></div></div>
+        <aside className="image-detail-summary min-w-0">
+          <p className="page-kicker">{t('images.detailEyebrow')}</p>
           <h1 className="page-title break-words">{image.originalName}</h1>
           <p className="mt-2 text-sm text-muted-foreground">{image.width} × {image.height} · {image.mimeType} · {formatBytes(image.storedSize)}</p>
-        </div>
+          <div className="detail-visibility"><span>{t('images.visibility')} <strong>{t(`visibility.${image.visibility}`)}</strong></span><Button variant="ghost" type="button" disabled={visibility.isPending} onClick={() => visibility.mutate(image.visibility === 'public' ? 'private' : 'public')}><Icon name={image.visibility === 'public' ? 'visibilityOff' : 'visibility'} />{image.visibility === 'public' ? t('images.makePrivate') : t('images.makePublic')}</Button></div>
+          <div className="image-detail-actions">
+          <CopyLinkControl image={image} prominent />
+          <Button size="sm" asChild variant="outline"><a href={image.standardUrl} target="_blank" rel="noreferrer"><Icon name="external" />{t('images.openImage')}</a></Button>
+          </div>
+          <dl className="detail-core-info"><dt>{t('images.uploadedAt')}</dt><dd>{new Date(image.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</dd><dt>{t('images.uploadedVia')}</dt><dd>{t(`images.source.${image.uploadedVia}`)}</dd><dt>{t('images.storedSize')}</dt><dd>{formatBytes(image.storedSize)}</dd><dt>{t('images.format')}</dt><dd>{image.extension.toUpperCase()}</dd></dl>
+        </aside>
       </div>
 
-      <div className="image-detail-action-bar mt-4">
-        <div className="image-detail-actions">
-          <Button size="sm" asChild><a href={image.standardUrl} target="_blank" rel="noreferrer"><Icon name="external" />{t('images.openImage')}</a></Button>
-          <Button size="sm" variant="outline" type="button" disabled={visibility.isPending} onClick={() => visibility.mutate(image.visibility === 'public' ? 'private' : 'public')}><Icon name={image.visibility === 'public' ? 'visibilityOff' : 'visibility'} />{image.visibility === 'public' ? t('images.makePrivate') : t('images.makePublic')}</Button>
-          <CopyLinkControl image={image} />
-          {canConvert ? <Button size="sm" variant="outline" type="button" disabled={conversion.isPending} onClick={() => setConvertOpen(true)}><Icon name="wand" />{t('images.convertWebp')}</Button> : null}
-          <Button size="sm" variant="destructive" type="button" disabled={deletion.isPending} onClick={() => setDeleteOpen(true)}><Icon name="trash" />{t('common.delete')}</Button>
-        </div>
-      </div>
-
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
-        <ComponentCard title={t('images.metadata')}>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm">
-            <Meta label={t('images.visibility')} value={t(`visibility.${image.visibility}`)} />
-            <Meta label={t('images.uploadedVia')} value={t(`images.source.${image.uploadedVia}`)} />
+      <div className="detail-secondary-grid">
+        <section className="detail-secondary">
+          <h2>{t('images.metadata')}</h2>
+          <dl>
             <Meta label={t('images.sourceSize')} value={formatBytes(image.sourceSize)} />
-            <Meta label={t('images.storedSize')} value={formatBytes(image.storedSize)} />
             <Meta label={t('images.sha256')} value={image.storedSha256} mono />
-            <Meta label={t('images.uploadedAt')} value={new Date(image.createdAt).toLocaleString()} />
             <Meta label={t('images.processing')} value={JSON.stringify(image.processingSummary)} mono />
           </dl>
-        </ComponentCard>
-        <ComponentCard title={t('images.aliases')}>
+        </section>
+        <section className="detail-secondary">
+          <h2>{t('images.aliases')}</h2>
           <form className="mb-4 flex flex-col gap-2 sm:flex-row" onSubmit={createAlias}>
             <label className="sr-only" htmlFor="detail-alias-path">{t('images.aliasPath')}</label>
-            <Input
-              className="min-w-0 flex-1"
-              id="detail-alias-path"
-              value={aliasPath}
-              onChange={(event) => setAliasPath(event.target.value)}
-              placeholder="/i/2026/08/example.jpg"
-              maxLength={2048}
-              required
-            />
-            <Button type="submit" variant="outline" disabled={!aliasPath.trim() || aliasCreation.isPending}>
-              <Icon name={aliasCreation.isPending ? 'loader' : 'plus'} className={aliasCreation.isPending ? 'animate-spin' : ''} />
-              {aliasCreation.isPending ? t('images.aliasSaving') : t('images.addAlias')}
-            </Button>
+            <Input className="min-w-0 flex-1" id="detail-alias-path" value={aliasPath} onChange={(event) => setAliasPath(event.target.value)} placeholder="/i/2026/08/example.jpg" maxLength={2048} required />
+            <Button type="submit" variant="outline" disabled={!aliasPath.trim() || aliasCreation.isPending}><Icon name={aliasCreation.isPending ? 'loader' : 'plus'} className={aliasCreation.isPending ? 'animate-spin' : ''} />{aliasCreation.isPending ? t('images.aliasSaving') : t('images.addAlias')}</Button>
           </form>
           {image.aliases.length === 0 ? <p className="text-muted-foreground">{t('images.noAliases')}</p> : <ul className="grid gap-3">{image.aliases.map((alias) => <li className="rounded-xl bg-canvas p-3" key={alias.id}><code className="break-all text-sm">{alias.path}</code><p className="mt-1 text-xs text-muted-foreground">{alias.source}</p></li>)}</ul>}
-        </ComponentCard>
+        </section>
+      </div>
+      <div className="detail-danger-actions">
+          {canConvert ? <Button size="sm" variant="outline" type="button" disabled={conversion.isPending} onClick={() => setConvertOpen(true)}><Icon name="wand" />{t('images.convertWebp')}</Button> : null}
+          <Button size="sm" variant="destructive" type="button" disabled={deletion.isPending} onClick={() => setDeleteOpen(true)}><Icon name="trash" />{t('common.delete')}</Button>
       </div>
 
       <ConfirmDialog open={deleteOpen} onOpenChange={setDeleteOpen} title={t('images.deleteImageTitle')} description={t('images.confirmDelete', { name: image.originalName })} confirmLabel={t('images.deletePermanently')} cancelLabel={t('common.cancel')} closeLabel={t('common.close')} destructive pending={deletion.isPending} onConfirm={() => deletion.mutate()} />

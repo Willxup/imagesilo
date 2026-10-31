@@ -1,12 +1,13 @@
+import { PreviewImage } from '../../components/ui/preview-image'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect, useMemo, useState, type FormEvent, type KeyboardEvent, type MouseEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useLocation, useNavigate, useSearchParams, useViewTransitionState } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { preloadAdminPage } from '../../app/page-loaders'
 import { Badge } from '../../components/ui/badge'
 import { Button } from '../../components/ui/button'
-import { Card } from '../../components/ui/card'
 import { Checkbox } from '../../components/ui/checkbox'
 import { ConfirmDialog } from '../../components/ui/confirm-dialog'
 import { CopyLinkControl, CopyLinksControl } from '../../components/ui/copy-link-control'
@@ -17,22 +18,34 @@ import { Select } from '../../components/ui/select'
 import { apiRequest } from '../../lib/api-client'
 import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { formatBytes } from '../../lib/image-links'
-import type { BatchOperationResult, Image, ImageList, Visibility } from '../../lib/api-types'
+import type { BatchOperationResult, Image, ImageDetail, ImageList, Visibility } from '../../lib/api-types'
 
 type ViewMode = 'grid' | 'list'
 
 const viewModeStorageKey = 'imagesilo_image_view_mode'
 const filtersOpenStorageKey = 'imagesilo_image_filters_open'
 const advancedFiltersOpenStorageKey = 'imagesilo_image_advanced_filters_open'
+const scrollPositions = new Map<string, { top: number; count: number }>()
+
+function rememberScroll(key: string, count: number) {
+  scrollPositions.delete(key)
+  scrollPositions.set(key, { top: window.scrollY, count })
+  // Bound abandoned detail visits without changing browser history entries.
+  while (scrollPositions.size > 20) scrollPositions.delete(scrollPositions.keys().next().value!)
+}
 
 export function ImageListPage() {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
+  const formRef = useRef<HTMLFormElement>(null)
+  const filterToggleRef = useRef<HTMLButtonElement>(null)
   const searchKey = searchParams.toString()
   const filters = useMemo(() => normalizedFilterQuery(new URLSearchParams(searchKey)), [searchKey])
   const filterValues = useMemo(() => new URLSearchParams(filters), [filters])
+  const activeFilterCount = imageFilterNames.filter((name) => filterValues.has(name)).length
   const [filtersOpen, setFiltersOpen] = useState(() => storedBoolean(filtersOpenStorageKey))
   const [advancedOpen, setAdvancedOpen] = useState(
     () => hasAdvancedParameters(searchParams) || storedBoolean(advancedFiltersOpenStorageKey),
@@ -63,7 +76,8 @@ export function ImageListPage() {
         body: JSON.stringify({ visibility }),
       }),
     onMutate: ({ id }) => toast.loading(t('common.working'), { id: `image-visibility-${id}` }),
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
+      await syncDetailVisibility(variables.id, variables.visibility)
       toast.success(variables.visibility === 'public' ? t('toast.imagePublic') : t('toast.imagePrivate'), { id: `image-visibility-${variables.id}` })
       void queryClient.invalidateQueries({ queryKey: ['images'] })
     },
@@ -77,7 +91,10 @@ export function ImageListPage() {
         body: JSON.stringify({ imageIds, visibility }),
       }),
     onMutate: () => toast.loading(t('common.working'), { id: 'batch-visibility' }),
-    onSuccess: (result) => {
+    onSuccess: async (result, variables) => {
+      await Promise.all(result.items.filter((item) => item.status === 'updated').map((item) =>
+        syncDetailVisibility(item.imageId, variables.visibility),
+      ))
       showBatchToast(result, 'batch-visibility')
       setSelected(new Set())
       void queryClient.invalidateQueries({ queryKey: ['images'] })
@@ -123,11 +140,42 @@ export function ImageListPage() {
     writeLocalStorage(viewModeStorageKey, viewMode)
   }, [viewMode])
 
+  const { isSuccess, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage } = query
+  useLayoutEffect(() => {
+    if (!isSuccess || !scrollPositions.has(location.key)) return
+    // Restore before the browser captures the return transition, not one frame later.
+    const target = scrollPositions.get(location.key)
+    if (target === undefined) return
+    if (images.length < target.count && hasNextPage && !isFetchNextPageError) {
+      if (!isFetchingNextPage) void fetchNextPage()
+      return
+    }
+    window.scrollTo({ top: target.top, behavior: 'instant' })
+    scrollPositions.delete(location.key)
+  }, [isSuccess, hasNextPage, isFetchingNextPage, isFetchNextPageError, fetchNextPage, images.length, location.key])
+
+  function setVisibilityFilter(value: string) {
+    const next = new URLSearchParams(searchParams)
+    if (value) next.set('visibility', value)
+    else next.delete('visibility')
+    setSearchParams(next, { replace: true })
+  }
+
   function showBatchToast(result: BatchOperationResult, id: string) {
     const failures = result.items.filter((item) => item.status === 'error' || item.status === 'not_found' || item.status === 'cleanup_pending')
     if (failures.length > 0) toast.warning(t('toast.batchPartial', { success: result.items.length - failures.length, failed: failures.length }), { id })
     else toast.success(t('toast.batchSuccess', { count: result.items.length }), { id })
   }
+
+  async function syncDetailVisibility(id: string, visibility: Visibility) {
+    const queryKey = ['image', id]
+    // Discard an older detail response before applying the confirmed change.
+    await queryClient.cancelQueries({ queryKey, exact: true })
+    queryClient.setQueryData<ImageDetail>(queryKey, (detail) => detail ? { ...detail, visibility } : detail)
+    void queryClient.invalidateQueries({ queryKey, exact: true })
+  }
+
+  useEffect(() => { formRef.current?.reset() }, [filters])
 
   function applyFilters(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -144,10 +192,14 @@ export function ImageListPage() {
     for (const name of ['minWidth', 'maxWidth', 'minHeight', 'maxHeight']) append(parameters, name, form.get(name))
     setSelected(new Set())
     setSearchParams(parameters, { replace: true })
-    if (window.matchMedia?.('(max-width: 720px)').matches) setFiltersOpen(false)
+    if (window.matchMedia?.('(max-width: 720px)').matches) {
+      setFiltersOpen(false)
+      filterToggleRef.current?.focus()
+    }
   }
 
   function resetFilters() {
+    formRef.current?.reset()
     setSelected(new Set())
     setCreatedFrom('')
     setCreatedTo('')
@@ -160,7 +212,9 @@ export function ImageListPage() {
     setSelected((current) => {
       const next = new Set(current)
       if (next.has(id)) next.delete(id)
-      else next.add(id)
+      else if (next.size >= 100) {
+        toast.warning(t('images.selectionLimit'))
+      } else next.add(id)
       return next
     })
   }
@@ -169,13 +223,21 @@ export function ImageListPage() {
 
   return (
     <section className={selected.size > 0 ? 'has-floating-batch' : ''}>
-      <div className="page-heading-row">
+      <div className="page-heading-row library-heading">
         <div>
+          <p className="page-kicker">{t('images.eyebrow')}</p>
           <h1 className="page-title">{t('images.title')}</h1>
           <p className="page-description">{t('images.description')}</p>
         </div>
-        <div className="library-toolbar">
+        <Button type="button" aria-label={t('images.uploadAction')} onClick={() => navigate('/admin/upload')}><Icon name="plus" /><span className="library-upload-label">{t('images.uploadAction')}</span></Button>
+      </div>
+      <div className="library-toolbar">
+        <div className="library-visibility" role="group" aria-label={t('images.visibility')}>
+          {([['', t('images.allImages')], ['public', t('visibility.public')], ['private', t('visibility.private')]] as const).map(([value, label]) => <button type="button" key={value} className={filterValues.get('visibility') === (value || null) ? 'active' : ''} aria-pressed={filterValues.get('visibility') === (value || null)} aria-label={label} onClick={() => setVisibilityFilter(value)}><span className="visibility-label-full">{label}</span><span className="visibility-label-compact" aria-hidden="true">{value ? label : t('images.allImagesCompact')}</span></button>)}
+        </div>
+        <div className="library-tools">
           <Button
+            ref={filterToggleRef}
             className="filter-toggle"
             size="xs"
             variant="outline"
@@ -185,7 +247,9 @@ export function ImageListPage() {
           >
             <Icon name="filter" />
             <span>{filtersOpen ? t('images.hideFilters') : t('images.showFilters')}</span>
+            {activeFilterCount > 0 ? <span className="filter-count" aria-label={t('images.activeFilterCount', { count: activeFilterCount })}>{activeFilterCount}</span> : null}
           </Button>
+          {activeFilterCount > 0 ? <Button className="library-clear-filters" size="xs" variant="ghost" type="button" aria-label={t('images.clearFilters')} onClick={resetFilters}><Icon name="x" /><span>{t('images.clearFilters')}</span></Button> : null}
           <div className="view-switcher" role="group" aria-label={t('images.viewMode')}>
             <Button
               size="xs"
@@ -211,7 +275,8 @@ export function ImageListPage() {
         </div>
       </div>
 
-      <form className={`filter-panel mt-6 ${filtersOpen ? 'is-open' : ''}`} key={filters} onSubmit={applyFilters}>
+      <form className={`filter-panel ${filtersOpen ? 'is-open' : ''}`} aria-hidden={!filtersOpen} inert={!filtersOpen || undefined} ref={formRef} onSubmit={applyFilters}>
+        <div className="filter-panel-inner">
         <div className="mb-4 flex items-center gap-2 text-sm font-semibold">
           <Icon name="filter" className="h-4 w-4 text-cyan" />
           {t('images.filters')}
@@ -318,18 +383,16 @@ export function ImageListPage() {
             {t('images.resetFilters')}
           </Button>
         </div>
+        </div>
       </form>
 
-      {query.isLoading ? <p className="mt-8 text-muted-foreground">{t('common.loading')}</p> : null}
-      {query.isError ? <p className="mt-8 text-danger">{t('images.failed')}</p> : null}
+      {query.isLoading ? <div className="image-grid mt-6" role="status" aria-label={t('common.loading')}>{Array.from({ length: 6 }, (_, index) => <div className="image-skeleton" key={index}><div /><span /><small /></div>)}</div> : null}
+      {query.isError ? <div className="empty-state" role="alert"><span className="empty-state-icon"><Icon name="activity" /></span><p>{t('images.failed')}</p><Button variant="outline" type="button" onClick={() => void query.refetch()}>{t('images.retryLoad')}</Button></div> : null}
       {!query.isLoading && !query.isError && images.length === 0 ? (
         <div className="empty-state">
-          <div>
-            <span className="empty-state-icon">
-              <Icon name="images" />
-            </span>
-            <p>{t('images.empty')}</p>
-          </div>
+          <span className="empty-state-icon"><Icon name="images" /></span>
+          <p>{filters === 'limit=24' ? t('images.emptyLibrary') : t('images.emptyFiltered')}</p>
+          <Button variant="outline" type="button" onClick={filters === 'limit=24' ? () => navigate('/admin/upload') : resetFilters}>{filters === 'limit=24' ? t('images.uploadAction') : t('images.clearFilters')}</Button>
         </div>
       ) : null}
 
@@ -344,9 +407,11 @@ export function ImageListPage() {
             returnTo={`${location.pathname}${location.search}`}
             onSelect={() => toggleSelected(image.id)}
             onVisibility={(visibility) => visibilityMutation.mutate({ id: image.id, visibility })}
+            onOpen={() => { rememberScroll(location.key, images.length) }}
           />
         ))}
       </div>
+      {images.length > 0 ? <p className="library-loaded-count">{t('images.loadedCount', { count: images.length })}</p> : null}
       {query.hasNextPage ? (
         <Button className="mt-5" size="sm" variant="outline" type="button" disabled={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()}>
           <Icon name="plus" />
@@ -364,6 +429,7 @@ export function ImageListPage() {
             <CopyLinksControl
               images={selectedImages}
               compact
+              menuAlign="left"
               label={t('images.copySelectedLinks')}
               ariaLabel={(format) => t('images.copySelectedLinksFormat', { count: selectedImages.length, format })}
             />
@@ -437,6 +503,7 @@ function ImageCard({
   returnTo,
   onSelect,
   onVisibility,
+  onOpen,
 }: {
   image: Image
   list: boolean
@@ -445,36 +512,31 @@ function ImageCard({
   returnTo: string
   onSelect: () => void
   onVisibility: (value: Visibility) => void
+  onOpen: () => void
 }) {
-  const { t } = useTranslation()
-  const navigate = useNavigate()
-  const open = () => navigate(`/admin/images/${image.id}`, { state: { fromImageList: true, returnTo } })
-  const stop = (event: MouseEvent) => event.stopPropagation()
-  const keyDown = (event: KeyboardEvent<HTMLElement>) => {
-    if (event.target !== event.currentTarget) return
-    if (event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      open()
-    }
-  }
+  const { t, i18n } = useTranslation()
+  const transitioning = useViewTransitionState(`/admin/images/${image.id}`)
+  const linkState = { fromImageList: true, returnTo, preview: { url: image.standardUrl, name: image.originalName } }
   return (
-    <article className="image-card-clickable" role="link" tabIndex={0} onClick={open} onKeyDown={keyDown} aria-label={image.originalName}>
-      <Card size="sm" className={list ? 'image-card gap-0 py-0 sm:flex-row' : 'image-card gap-0 py-0'}>
-        <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'}>
-          <img
-            className={list ? 'aspect-video h-full w-full object-contain' : 'aspect-[4/3] h-full w-full object-cover'}
+    <article className={`image-card-clickable ${list ? 'is-list' : ''} ${selected ? 'is-selected' : ''}`} onPointerEnter={() => preloadAdminPage(`/admin/images/${image.id}`)} onFocus={() => preloadAdminPage(`/admin/images/${image.id}`)}>
+        <div className={list ? 'image-card-media sm:w-56' : 'image-card-media'} style={{ '--image-ratio': image.width > 0 && image.height > 0 ? `${image.width} / ${image.height}` : '4 / 3' } as CSSProperties}>
+          <Link className="image-card-link" to={`/admin/images/${image.id}`} state={linkState} viewTransition onClick={onOpen} aria-label={image.originalName}>
+          <PreviewImage
+            className={list ? 'aspect-video h-full w-full object-cover' : 'aspect-[4/3] h-full w-full object-cover'}
             src={image.thumbnailUrl}
             alt={image.originalName}
             loading="lazy"
+            style={{ viewTransitionName: transitioning ? `image-${image.id}` : 'none' }}
           />
-          <label className="image-select" onClick={stop}>
+          </Link>
+          <label className="image-select">
             <Checkbox checked={selected} disabled={disabled} onChange={onSelect} aria-label={t('images.selectImage', { name: image.originalName })} />
           </label>
         </div>
-        <div className="min-w-0 flex-1 p-4">
+        <div className="image-card-info">
           <div className="image-card-title-row">
             <h2 className="truncate text-sm font-semibold text-ink" title={image.originalName}>
-              {image.originalName}
+              <Link to={`/admin/images/${image.id}`} state={linkState} viewTransition onClick={onOpen}>{image.originalName}</Link>
             </h2>
             <Badge className="image-visibility-badge border-cyan/25 bg-cyan/8 text-cyan" variant="outline">
               <Icon name={image.visibility === 'public' ? 'visibility' : 'lock'} />
@@ -484,13 +546,14 @@ function ImageCard({
           <p className="mt-1 text-xs text-muted-foreground">
             {image.width} × {image.height} · {image.extension} · {formatBytes(image.storedSize)}
           </p>
-          <p className="mt-1 text-xs text-muted-foreground">{new Date(image.createdAt).toLocaleString()}</p>
-          <div className="image-card-actions mt-3" onClick={stop}>
+          <p className={`image-card-date mt-1 text-xs text-muted-foreground${list ? '' : ' grid-date'}`}>{new Date(image.createdAt).toLocaleString(i18n.resolvedLanguage ?? i18n.language)}</p>
+          <div className="image-card-actions mt-3">
             <Button
               size="xs"
               variant="outline"
               type="button"
               disabled={disabled}
+              aria-label={image.visibility === 'public' ? t('images.makePrivate') : t('images.makePublic')}
               onClick={() => onVisibility(image.visibility === 'public' ? 'private' : 'public')}
             >
               <Icon name={image.visibility === 'public' ? 'visibilityOff' : 'visibility'} />
@@ -499,7 +562,6 @@ function ImageCard({
             <CopyLinkControl image={image} compact />
           </div>
         </div>
-      </Card>
     </article>
   )
 }

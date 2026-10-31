@@ -95,11 +95,12 @@ export function AliasPage() {
 
   return (
     <section>
+      <p className="page-kicker">{t('aliases.eyebrow')}</p>
       <h1 className="page-title">{t('aliases.title')}</h1>
       <p className="page-description">{t('aliases.description')}</p>
-      <div className="mt-8 grid gap-6 lg:grid-cols-2">
+      <div className="support-columns mt-8">
         <form ref={createFormRef} onSubmit={createAlias}>
-          <ComponentCard className="h-full" title={t('aliases.create')}>
+          <ComponentCard className="section-panel h-full" title={t('aliases.create')}>
             <label className="block font-medium" htmlFor="alias-path">
               {t('aliases.path')}
             </label>
@@ -130,7 +131,7 @@ export function AliasPage() {
               {create.isPending ? `${t('aliases.saving')} ${uploadProgress}%` : t('aliases.create')}
             </Button>
             {created ? (
-              <p className="mt-4 text-green" aria-live="polite">
+              <p className="mt-4 text-green [overflow-wrap:anywhere]" aria-live="polite">
                 {t('aliases.created', { path: created.path })}
               </p>
             ) : null}
@@ -138,7 +139,7 @@ export function AliasPage() {
           </ComponentCard>
         </form>
         <form onSubmit={resolveAlias}>
-          <ComponentCard className="h-full" title={t('aliases.resolve')}>
+          <ComponentCard className="section-panel resolve-panel h-full" title={t('aliases.resolve')}>
             <label className="block font-medium" htmlFor="resolve-alias-path">
               {t('aliases.path')}
             </label>
@@ -162,13 +163,13 @@ export function AliasPage() {
         </form>
       </div>
 
-      <ComponentCard className="mt-6" title={t('aliases.existing')}>
+      <ComponentCard className="existing-section mt-8" title={t('aliases.existing')}>
         {query.isLoading ? <p className="mt-4 text-muted-foreground">{t('common.loading')}</p> : null}
         {query.isError ? <p className="mt-4 text-danger">{t('aliases.listFailed')}</p> : null}
         {aliases.length === 0 && !query.isLoading && !query.isError ? <p className="mt-4 text-muted-foreground">{t('aliases.empty')}</p> : null}
         <ul className="mt-4 grid gap-3">
           {aliases.map((alias) => (
-            <li className="flex flex-col gap-3 rounded-xl border border-line bg-canvas/60 p-4 sm:flex-row sm:items-center sm:justify-between" key={alias.id}>
+            <li className="mapping-row flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between" key={alias.id}>
               <div className="min-w-0">
                 <code className="break-all text-sm">{alias.path}</code>
                 <p className="mt-1 text-xs text-muted-foreground">{alias.source}</p>

@@ -20,8 +20,8 @@ export function subscribeUnauthorized(listener: UnauthorizedListener) {
   }
 }
 
-function notifyUnauthorized(path: string) {
-  if (path === '/api/v1/auth/login') return
+function notifyUnauthorized(path: string, code?: string) {
+  if (path === '/api/v1/auth/login' || (path === '/api/v1/auth/password' && code === 'invalid_credentials')) return
   for (const listener of unauthorizedListeners) listener()
 }
 
@@ -37,13 +37,13 @@ export async function apiRequest<T>(path: string, init?: RequestInit): Promise<T
     credentials: 'include',
     headers,
   })
-  if (response.status === 401) notifyUnauthorized(path)
   if (response.status === 204) {
     return undefined as T
   }
 
   const contentType = response.headers.get('content-type') ?? ''
   const body = contentType.includes('application/json') ? await response.json() : undefined
+  if (response.status === 401) notifyUnauthorized(path, typeof body?.code === 'string' ? body.code : undefined)
   if (!response.ok) {
     const message = typeof body?.message === 'string' ? body.message : `Request failed with status ${response.status}`
     const code = typeof body?.code === 'string' ? body.code : undefined
@@ -81,8 +81,8 @@ export function uploadForm<T>(path: string, body: FormData, onProgress: (percent
         resolve(value as T)
         return
       }
-      if (request.status === 401) notifyUnauthorized(path)
       const error = value as { message?: unknown; code?: unknown } | undefined
+      if (request.status === 401) notifyUnauthorized(path, typeof error?.code === 'string' ? error.code : undefined)
       reject(
         new ApiError(
           request.status,
