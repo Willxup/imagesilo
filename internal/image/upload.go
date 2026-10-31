@@ -34,8 +34,8 @@ type Service struct {
 	processor          processor.Engine
 	gate               *processor.Gate
 	barrier            *indexbarrier.Barrier
-	mutations          indexbarrier.KeyedLocker
 	beforeMutationLock func(operation, imageID string)
+	afterCreateCommit  func(imageID string)
 	afterContentUpdate func(imageID string)
 }
 
@@ -242,12 +242,17 @@ func (s *Service) CommitStagedUpload(
 		CreatedAt:            now.UTC(),
 		UpdatedAt:            now.UTC(),
 	}
+	unlock := s.barrier.LockImage(value.ID)
+	defer unlock()
 	releaseChange := s.barrier.BeginChange()
 	defer releaseChange()
 	if err := s.repository.Create(ctx, value); err != nil {
 		return Image{}, err
 	}
 	databaseCommitted = true
+	if s.afterCreateCommit != nil {
+		s.afterCreateCommit(value.ID)
+	}
 	s.index.Add(value.ID, delivery.Target{
 		StorageKey:   value.StorageKey,
 		MIMEType:     value.MIMEType,
@@ -479,7 +484,7 @@ func (s *Service) Delete(ctx context.Context, id string) (DeleteResult, error) {
 	if s.beforeMutationLock != nil {
 		s.beforeMutationLock("delete", id)
 	}
-	unlock := s.mutations.Lock(id)
+	unlock := s.barrier.LockImage(id)
 	defer unlock()
 
 	releaseChange := s.barrier.BeginChange()
@@ -511,7 +516,7 @@ func (s *Service) ChangeVisibility(ctx context.Context, id string, visibility Vi
 	if s.beforeMutationLock != nil {
 		s.beforeMutationLock("visibility", id)
 	}
-	unlock := s.mutations.Lock(id)
+	unlock := s.barrier.LockImage(id)
 	defer unlock()
 
 	releaseChange := s.barrier.BeginChange()
@@ -532,7 +537,7 @@ func (s *Service) ConvertToWebP(ctx context.Context, id string, options processo
 	if s.beforeMutationLock != nil {
 		s.beforeMutationLock("convert", id)
 	}
-	unlock := s.mutations.Lock(id)
+	unlock := s.barrier.LockImage(id)
 	defer unlock()
 
 	release, ok := s.gate.TryAcquire()

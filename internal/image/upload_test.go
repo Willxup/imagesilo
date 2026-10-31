@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"errors"
 	stdimage "image"
 	"image/color"
 	"image/jpeg"
@@ -61,6 +62,65 @@ func TestUploadPreservesBytesAndUpdatesIndex(t *testing.T) {
 	}
 	if _, ok := reloaded.Get(value.ID); !ok {
 		t.Fatal("delivery index did not recover after reload")
+	}
+}
+
+func TestUploadPublicationSerializesWithVisibilityChange(t *testing.T) {
+	_, db, service, index := prepareManagementTest(t)
+	defer db.Close()
+	committed := make(chan string, 1)
+	resume := make(chan struct{})
+	service.afterCreateCommit = func(id string) {
+		committed <- id
+		<-resume
+	}
+	uploaded := make(chan error, 1)
+	source := testJPEG(t)
+	go func() {
+		_, err := service.Upload(context.Background(), bytes.NewReader(source), "visibility.jpg", UploadOptions{
+			Visibility: VisibilityPublic, UploadedVia: "admin",
+		}, time.Now())
+		uploaded <- err
+	}()
+	var id string
+	select {
+	case id = <-committed:
+	case err := <-uploaded:
+		t.Fatalf("upload stopped before publication: %v", err)
+	case <-time.After(5 * time.Second):
+		close(resume)
+		t.Fatal("upload did not reach publication")
+	}
+	changed := make(chan error, 1)
+	go func() {
+		found, err := service.ChangeVisibility(context.Background(), id, VisibilityPrivate)
+		if err == nil && !found {
+			err = errors.New("committed image was not found")
+		}
+		changed <- err
+	}()
+	completedEarly := false
+	select {
+	case err := <-changed:
+		completedEarly = true
+		t.Errorf("visibility change passed unfinished upload publication: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(resume)
+	if err := <-uploaded; err != nil {
+		t.Fatal(err)
+	}
+	if !completedEarly {
+		if err := <-changed; err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, err := service.Get(context.Background(), id)
+	if err != nil || stored.Visibility != VisibilityPrivate {
+		t.Fatalf("stored image = %+v, %v", stored, err)
+	}
+	if target, ok := index.Get(id); !ok || target.Visibility != string(VisibilityPrivate) {
+		t.Fatalf("private upload remained publicly deliverable: %+v, found=%v", target, ok)
 	}
 }
 

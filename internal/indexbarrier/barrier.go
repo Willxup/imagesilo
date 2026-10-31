@@ -6,11 +6,18 @@ import "sync"
 // Delivery reads intentionally do not use this barrier.
 type Barrier struct {
 	mu      sync.RWMutex
+	images  KeyedLocker
 	aliases KeyedLocker
 }
 
 func New() *Barrier {
 	return &Barrier{}
+}
+
+// LockImage serializes publication and mutations of one image across services.
+// Acquire it before BeginChange or BeginAliasChange, never during a rebuild.
+func (b *Barrier) LockImage(id string) func() {
+	return b.images.Lock(id)
 }
 
 func (b *Barrier) BeginChange() func() {

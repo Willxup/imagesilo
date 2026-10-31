@@ -151,6 +151,69 @@ func TestImportCommitSharesAliasPathLock(t *testing.T) {
 	}
 }
 
+func TestImportPublicationSerializesWithVisibilityChange(t *testing.T) {
+	_, db, service, index := prepareImportTest(t)
+	defer db.Close()
+	management := images.NewServiceWithProcessorAndBarrier(images.NewRepository(db), service.storage,
+		index, service.processor, service.gate, service.barrier)
+	committed := make(chan string, 1)
+	resume := make(chan struct{})
+	service.afterCreateCommit = func(id string) {
+		committed <- id
+		<-resume
+	}
+	imported := make(chan error, 1)
+	const aliasPath = "/legacy/visibility.webp"
+	go func() {
+		_, err := service.Import(context.Background(), bytes.NewReader(testWebP()), "visibility.webp", aliasPath,
+			Options{Visibility: images.VisibilityPublic}, time.Now())
+		imported <- err
+	}()
+	var id string
+	select {
+	case id = <-committed:
+	case err := <-imported:
+		t.Fatalf("import stopped before publication: %v", err)
+	case <-time.After(5 * time.Second):
+		close(resume)
+		t.Fatal("import did not reach publication")
+	}
+	changed := make(chan error, 1)
+	go func() {
+		found, err := management.ChangeVisibility(context.Background(), id, images.VisibilityPrivate)
+		if err == nil && !found {
+			err = errors.New("committed image was not found")
+		}
+		changed <- err
+	}()
+	completedEarly := false
+	select {
+	case err := <-changed:
+		completedEarly = true
+		t.Errorf("visibility change passed unfinished import publication: %v", err)
+	case <-time.After(25 * time.Millisecond):
+	}
+	close(resume)
+	if err := <-imported; err != nil {
+		t.Fatal(err)
+	}
+	if !completedEarly {
+		if err := <-changed; err != nil {
+			t.Fatal(err)
+		}
+	}
+	stored, err := management.Get(context.Background(), id)
+	if err != nil || stored.Visibility != images.VisibilityPrivate {
+		t.Fatalf("stored image = %+v, %v", stored, err)
+	}
+	if target, ok := index.Get(id); !ok || target.Visibility != string(images.VisibilityPrivate) {
+		t.Fatalf("private import remained publicly deliverable: %+v, found=%v", target, ok)
+	}
+	if target, ok := index.GetAlias(aliasPath); !ok || target.Visibility != string(images.VisibilityPrivate) {
+		t.Fatalf("private import alias remained publicly deliverable: %+v, found=%v", target, ok)
+	}
+}
+
 func prepareImportTest(t *testing.T) (string, *sql.DB, *Service, *delivery.Index) {
 	t.Helper()
 	directory := t.TempDir()
