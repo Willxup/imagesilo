@@ -6,7 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import '../../i18n/config'
 import { apiRequest } from '../../lib/api-client'
-import type { Image, ImageList } from '../../lib/api-types'
+import type { Image, ImageDetail, ImageList, Visibility } from '../../lib/api-types'
+import { ImageDetailPage } from './image-detail-page'
 import { ImageListPage } from './image-list-page'
 
 vi.mock('../../lib/api-client', () => ({ apiRequest: vi.fn() }))
@@ -45,6 +46,12 @@ const secondImage = {
   standardUrl: '/image/019c1234-5678-7abc-8def-0123456789ac',
   thumbnailUrl: '/api/v1/images/019c1234-5678-7abc-8def-0123456789ac/thumbnail',
 } as Image
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((complete) => { resolve = complete })
+  return { promise, resolve }
+}
 
 describe('ImageListPage', () => {
   afterEach(() => { cleanup(); vi.restoreAllMocks() })
@@ -201,5 +208,95 @@ describe('ImageListPage', () => {
       expect(window.localStorage.getItem('imagesilo_image_view_mode')).toBe('grid')
       expect(window.localStorage.getItem('imagesilo_image_filters_open')).toBe('false')
     })
+  })
+
+  it.each([
+    ['public', 'private', '改为私密', '改为公开'],
+    ['private', 'public', '改为公开', '改为私密'],
+  ] as const)('updates a fresh %s detail after a gallery change to %s', async (initial, next, action, nextAction) => {
+    let visibility: Visibility = initial
+    let detailReads = 0
+    const refreshed = deferred<ImageDetail>()
+    vi.mocked(apiRequest).mockImplementation(async (path, options) => {
+      if (options?.method === 'PATCH') {
+        visibility = next
+        return
+      }
+      if (path === `/api/v1/images/${image.id}`) {
+        detailReads += 1
+        return detailReads === 1 ? { ...image, visibility, aliases: [] } : refreshed.promise
+      }
+      return { items: [{ ...image, visibility }] }
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={createMemoryRouter([
+          { path: '/admin/images', element: <ImageListPage /> },
+          { path: '/admin/images/:imageId', element: <ImageDetailPage /> },
+        ], { initialEntries: [`/admin/images/${image.id}`] })} />
+      </QueryClientProvider>,
+    )
+    await screen.findByRole('button', { name: action })
+    fireEvent.click(screen.getByRole('button', { name: '返回图片列表' }))
+    await screen.findByRole('checkbox', { name: `选择图片 ${image.originalName}` })
+    fireEvent.click(screen.getByRole('button', { name: action }))
+    await screen.findByRole('button', { name: nextAction })
+    fireEvent.click(screen.getAllByRole('link', { name: image.originalName })[0])
+    await screen.findByRole('heading', { name: image.originalName })
+    // The confirmed value must render even while the refreshed detail request is pending.
+    expect(await screen.findByRole('button', { name: nextAction })).toBeInTheDocument()
+    await waitFor(() => expect(detailReads).toBe(2))
+    await act(async () => refreshed.resolve({ ...image, visibility: next, aliases: [] }))
+  })
+
+  it.each(['error', 'not_found'])('only updates successful batch detail caches when another item returns %s', async (failureStatus) => {
+    const uncached = { ...image, id: 'uncached', originalName: 'uncached.jpg' }
+    const items = [image, secondImage, uncached]
+    vi.mocked(apiRequest).mockImplementation(async (path) => {
+      if (path === '/api/v1/images/batch-visibility') return {
+        items: items.map((item) => ({ imageId: item.id, status: item.id === secondImage.id ? failureStatus : 'updated' })),
+      }
+      return { items }
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+    const firstDetail = { ...image, aliases: [] }
+    const failedDetail = { ...secondImage, aliases: [] }
+    queryClient.setQueryData(['image', image.id], firstDetail)
+    queryClient.setQueryData(['image', secondImage.id], failedDetail)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
+      </QueryClientProvider>,
+    )
+    for (const item of items) fireEvent.click(await screen.findByRole('checkbox', { name: `选择图片 ${item.originalName}` }))
+    fireEvent.click(within(document.querySelector<HTMLElement>('.floating-batch-toolbar')!).getByRole('button', { name: '改为私密' }))
+    await waitFor(() => expect(queryClient.getQueryData(['image', image.id])).toEqual({ ...firstDetail, visibility: 'private' }))
+    expect(queryClient.getQueryState(['image', image.id])?.isInvalidated).toBe(true)
+    expect(queryClient.getQueryData(['image', secondImage.id])).toEqual(failedDetail)
+    expect(queryClient.getQueryState(['image', secondImage.id])?.isInvalidated).toBe(false)
+    expect(queryClient.getQueryData(['image', uncached.id])).toBeUndefined()
+  })
+
+  it('prevents an older detail response from overwriting a confirmed gallery visibility change', async () => {
+    let visibility: Visibility = 'public'
+    vi.mocked(apiRequest).mockImplementation(async (_, options) => {
+      if (options?.method === 'PATCH') { visibility = 'private'; return }
+      return { items: [{ ...image, visibility }] }
+    })
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } })
+    const oldDetail = { ...image, aliases: [] }
+    queryClient.setQueryData(['image', image.id], oldDetail)
+    const delayed = deferred<ImageDetail>()
+    const pending = queryClient.fetchQuery({ queryKey: ['image', image.id], queryFn: () => delayed.promise, staleTime: 0 }).catch(() => undefined)
+    render(
+      <QueryClientProvider client={queryClient}>
+        <RouterProvider router={createMemoryRouter([{ path: '*', element: <ImageListPage /> }])} />
+      </QueryClientProvider>,
+    )
+    fireEvent.click(await screen.findByRole('button', { name: '改为私密' }))
+    await screen.findByRole('button', { name: '改为公开' })
+    await act(async () => { delayed.resolve(oldDetail); await pending })
+    expect(queryClient.getQueryData(['image', image.id])).toEqual({ ...oldDetail, visibility: 'private' })
   })
 })

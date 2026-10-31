@@ -18,7 +18,7 @@ import { Select } from '../../components/ui/select'
 import { apiRequest } from '../../lib/api-client'
 import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { formatBytes } from '../../lib/image-links'
-import type { BatchOperationResult, Image, ImageList, Visibility } from '../../lib/api-types'
+import type { BatchOperationResult, Image, ImageDetail, ImageList, Visibility } from '../../lib/api-types'
 
 type ViewMode = 'grid' | 'list'
 
@@ -76,7 +76,8 @@ export function ImageListPage() {
         body: JSON.stringify({ visibility }),
       }),
     onMutate: ({ id }) => toast.loading(t('common.working'), { id: `image-visibility-${id}` }),
-    onSuccess: (_, variables) => {
+    onSuccess: async (_, variables) => {
+      await syncDetailVisibility(variables.id, variables.visibility)
       toast.success(variables.visibility === 'public' ? t('toast.imagePublic') : t('toast.imagePrivate'), { id: `image-visibility-${variables.id}` })
       void queryClient.invalidateQueries({ queryKey: ['images'] })
     },
@@ -90,7 +91,10 @@ export function ImageListPage() {
         body: JSON.stringify({ imageIds, visibility }),
       }),
     onMutate: () => toast.loading(t('common.working'), { id: 'batch-visibility' }),
-    onSuccess: (result) => {
+    onSuccess: async (result, variables) => {
+      await Promise.all(result.items.filter((item) => item.status === 'updated').map((item) =>
+        syncDetailVisibility(item.imageId, variables.visibility),
+      ))
       showBatchToast(result, 'batch-visibility')
       setSelected(new Set())
       void queryClient.invalidateQueries({ queryKey: ['images'] })
@@ -161,6 +165,14 @@ export function ImageListPage() {
     const failures = result.items.filter((item) => item.status === 'error' || item.status === 'not_found' || item.status === 'cleanup_pending')
     if (failures.length > 0) toast.warning(t('toast.batchPartial', { success: result.items.length - failures.length, failed: failures.length }), { id })
     else toast.success(t('toast.batchSuccess', { count: result.items.length }), { id })
+  }
+
+  async function syncDetailVisibility(id: string, visibility: Visibility) {
+    const queryKey = ['image', id]
+    // Discard an older detail response before applying the confirmed change.
+    await queryClient.cancelQueries({ queryKey, exact: true })
+    queryClient.setQueryData<ImageDetail>(queryKey, (detail) => detail ? { ...detail, visibility } : detail)
+    void queryClient.invalidateQueries({ queryKey, exact: true })
   }
 
   useEffect(() => { formRef.current?.reset() }, [filters])
