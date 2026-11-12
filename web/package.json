@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "npm run typecheck && vite build",
     "lint": "eslint . --max-warnings=0",
     "test": "vitest run",
-    "typecheck": "tsc -b --pretty false",
+    "typecheck": "tsc -p tsconfig.app.json --pretty false && tsc -p tsconfig.node.json --pretty false",
     "generate:api": "openapi-typescript ../api/openapi.yaml -o src/generated/openapi.d.ts"
   },
   "dependencies": {
