@@ -34,6 +34,32 @@ describe('copy feedback', () => {
     expect(container.firstChild).not.toHaveAttribute('data-copied')
   })
 
+  it('uses matching vector marks in the trigger and menu and copies every selected format', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { clipboard: { writeText } })
+    const { container } = render(<CopyLinkControl image={image} compact />)
+    expect(container.querySelector('[data-copy-glyph="copy"]')).toHaveAttribute('viewBox', '0 0 24 24')
+    for (const format of ['direct', 'markdown', 'bbcode', 'html']) {
+      const trigger = screen.getByRole('button', { name: /images.chooseLinkFormat/ })
+      fireEvent.click(trigger)
+      const item = screen.getByRole('menuitem', { name: `images.linkFormat.${format}` })
+      expect(item.querySelector('svg')).toHaveAttribute('data-copy-glyph', format)
+      expect(item.querySelector('svg')).toHaveAttribute('aria-hidden', 'true')
+      fireEvent.click(item)
+      expect(trigger.querySelector('svg')).toHaveAttribute('data-copy-glyph', format)
+      expect(trigger).toHaveAttribute('aria-expanded', 'false')
+      expect(localStorage.getItem('imagesilo_link_format')).toBe(format)
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'images.copySelectedFormat' })))
+    }
+    const url = new URL(image.standardUrl, window.location.origin).href
+    expect(writeText.mock.calls.map(([value]) => value)).toEqual([
+      url,
+      `![coast.jpg](${url})`,
+      `[img]${url}[/img]`,
+      `<img src="${url}" alt="coast.jpg">`,
+    ])
+  })
+
   it('does not retain a success marker for another image or after a failed copy', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     vi.stubGlobal('navigator', { clipboard: { writeText } })

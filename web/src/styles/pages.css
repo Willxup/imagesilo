@@ -280,8 +280,13 @@
 .setup-error { margin: 0; border-radius: 10px; background: var(--color-danger-soft); padding: 12px; color: var(--color-danger); font-size: 13px; }
 
 /* Calm, readable image actions; keep the split border continuous in either theme. */
-.image-card-actions .copy-link-control { height: 34px; }
-.image-card-actions .copy-link-caret { border: 0; border-left: 1px solid var(--tail-border); background: transparent; color: var(--control-text); }
+.image-card-actions .copy-link-control { height: 34px; border-radius: 10px; background: var(--tail-surface-soft); box-shadow: inset 0 0 0 1px var(--tail-border); }
+.image-card-actions .copy-link-control .copy-link-main { height: 100%; border: 0; border-radius: 10px 0 0 10px; background: transparent; padding-inline: 11px; gap: 7px; }
+.image-card-actions .copy-link-control .copy-action-icon { width: 16px; height: 16px; }
+.image-card-actions .copy-link-caret { border: 0; background: transparent; color: var(--control-text); }
+.image-card-actions .copy-link-control .copy-link-main:hover:not(:disabled),
+.image-card-actions .copy-link-control .copy-link-caret:hover,
+.image-card-actions .copy-link-control .copy-link-caret[aria-expanded="true"] { background: var(--control-hover); }
 .image-card-actions [data-slot="button"] { color: var(--control-text); }
 .image-card-actions .copy-link-control[data-copied="true"] .copy-link-main { color: var(--success); }
 .floating-batch-actions .copy-link-control[data-copied="true"] .copy-link-main { color: #8be0c7; }
@@ -474,7 +479,7 @@
   .image-grid .image-card-actions .image-action-label { display: inline; }
   .image-grid .image-card-actions .copy-link-control { width: 100%; min-width: 0; border: 0; box-shadow: inset 0 0 0 1px var(--tail-border); border-radius: 10px; background: var(--tail-surface-soft); }
   .image-grid .image-card-actions .copy-link-main { flex: 1; width: auto; min-height: 44px; height: 44px; border: 0; border-radius: 10px 0 0 10px; background: transparent; }
-  .image-grid .image-card-actions .copy-link-caret { min-height: 44px; height: 44px; border: 0; border-left: 1px solid var(--tail-border); border-radius: 0 10px 10px 0; background: transparent; }
+  .image-grid .image-card-actions .copy-link-caret { min-height: 44px; height: 44px; border: 0; border-radius: 0 10px 10px 0; background: transparent; }
   .image-grid .image-card-actions [data-slot="button"]:hover:not(:disabled), .image-grid .image-card-actions .copy-link-caret:hover { background: var(--control-hover); }
   .image-grid .image-card-actions [data-slot="button"]:active:not(:disabled), .image-grid .image-card-actions .copy-link-caret:active { background: var(--control-pressed); }
 }

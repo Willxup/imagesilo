@@ -511,21 +511,24 @@
   height: 30px;
 }
 
+.copy-link-control > .ui-dropdown-root {
+  align-self: stretch;
+  height: 100%;
+}
+
 .copy-link-control[data-compact] .copy-link-caret {
-  width: 34px;
-  min-width: 34px;
-  height: 30px;
+  width: 46px;
+  min-width: 46px;
+  height: 100%;
   padding: 0;
 }
 
-.copy-link-control[data-compact] .copy-format-icon {
-  width: 11px;
-  height: 11px;
-}
-
-.copy-link-control[data-compact] .copy-format-chevron {
-  width: 9px;
-  height: 9px;
+.copy-link-control .copy-action-icon,
+.copy-link-control .copy-format-icon {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  stroke-width: 1.75;
 }
 
 .floating-batch-actions .copy-link-control[data-compact],
@@ -540,12 +543,13 @@
 
 .copy-link-caret {
   display: inline-flex;
-  width: 40px;
-  min-width: 40px;
+  position: relative;
+  width: 48px;
+  min-width: 48px;
   height: 36px;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 5px;
   border: 1px solid var(--tail-border-strong);
   border-left: 0;
   border-radius: 0 10px 10px 0;
@@ -554,9 +558,37 @@
   color: var(--tail-text);
 }
 
-.copy-format-icon {
-  width: 14px;
-  height: 14px;
+.copy-link-caret::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 25%;
+  height: 50%;
+  width: 1px;
+  background: currentColor;
+  opacity: 0.16;
+  pointer-events: none;
+}
+
+.copy-format-mark {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  border-radius: 7px;
+  background: var(--tail-surface-soft);
+  color: var(--control-text);
+}
+
+.copy-format-mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+.copy-format-menu .ui-dropdown-item {
+  gap: 10px;
+  min-height: 42px;
 }
 
 .copy-format-chevron {
