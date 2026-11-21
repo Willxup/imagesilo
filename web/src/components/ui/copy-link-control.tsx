@@ -6,15 +6,10 @@ import { readLocalStorage, writeLocalStorage } from '../../lib/browser-storage'
 import { copyText, imageLinksText, type LinkableImage, type LinkFormat } from '../../lib/image-links'
 import { Button } from './button'
 import { DropdownItem, DropdownMenu } from './dropdown-menu'
-import { Icon, type IconName } from './icon'
+import { Icon } from './icon'
+import { CopyGlyph } from './copy-glyph'
 
 const formats: LinkFormat[] = ['direct', 'markdown', 'bbcode', 'html']
-const formatIcons = {
-  direct: 'link',
-  markdown: 'fileText',
-  bbcode: 'brackets',
-  html: 'code',
-} satisfies Record<LinkFormat, IconName>
 const storageKey = 'imagesilo_link_format'
 
 function initialFormat(): LinkFormat {
@@ -110,7 +105,9 @@ export function CopyLinksControl({
         )}
         onClick={() => void copy()}
       >
-        <Icon name={copying ? 'loader' : copied ? 'check' : 'copy'} className={copying ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+        {copying || copied
+          ? <Icon name={copying ? 'loader' : 'check'} className={`copy-action-icon${copying ? ' animate-spin' : ''}`} />
+          : <CopyGlyph name="copy" className="copy-action-icon" />}
         <span className="image-action-label">{label ?? t('common.copy')}</span>
       </Button>
       <DropdownMenu
@@ -127,7 +124,7 @@ export function CopyLinksControl({
             aria-haspopup="menu" aria-expanded={open}
             onClick={() => setOpen((value) => !value)}
           >
-            <Icon name={formatIcons[format]} className="copy-format-icon" />
+            <CopyGlyph name={format} className="copy-format-icon" />
             <Icon name="chevronDown" className="copy-format-chevron" />
           </button>
         }
@@ -141,7 +138,7 @@ export function CopyLinksControl({
               setOpen(false)
             }}
           >
-            <Icon name={formatIcons[value]} />
+            <span className="copy-format-mark"><CopyGlyph name={value} /></span>
             <span>{t(`images.linkFormat.${value}`)}</span>
             {value === format ? <Icon name="check" className="ml-auto h-4 w-4 text-brand-500" /> : null}
           </DropdownItem>
